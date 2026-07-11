@@ -70,49 +70,49 @@ i64 saturating_add_i64(i64 a, i64 b) {
 
 u8 add_u8(u8 a, u8 b, bool* overflow) {
   u8 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 u16 add_u16(u16 a, u16 b, bool* overflow) {
   u16 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 u32 add_u32(u32 a, u32 b, bool* overflow) {
   u32 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 u64 add_u64(u64 a, u64 b, bool* overflow) {
   u64 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 i8 add_i8(i8 a, i8 b, bool* overflow) {
   i8 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 i16 add_i16(i16 a, i16 b, bool* overflow) {
   i16 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 i32 add_i32(i32 a, i32 b, bool* overflow) {
   i32 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
 i64 add_i64(i64 a, i64 b, bool* overflow) {
   i64 res;
-  *failure |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_add_overflow(a, b, &res);
   return res;
 }
 
@@ -230,49 +230,49 @@ i64 saturating_sub_i64(i64 a, i64 b) {
 
 u8 sub_u8(u8 a, u8 b, bool* overflow) {
   u8 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 u16 sub_u16(u16 a, u16 b, bool* overflow) {
   u16 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 u32 sub_u32(u32 a, u32 b, bool* overflow) {
   u32 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 u64 sub_u64(u64 a, u64 b, bool* overflow) {
   u64 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 i8 sub_i8(i8 a, i8 b, bool* overflow) {
   i8 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 i16 sub_i16(i16 a, i16 b, bool* overflow) {
   i16 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 i32 sub_i32(i32 a, i32 b, bool* overflow) {
   i32 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
 i64 sub_i64(i64 a, i64 b, bool* overflow) {
   i64 res;
-  *overflow |= __builtin_add_overflow(a, b, &res);
+  *overflow |= __builtin_sub_overflow(a, b, &res);
   return res;
 }
 
@@ -350,15 +350,30 @@ u8 saturating_mul_u8(u8 a, u8 b) {
 }
 
 u16 saturating_mul_u16(u16 a, u16 b) {
-  return __builtin_elementwise_mul_sat(a, b);
+  u16 res;
+  if (__builtin_mul_overflow(a, b, &res)) {
+    return U16_MAX;
+  } else {
+    return res;
+  }
 }
 
 u32 saturating_mul_u32(u32 a, u32 b) {
-  return __builtin_elementwise_mul_sat(a, b);
+  u32 res;
+  if (__builtin_mul_overflow(a, b, &res)) {
+    return U32_MAX;
+  } else {
+    return res;
+  }
 }
 
 u64 saturating_mul_u64(u64 a, u64 b) {
-  return __builtin_elementwise_mul_sat(a, b);
+  u64 res;
+  if (__builtin_mul_overflow(a, b, &res)) {
+    return U64_MAX;
+  } else {
+    return res;
+  }
 }
 
 u8 mul_u8(u8 a, u8 b, bool* overflow) {
@@ -412,49 +427,49 @@ i64 mul_i64(i64 a, i64 b, bool* overflow) {
 u8 mul_unsafe_u8(u8 a, u8 b) {
   u8 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 u16 mul_unsafe_u16(u16 a, u16 b) {
   u16 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 u32 mul_unsafe_u32(u32 a, u32 b) {
   u32 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 u64 mul_unsafe_u64(u64 a, u64 b) {
   u64 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 i8 mul_unsafe_i8(i8 a, i8 b) {
   i8 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 i16 mul_unsafe_i16(i16 a, i16 b) {
   i16 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 i32 mul_unsafe_i32(i32 a, i32 b) {
   i32 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 i64 mul_unsafe_i64(i64 a, i64 b) {
   i64 res;
   assert_dev(!__builtin_mul_overflow(a, b, &res));
-  res;
+  return res;
 }
 
 u8 div_u8(u8 a, u8 b, bool* div_by_zero) {
@@ -743,7 +758,7 @@ u8 ctz_u32(u32 a) {
   return (u8)__builtin_ctzg(a, 32);
 }
 
-u8 ctz_u32(u64 a) {
+u8 ctz_u64(u64 a) {
   return (u8)__builtin_ctzg(a, 64);
 }
 
@@ -780,19 +795,19 @@ u8 popcount_u64(u64 a) {
 }
 
 u8 bit_width_u8(u8 a) {
-  return u8{8} - (u8)__builtin_clzg(a, 8)
+  return u8{8} - (u8)__builtin_clzg(a, 8);
 }
 
 u8 bit_width_u16(u16 a) {
-  return u8{8} - (u8)__builtin_clzg(a, 8)
+  return u8{16} - (u8)__builtin_clzg(a, 16);
 }
 
 u8 bit_width_u32(u32 a) {
-  return u8{8} - (u8)__builtin_clzg(a, 8)
+  return u8{32} - (u8)__builtin_clzg(a, 32);
 }
 
 u8 bit_width_u64(u64 a) {
-  return u8{8} - (u8)__builtin_clzg(a, 8)
+  return u8{64} - (u8)__builtin_clzg(a, 64);
 }
 
 u8 shl_u8(u8 a, u64 amount, bool* fail) {
@@ -896,7 +911,7 @@ u8 next_pow_two_u8(u8 a, bool* overflow) {
     return 1;
   }
   u8 const shift = bit_width_u8(a - u8{1});
-  return shl_u8(1, shift, failure);
+  return shl_u8(1, shift, overflow);
 }
 
 u16 next_pow_two_u16(u16 a, bool* overflow) {
@@ -904,7 +919,7 @@ u16 next_pow_two_u16(u16 a, bool* overflow) {
     return 1;
   }
   u8 const shift = bit_width_u16(a - u16{1});
-  return shl_u16(1, shift, failure);
+  return shl_u16(1, shift, overflow);
 }
 
 u32 next_pow_two_u32(u32 a, bool* overflow) {
@@ -912,7 +927,7 @@ u32 next_pow_two_u32(u32 a, bool* overflow) {
     return 1;
   }
   u8 const shift = bit_width_u32(a - u32{1});
-  return shl_u32(1, shift, failure);
+  return shl_u32(1, shift, overflow);
 }
 
 u64 next_pow_two_u64(u64 a, bool* overflow) {
@@ -920,7 +935,7 @@ u64 next_pow_two_u64(u64 a, bool* overflow) {
     return 1;
   }
   u8 const shift = bit_width_u64(a - u64{1});
-  return shl_u64(1, shift, failure);
+  return shl_u64(1, shift, overflow);
 }
 
 u8 next_pow_two_unsafe_u8(u8 a) {
@@ -1003,6 +1018,228 @@ u8 u64_to_u8(u64 a, bool *failure) {
   u8 res;
   *failure |= __builtin_add_overflow(a, u64{0}, &res);
   return res;
+}
+
+u8 i8_to_u8(i8 a, bool *failure) {
+  u8 res;
+  *failure |= __builtin_add_overflow(a, i8{0}, &res);
+  return res;
+}
+
+u8 i16_to_u8(i16 a, bool *failure) {
+  u8 res;
+  *failure |= __builtin_add_overflow(a, i16{0}, &res);
+  return res;
+}
+
+u8 i32_to_u8(i32 a, bool *failure) {
+  u8 res;
+  *failure |= __builtin_add_overflow(a, i32{0}, &res);
+  return res;
+}
+
+u8 i64_to_u8(i64 a, bool *failure) {
+  u8 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+u16 u32_to_u16(u32 a, bool *failure) {
+  u16 res;
+  *failure |= __builtin_add_overflow(a, u32{0}, &res);
+  return res;
+}
+
+u16 u64_to_u16(u64 a, bool *failure) {
+  u16 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+u16 i16_to_u16(i16 a, bool *failure) {
+  u16 res;
+  *failure |= __builtin_add_overflow(a, i16{0}, &res);
+  return res;
+}
+
+u16 i32_to_u16(i32 a, bool *failure) {
+  u16 res;
+  *failure |= __builtin_add_overflow(a, i32{0}, &res);
+  return res;
+}
+
+u16 i64_to_u16(i64 a, bool *failure) {
+  u16 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+u32 u64_to_u32(u64 a, bool *failure) {
+  u32 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+u32 i32_to_u32(i32 a, bool *failure) {
+  u32 res;
+  *failure |= __builtin_add_overflow(a, i32{0}, &res);
+  return res;
+}
+
+u32 i64_to_u32(i64 a, bool *failure) {
+  u32 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+u64 i64_to_u64(i64 a, bool *failure) {
+  u64 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+i8 u8_to_i8(u8 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, u8{0}, &res);
+  return res;
+}
+
+i8 u16_to_i8(u16 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, u16{0}, &res);
+  return res;
+}
+
+i8 u32_to_i8(u32 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, u32{0}, &res);
+  return res;
+}
+
+i8 u64_to_i8(u64 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+i8 i16_to_i8(i16 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, i16{0}, &res);
+  return res;
+}
+
+i8 i32_to_i8(i32 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, i32{0}, &res);
+  return res;
+}
+
+i8 i64_to_i8(i64 a, bool *failure) {
+  i8 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+i16 u16_to_i16(u16 a, bool *failure) {
+  i16 res;
+  *failure |= __builtin_add_overflow(a, u16{0}, &res);
+  return res;
+}
+
+i16 u32_to_i16(u32 a, bool *failure) {
+  i16 res;
+  *failure |= __builtin_add_overflow(a, u32{0}, &res);
+  return res;
+}
+
+i16 u64_to_i16(u64 a, bool *failure) {
+  i16 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+i16 i32_to_i16(i32 a, bool *failure) {
+  i16 res;
+  *failure |= __builtin_add_overflow(a, i32{0}, &res);
+  return res;
+}
+
+i16 i64_to_i16(i64 a, bool *failure) {
+  i16 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+i32 u32_to_i32(u32 a, bool *failure) {
+  i32 res;
+  *failure |= __builtin_add_overflow(a, u32{0}, &res);
+  return res;
+}
+
+i32 u64_to_i32(u64 a, bool *failure) {
+  i32 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+i32 i64_to_i32(i64 a, bool *failure) {
+  i32 res;
+  *failure |= __builtin_add_overflow(a, i64{0}, &res);
+  return res;
+}
+
+i64 u64_to_i64(u64 a, bool *failure) {
+  i64 res;
+  *failure |= __builtin_add_overflow(a, u64{0}, &res);
+  return res;
+}
+
+u64 align_up_u64(u64 val, u64 align, bool* failure) {
+  *failure |= !is_pow_two_u64(align) || (align == 0);
+  return (add_u64(val, align, failure) -  1) & ~(align - 1);
+}
+
+u64 align_down_u64(u64 val, u64 align, bool* failure) {
+  *failure |= !is_pow_two_u64(align) || (align == 0);
+  return val & ~(align - 1);
+}
+
+template <typename T>
+T align_up_g(T val, u64 align, bool* failure) {
+  static_assert(sizeof(T) == 8);
+  static_assert(alignof(T) == 8);
+  return (T)align_up_u64((u64)val, align, failure);
+}
+
+template <typename T>
+T align_down_g(T val, u64 align, bool* failure) {
+  static_assert(sizeof(T) == 8);
+  static_assert(alignof(T) == 8);
+  return (T)align_down_u64((u64)val, align, failure);
+}
+
+u64 align_up_unsafe_u64(u64 val, u64 align) {
+  assert_dev(is_pow_two_u64(align));
+  return sub_unsafe_u64(add_unsafe_u64(val, align), 1) & ~sub_unsafe_u64(align, 1);
+}
+
+u64 align_down_unsafe_u64(u64 val, u64 align) {
+  assert_dev(is_pow_two_u64(align));
+  return val & ~sub_unsafe_u64(align, 1);
+}
+
+template <typename T>
+T align_up_unsafe_g(T val, u64 align) {
+  static_assert(sizeof(T) == 8);
+  static_assert(alignof(T) == 8);
+  return (T)align_up_unsafe_u64((u64)val, align);
+}
+
+template <typename T>
+T align_down_unsafe_g(T val, u64 align) {
+  static_assert(sizeof(T) == 8);
+  static_assert(alignof(T) == 8);
+  return (T)align_down_unsafe_u64((u64)val, align);
 }
 
 } // export namespace zx
