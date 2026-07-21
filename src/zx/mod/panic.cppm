@@ -2,7 +2,7 @@ export module zx:panic;
 
 export namespace zx {
 
-[[noreturn]] panic() {
+[[noreturn]] void panic() {
   __builtin_trap();
 }
   
