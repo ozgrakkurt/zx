@@ -14,6 +14,7 @@ export namespace zx {
 
 namespace sys {
 
+// echo '#include <errno.h>' | gcc -E -dM -xc - | grep -E "^#define E"
 constexpr u64 EAGAIN = 11;
 constexpr u64 EMULTIHOP = 72;
 constexpr u64 EUNATCH = 49;
@@ -150,6 +151,10 @@ constexpr u64 EXFULL = 54;
 constexpr u64 EKEYREVOKED = 128;
 constexpr u64 ENOTDIR = 20;
 constexpr u64 EMEDIUMTYPE = 124;
+
+// echo '#include <signal.h>' | gcc -E -dM -xc - | grep -E "SIGBUS"
+constexpr u64 SIGSEGV = 11;
+constexpr u64 SIGBUS = 7;
 
 u64 const SUCCESS = 0;
 
@@ -301,11 +306,11 @@ enum class [[nodiscard]] OpenStatus : u8_c {
   Ok = 0,
   Nullptr,
   UnexpectedErr,
-  EAccess,
+  EAcces,
   EBadF,
   EBusy,
   EDQuot,
-  EExists,
+  EExist,
   EFault,
   EFBig,
   EIntr,
@@ -340,8 +345,8 @@ OpenStatus open(u8 const* path, i32 flags, u32 mode, i32* fd) {
     *fd = -1;
 
     switch (errno) {
-    case EACCESS: {
-      return OpenStatus::EAccess;    
+    case EACCES: {
+      return OpenStatus::EAcces;    
     }
     case EBADF: {
       return OpenStatus::EBadF;    
@@ -352,8 +357,8 @@ OpenStatus open(u8 const* path, i32 flags, u32 mode, i32* fd) {
     case EDQUOT: {
       return OpenStatus::EDQuot;    
     }
-    case EEXISTS: {
-      return OpenStatus::EExists;    
+    case EEXIST: {
+      return OpenStatus::EExist;    
     }
     case EFAULT: {
       return OpenStatus::EFault;    
@@ -459,12 +464,102 @@ CloseStatus close(i32 fd) {
       return CloseStatus::EDQuot;
     }
     default: {
-      return CloseStatus::UnexpectedErr,
+      return CloseStatus::UnexpectedErr;
     }
     }
   }
 
   return CloseStatus::Ok;
+}
+
+enum class [[nodiscard]] MMapStatus: u8_c {
+  Ok = 0,
+  Nullptr,
+  UnexpectedErr,
+  EAcces,
+  EAgain,
+  EBadF,
+  EExist,
+  EInval,
+  ENFile,
+  ENoDev,
+  ENoMem,
+  EOverflow,
+  EPerm,
+  ETxtBsy,
+};
+
+MMapStatus mmap_err_(u64 errno) {
+  switch (errno) {
+  case EACCES: {
+    return MMapStatus::EAcces;
+  }
+  case EAGAIN: {
+    return MMapStatus::EAgain;
+  }
+  case EBADF: {
+    return MMapStatus::EBadF;
+  }
+  case EEXIST: {
+    return MMapStatus::EExist;
+  }
+  case EINVAL: {
+    return MMapStatus::EInval;
+  }
+  case ENFILE: {
+    return MMapStatus::ENFile;
+  }
+  case ENODEV: {
+    return MMapStatus::ENoDev;
+  }
+  case ENOMEM: {
+    return MMapStatus::ENoMem;
+  }
+  case EOVERFLOW: {
+    return MMapStatus::EOverflow;
+  }
+  case EPERM: {
+    return MMapStatus::EPerm;
+  }
+  case ETXTBSY: {
+    return MMapStatus::ETxtBsy;
+  }
+  default: {
+    return MMapStatus::UnexpectedErr;
+  }
+  }
+}
+
+MMapStatus mmap(u8* addr, u64 length, i32 prot, i32 flags, i32 fd, i64 offset, u8** mem) {
+  if (mem == nullptr) {
+    return MMapStatus::Nullptr;
+  }
+  
+  u64 const res = syscall6(9, (u64)addr, length, (u64)prot, (u64)flags, (u64)fd, (u64)offset);
+  u64 const errno = errno_(res);
+
+  if (errno != SUCCESS) {
+    *mem = nullptr;
+    return mmap_err_(errno);
+  }
+
+  *mem = (u8*)res;
+  return MMapStatus::Ok;
+}
+
+MMapStatus munmap(u8* mem, u64 length) {
+  if (mem == nullptr) {
+    return MMapStatus::Nullptr;
+  }
+
+  u64 const res = syscall2(11, (u64)mem, length);
+  u64 const errno = errno_(res);
+
+  if (errno != SUCCESS) {
+    return mmap_err_(errno);
+  }
+
+  return MMapStatus::Ok;
 }
 
 } // namespace sys
