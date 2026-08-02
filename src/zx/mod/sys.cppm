@@ -176,14 +176,21 @@ enum class [[nodiscard]] ReadStatus : u8_c {
 };
 
 ReadStatus read(i32 fd, u8* buf, u64 count, u64* n_read) {
-  if (n_read == nullptr) {
+  if (n_read == nullptr || buf == nullptr) {
     return ReadStatus::Nullptr;
   }
 
   u64 const res = syscall3(0, (u64)fd, (u64)buf, count);
   u64 const errno = errno_(res);
   if (errno != SUCCESS) {
+     // The returned n_read count isn't supposed to be used on error case.
+     // Set to max value so the caller will do something unexpected if it tries to use this
+     // value on error case. Then we can hope to catch this in tests.
      *n_read = U64_MAX;
+
+     // don't need to handle these separately since they are the same value.
+     static_assert(EAGAIN == EWOULDBLOCK);
+
      switch (errno) {
      case EAGAIN: {
        return ReadStatus::EAgain;    
@@ -213,6 +220,78 @@ ReadStatus read(i32 fd, u8* buf, u64 count, u64* n_read) {
   }
   *n_read = res;
   return ReadStatus::Ok;
+}
+
+enum class [[nodiscard]] WriteStatus: u8_c {
+  Ok = 0,
+  Nullptr,
+  UnexpectedErr,
+  EAgain,
+  EBadF,
+  EDestAddrReq,
+  EDQuot,
+  EFault,
+  EFBig,
+  EIntr,
+  EInval,
+  EIo,
+  ENoSpc,
+  EPerm,
+  EPipe,
+};
+
+WriteStatus write(i32 fd, u8 const* buf, u64 count, u64* n_written) {
+  if (n_written == nullptr || buf == nullptr) {
+    return WriteStatus::Nullptr;
+  }
+  u64 const res = syscall3(1, (u64)fd, (u64)buf, count);
+  u64 const errno = errno_(res);
+  if (errno != SUCCESS) {
+    switch (errno) {
+    case EAGAIN: {
+      return WriteStatus::EAgain;
+    }
+    case EBADF: {
+      return WriteStatus::EBadF;    
+    }
+    case EDESTADDRREQ: {
+      return WriteStatus::EDestAddrReq;
+    }
+    case EDQUOT: {
+      return WriteStatus::EDQuot;
+    }
+    case EFAULT: {
+      return WriteStatus::EFault;    
+    }
+    case EFBIG: {
+      return WriteStatus::EFBig;    
+    }
+    case EINTR: {
+      return WriteStatus::EIntr;    
+    }
+    case EINVAL: {
+      return WriteStatus::EInval;    
+    }
+    case EIO: {
+      return WriteStatus::EIo;    
+    }
+    case ENOSPC: {
+      return WriteStatus::ENoSpc;    
+    }
+    case EPERM: {
+      return WriteStatus::EPerm;    
+    }
+    case EPIPE: {
+      return WriteStatus::EPipe;    
+    }
+    default: {
+      return WriteStatus::UnexpectedErr;
+    }
+    }
+  }
+
+  *n_written = res;
+  return WriteStatus::Ok;
 }
 
 } // namespace sys
