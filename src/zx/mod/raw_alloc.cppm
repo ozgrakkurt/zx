@@ -58,7 +58,7 @@ struct RawAlloc {
     }
 
     u8* const mem = this->m_mem;
-    u8 const offset = this->m_offset;
+    u64 const offset = this->m_offset;
 
     static_assert(sizeof(void*) == sizeof(u64));
 
@@ -101,5 +101,5 @@ struct RawAlloc {
     return this->aligned_alloc(alignof(T), len, out);
   }
 };
-  
+
 } // export namespace zx
