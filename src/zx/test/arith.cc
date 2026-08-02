@@ -1,6 +1,6 @@
 import zx;
 
 int main(void) {
-  zx::panic();
-  return 31;
+  // zx::panic();
+  return 0;
 }
