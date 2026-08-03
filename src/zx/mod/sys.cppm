@@ -14,6 +14,10 @@ export namespace zx {
 
 namespace sys {
 
+constexpr i32 STDIN = 0;
+constexpr i32 STDOUT = 1;
+constexpr i32 STDERR = 2;
+
 // echo '#include <errno.h>' | gcc -E -dM -xc - | grep -E "^#define E"
 constexpr u64 EAGAIN = 11;
 constexpr u64 EMULTIHOP = 72;
