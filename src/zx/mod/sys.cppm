@@ -626,6 +626,14 @@ MProtectStatus mprotect(u8* addr, u64 length, int prot) {
   return MProtectStatus::Ok;
 }
 
+[[noreturn]] void exit_group(int status) {
+  syscall1(231, (u64)status);
+  // should never reach this but we put it to make sure
+  // that this function doesn't return and the compiler is happy
+  // about the [[noreturn]] annotation.
+  __builtin_trap();
+}
+
 } // namespace sys
 
 } // namespace zx

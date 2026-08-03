@@ -130,7 +130,7 @@ struct RawFmt {
     if (this->m_offset == 0) {
       return PrintStatus::Ok;
     }
-    
+
     u64 n_written = 0;
     if (sys::WriteStatus::Ok != sys::write(fd, this->m_mem, this->m_offset, &n_written)) {
       return PrintStatus::UnexpectedErr;
