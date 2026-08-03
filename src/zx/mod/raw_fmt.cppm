@@ -141,12 +141,10 @@ struct RawFmt {
     return PrintStatus::Ok;
   }
 
-  // print to stdout
   PrintStatus print() const {
     return this->print_(sys::STDOUT);
   }
 
-  // print to stderr
   PrintStatus eprint() const {    
     return this->print_(sys::STDERR);
   }

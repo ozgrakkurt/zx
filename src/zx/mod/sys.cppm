@@ -14,6 +14,29 @@ export namespace zx {
 
 namespace sys {
 
+// echo '#include <sys/mman.h>' | gcc -E - -dM | grep "#define MAP_"
+constexpr i32 MAP_SHARED = 0x01;
+constexpr i32 MAP_PRIVATE = 0x02;
+constexpr i32 MAP_ANONYMOUS = 0x20;
+constexpr i32 MAP_LOCKED = 0x02000;
+constexpr i32 MAP_POPULATE = 0x08000;
+constexpr i32 MAP_HUGETLB = 0x40000;
+
+constexpr i32 MAP_HUGE_SHIFT = 26;
+constexpr i32 MAP_HUGE_2MB = (21 << MAP_HUGE_SHIFT);
+constexpr i32 MAP_HUGE_1GB = (30 << MAP_HUGE_SHIFT);
+
+constexpr i32 PROT_NONE = 0x0;
+constexpr i32 PROT_READ = 0x1;
+constexpr i32 PROT_WRITE = 0x2;
+
+// echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "O_RD"
+constexpr i32 SYS_O_RDONLY = 00;
+
+// echo '#define _GNU_SOURCE 1
+// #include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "AT_"
+constexpr i32 SYS_AT_EMPTY_PATH = 0x1000;
+
 constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
 constexpr i32 STDERR = 2;
@@ -564,6 +587,43 @@ MMapStatus munmap(u8* mem, u64 length) {
   }
 
   return MMapStatus::Ok;
+}
+
+enum class [[nodiscard]] MProtectStatus : u8_c {
+  Ok = 0,
+  Nullptr,
+  UnexpectedErr,
+  EAcces,
+  EInval,
+  ENoMem,
+};
+
+MProtectStatus mprotect(u8* addr, u64 length, int prot) {
+  if (addr == nullptr) {
+    return MProtectStatus::Nullptr;
+  }
+
+  u64 const res = syscall3(10, (u64)addr, length, (u64)prot);
+  u64 const errno = errno_(res);
+
+  if (errno != SUCCESS) {
+    switch (errno) {
+    case EACCES: {
+      return MProtectStatus::EAcces;    
+    }
+    case EINVAL: {
+      return MProtectStatus::EInval;    
+    }
+    case ENOMEM: {
+      return MProtectStatus::ENoMem;   
+    }
+    default: {
+      return MProtectStatus::UnexpectedErr;
+    }
+    }
+  }
+
+  return MProtectStatus::Ok;
 }
 
 } // namespace sys

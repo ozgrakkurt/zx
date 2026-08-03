@@ -1,5 +1,6 @@
 export module zx:raw_alloc;
 import :def;
+import :raw_assert;
 
 export namespace zx {
 
@@ -26,11 +27,7 @@ struct RawAlloc {
   }
 
   u64 capacity_left() const {
-#ifdef ZX_DEV
-    if (this->m_offset > this->m_capacity) {
-      __builtin_trap();
-    }
-#endif
+    raw_assert_dev(this->m_offset <= this->m_capacity);
     return this->m_capacity - this->m_offset;
   }
 
