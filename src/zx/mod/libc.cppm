@@ -52,7 +52,8 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
   return dest;
 }
- __attribute__((no_builtin)) void *
+
+__attribute__((no_builtin)) void *
 memset(void *dest, i32_c ch, u64_c count) {
   u8 *output = (u8 *)dest;
   u64_c const byte = (u8)ch;
