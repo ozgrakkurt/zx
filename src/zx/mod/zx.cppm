@@ -13,3 +13,4 @@ export import :raw_alloc;
 export import :libc;
 export import :leb128;
 export import :vec;
+export import :page_alloc;

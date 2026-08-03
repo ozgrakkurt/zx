@@ -13,6 +13,8 @@ import :raw_assert;
 
 export namespace zx {
 
+namespace page_alloc {
+
 enum class [[nodiscard]] AllocStatus : u8_c {
   Ok = 0,
   Nullptr,
@@ -109,5 +111,7 @@ FreeStatus free(u8* mem, u64 size) {
 
   return FreeStatus::Ok;
 }
+
+} // namespace page_alloc
 
 } // export namespace zx

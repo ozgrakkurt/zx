@@ -28,7 +28,7 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
             : "zmm31", "zmm30", "zmm29", "zmm28");
   }
 
-  for (; offset + 256__wbu <= count; offset += 256__wbu) {
+  for (; offset + 64__wbu <= count; offset += 64__wbu) {
     __asm__("vmovups (%[input]), %%zmm31\n\t"
             "vmovups %%zmm31, (%[output])\n\t"
             : "=m"(*(u8(*)[64]) & output[offset])
@@ -201,8 +201,7 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
       u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
       // idx can't be oob of the vector.
       raw_assert_dev(idx < 64);
-      raw_assert_dev(offset >= idx);
-      return offset - idx;
+      return offset + idx;
     }
   }
 } 
