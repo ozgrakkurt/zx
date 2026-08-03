@@ -10,3 +10,6 @@ export import :raw_assert;
 export import :fmt;
 export import :raw_fmt;
 export import :raw_alloc;
+export import :libc;
+export import :leb128;
+export import :vec;
