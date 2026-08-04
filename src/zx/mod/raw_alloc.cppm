@@ -19,6 +19,7 @@ struct RawAlloc {
 #ifdef ZX_DEV
     __builtin_memset(mem, 0xaa, capacity);
 #endif
+    raw_assert(mem != nullptr);
     return RawAlloc {
       .m_mem = mem,
       .m_capacity = capacity,
@@ -50,7 +51,7 @@ struct RawAlloc {
     }
 
     if (len == 0) {
-      *out = (u8*)alignof(T);
+      *out = (T*)alignof(T);
       return RawAllocStatus::Ok;
     }
 

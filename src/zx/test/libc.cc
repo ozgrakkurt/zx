@@ -118,9 +118,9 @@ int main() {
   zx::u8* const buf0 = make_alloc(capacity);
   zx::u8* const buf1 = make_alloc(capacity);
 
-  constexpr zx::u64 lengths[] = {0,  1,  1023, 1024, 100, 1000, 13,
+  zx::u64 const lengths[] = {0,  1,  1023, 1024, 100, 1000, 13,
                                 65, 63, 64,   128,  127, 129};
-  constexpr zx::u64 n_lengths = sizeof(lengths) / sizeof(lengths[0]);
+  zx::u64 const n_lengths = sizeof(lengths) / sizeof(lengths[0]);
 
   for (zx::u64 i = 0; i < n_lengths; i++) {
     zx::u64 const len = lengths[i];

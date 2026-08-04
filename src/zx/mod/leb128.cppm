@@ -85,7 +85,7 @@ DecodeStatus decode_u64(u8 const* input, u64 len, u64* offset, u64* num) {
     offs++;
 
     raw_assert_dev(shift < 64);
-    out |= getval_(byte) << shift;    
+    out |= u64{getval_(byte)} << shift;    
     shift += 7__wbu;
     if ((byte & CONT_BIT) == 0) {
       *num = out;
@@ -157,7 +157,7 @@ DecodeStatus decode_i64(u8 const* input, u64 len, u64* offset, i64* num) {
     u8 const byte = input[offs];
     offs++;
     raw_assert_dev(shift < 64);
-    out |= getval_(byte) << shift;
+    out |= u64{getval_(byte)} << shift;
     shift += 7__wbu;
     if ((byte & CONT_BIT) == 0) {
       // sign extend if needed
