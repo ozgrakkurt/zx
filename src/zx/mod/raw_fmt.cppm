@@ -18,6 +18,10 @@ struct RawFmt {
     };
   }
 
+  u8 const* mem() const {
+    return this->m_mem; 
+  }
+
   u64 n_written() const {
     raw_assert_dev(this->m_capacity >= this->m_offset);
     return this->m_offset;

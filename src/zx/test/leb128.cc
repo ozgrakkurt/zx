@@ -39,7 +39,6 @@ static void test_unsigned() {
   testcase_unsigned((zx::u8[]){127__wbu}, 1, 127);
   testcase_unsigned((zx::u8[]){0x80__wbu, 1__wbu}, 2, 128);
   testcase_unsigned((zx::u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2, 129);
-  testcase_unsigned((zx::u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2, 129);
   testcase_unsigned((zx::u8[]){57__wbu | 0x80__wbu, 100__wbu}, 2, 12857__wbu);
 }
 
