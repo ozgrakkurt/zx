@@ -16,9 +16,7 @@ void assert_dev(bool condition) {
   }
 }
 #else
-void assert_dev(bool condition) {
-  (void)condition;
-}
+void assert_dev(bool condition) { (void)condition; }
 #endif
 
-} // export namespace zx
+} // namespace zx

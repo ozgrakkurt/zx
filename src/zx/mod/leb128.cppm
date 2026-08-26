@@ -9,9 +9,7 @@ namespace leb128 {
 constexpr u8 CONT_BIT = 0x80__wbu;
 constexpr u8 SIGN_BIT = 0x40__wbu;
 
-u8 getval_(u8 byte) {
-  return byte & 0x7f__wbu;
-}
+u8 getval_(u8 byte) { return byte & 0x7f__wbu; }
 
 enum class [[nodiscard]] EncodeStatus : u8_c {
   Ok = 0,
@@ -20,12 +18,12 @@ enum class [[nodiscard]] EncodeStatus : u8_c {
   OutOfCapacity,
 };
 
-EncodeStatus encode_u64(u64 num, u8* out, u64 capacity, u64* offset) {
+EncodeStatus encode_u64(u64 num, u8 *out, u64 capacity, u64 *offset) {
   if (out == nullptr || offset == nullptr) {
     return EncodeStatus::Nullptr;
   }
 
-  u64 offs  = *offset;
+  u64 offs = *offset;
 
   if (offs > capacity) {
     return EncodeStatus::InvalidOffset;
@@ -55,12 +53,12 @@ EncodeStatus encode_u64(u64 num, u8* out, u64 capacity, u64* offset) {
 enum class [[nodiscard]] DecodeStatus : u8_c {
   Ok = 0,
   Nullptr,
-  InvalidOffset,  
+  InvalidOffset,
   UnexpectedEndOfInput,
   InvalidInput,
 };
 
-DecodeStatus decode_u64(u8 const* input, u64 len, u64* offset, u64* num) {
+DecodeStatus decode_u64(u8 const *input, u64 len, u64 *offset, u64 *num) {
   if (input == nullptr || offset == nullptr || num == nullptr) {
     return DecodeStatus::Nullptr;
   }
@@ -70,7 +68,7 @@ DecodeStatus decode_u64(u8 const* input, u64 len, u64* offset, u64* num) {
   if (offs > len) {
     return DecodeStatus::InvalidOffset;
   }
-   
+
   u64 out = 0;
   u8 shift = 0;
   for (u8 iter = 0; iter < 10; iter++) {
@@ -85,7 +83,7 @@ DecodeStatus decode_u64(u8 const* input, u64 len, u64* offset, u64* num) {
     offs++;
 
     raw_assert_dev(shift < 64);
-    out |= u64{getval_(byte)} << shift;    
+    out |= u64{getval_(byte)} << shift;
     shift += 7__wbu;
     if ((byte & CONT_BIT) == 0) {
       *num = out;
@@ -99,7 +97,7 @@ DecodeStatus decode_u64(u8 const* input, u64 len, u64* offset, u64* num) {
   return DecodeStatus::InvalidInput;
 }
 
-EncodeStatus encode_i64(i64 num, u8* out, u64 capacity, u64* offset) {
+EncodeStatus encode_i64(i64 num, u8 *out, u64 capacity, u64 *offset) {
   if (out == nullptr || offset == nullptr) {
     return EncodeStatus::Nullptr;
   }
@@ -133,7 +131,7 @@ EncodeStatus encode_i64(i64 num, u8* out, u64 capacity, u64* offset) {
   }
 }
 
-DecodeStatus decode_i64(u8 const* input, u64 len, u64* offset, i64* num) {
+DecodeStatus decode_i64(u8 const *input, u64 len, u64 *offset, i64 *num) {
   if (input == nullptr || offset == nullptr || num == nullptr) {
     return DecodeStatus::Nullptr;
   }
@@ -176,6 +174,6 @@ DecodeStatus decode_i64(u8 const* input, u64 len, u64* offset, i64* num) {
   return DecodeStatus::InvalidInput;
 }
 
-}
+} // namespace leb128
 
-} // export namespace zx
+} // namespace zx

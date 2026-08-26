@@ -36,4 +36,4 @@ typedef i64 v512_i64 __attribute__((vector_size(64)));
 typedef f32 v512_f32 __attribute__((vector_size(64)));
 typedef f64 v512_f64 __attribute__((vector_size(64)));
 
-} // export namespace zx
+} // namespace zx

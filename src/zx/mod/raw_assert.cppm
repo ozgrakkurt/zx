@@ -9,9 +9,7 @@ void raw_assert_dev(bool cond) {
   }
 }
 #else
-void raw_assert_dev(bool cond) {
-  (void)cond;
-}
+void raw_assert_dev(bool cond) { (void)cond; }
 #endif
 
 void raw_assert(bool cond) {
@@ -20,4 +18,4 @@ void raw_assert(bool cond) {
   }
 }
 
-} // export namespace zx
+} // namespace zx

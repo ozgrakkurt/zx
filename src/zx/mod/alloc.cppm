@@ -3,6 +3,4 @@ import :assert;
 import :def;
 import :arith;
 
-export namespace zx {
-  
-} // export namespace zx
+export namespace zx {} // namespace zx

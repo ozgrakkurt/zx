@@ -13,7 +13,7 @@ __attribute__((no_builtin)) void *memset(void *dest, zx::i32_c ch,
 }
 
 __attribute__((no_builtin)) zx::i32_c memcmp(void const *lhs, void const *rhs,
-                                            zx::u64_c count) {
+                                             zx::u64_c count) {
   return zx::memcmp(lhs, rhs, count);
 }
 

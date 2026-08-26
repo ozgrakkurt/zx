@@ -10,4 +10,3 @@ __asm__(".text\n"
         "movq %rax, %rdi\n\t"
         "movq $60, %rax\n\t"
         "syscall\n\t");
-

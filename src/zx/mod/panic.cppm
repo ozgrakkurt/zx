@@ -6,8 +6,6 @@ import :raw_assert;
 
 export namespace zx {
 
-[[noreturn]] void panic() {
-  __builtin_trap();
-}
+[[noreturn]] void panic() { __builtin_trap(); }
 
-} // export namespace zx
+} // namespace zx

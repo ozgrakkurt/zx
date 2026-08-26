@@ -11,19 +11,19 @@ enum class [[nodiscard]] RawAllocStatus : u8_c {
 };
 
 struct RawAlloc {
-  u8* m_mem;
+  u8 *m_mem;
   u64 m_capacity;
   u64 m_offset;
 
-  static RawAlloc init(u8* mem, u64 capacity) {
+  static RawAlloc init(u8 *mem, u64 capacity) {
 #ifdef ZX_DEV
     __builtin_memset(mem, 0xaa, capacity);
 #endif
     raw_assert(mem != nullptr);
-    return RawAlloc {
-      .m_mem = mem,
-      .m_capacity = capacity,
-      .m_offset = 0,
+    return RawAlloc{
+        .m_mem = mem,
+        .m_capacity = capacity,
+        .m_offset = 0,
     };
   }
 
@@ -40,9 +40,8 @@ struct RawAlloc {
   }
 
   template <typename T>
-  RawAllocStatus aligned_alloc(u16 align, u64 len, T** out) {
-    bool const invalid_input = (align < alignof(T)) |
-                               (align > 128) |
+  RawAllocStatus aligned_alloc(u16 align, u64 len, T **out) {
+    bool const invalid_input = (align < alignof(T)) | (align > 128) |
                                (__builtin_popcountg(align) != 1) |
                                (out == nullptr);
 
@@ -51,17 +50,17 @@ struct RawAlloc {
     }
 
     if (len == 0) {
-      *out = (T*)alignof(T);
+      *out = (T *)alignof(T);
       return RawAllocStatus::Ok;
     }
 
-    u8* const mem = this->m_mem;
+    u8 *const mem = this->m_mem;
     u64 const offset = this->m_offset;
 
-    static_assert(sizeof(void*) == sizeof(u64));
+    static_assert(sizeof(void *) == sizeof(u64));
 
     bool overflow = false;
-    
+
     u64 mem_pos;
     overflow |= __builtin_add_overflow((u64)mem, offset, &mem_pos);
     u64 const mem_aligned = __builtin_align_up(mem_pos, align);
@@ -83,21 +82,20 @@ struct RawAlloc {
       return RawAllocStatus::OutOfMemory;
     }
 
-    u8* out_mem = &mem[alloc_offset];
+    u8 *out_mem = &mem[alloc_offset];
 
 #ifdef ZX_DEV
     __builtin_memset(out_mem, 0xaa, size);
 #endif
 
     this->m_offset = new_offset;
-    *out = (T*)out_mem;
+    *out = (T *)out_mem;
     return RawAllocStatus::Ok;
   }
 
-  template <typename T>
-  RawAllocStatus alloc(u64 len, T** out) {
+  template <typename T> RawAllocStatus alloc(u64 len, T **out) {
     return this->aligned_alloc(alignof(T), len, out);
   }
 };
 
-} // export namespace zx
+} // namespace zx

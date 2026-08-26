@@ -41,8 +41,7 @@ u64_c syscall2(u64_c num, u64_c arg1, u64_c arg2) {
   return ret;
 }
 
-u64_c syscall3(u64_c num, u64_c arg1, u64_c arg2,
-                                   u64_c arg3) {
+u64_c syscall3(u64_c num, u64_c arg1, u64_c arg2, u64_c arg3) {
   u64_c ret;
 
   __asm__ volatile("syscall"
@@ -53,8 +52,7 @@ u64_c syscall3(u64_c num, u64_c arg1, u64_c arg2,
   return ret;
 }
 
-u64_c syscall4(u64_c num, u64_c arg1, u64_c arg2,
-                                   u64_c arg3, u64_c arg4) {
+u64_c syscall4(u64_c num, u64_c arg1, u64_c arg2, u64_c arg3, u64_c arg4) {
   u64_c ret;
   register u64_c r10 __asm__("r10") = arg4;
 
@@ -66,9 +64,8 @@ u64_c syscall4(u64_c num, u64_c arg1, u64_c arg2,
   return ret;
 }
 
-u64_c syscall5(u64_c num, u64_c arg1, u64_c arg2,
-                                   u64_c arg3, u64_c arg4,
-                                   u64_c arg5) {
+u64_c syscall5(u64_c num, u64_c arg1, u64_c arg2, u64_c arg3, u64_c arg4,
+               u64_c arg5) {
   u64_c ret;
   register u64_c r10 __asm__("r10") = arg4;
   register u64_c r8 __asm__("r8") = arg5;
@@ -82,9 +79,8 @@ u64_c syscall5(u64_c num, u64_c arg1, u64_c arg2,
   return ret;
 }
 
-u64_c syscall6(u64_c num, u64_c arg1, u64_c arg2,
-                                   u64_c arg3, u64_c arg4, u64_c arg5,
-                                   u64_c arg6) {
+u64_c syscall6(u64_c num, u64_c arg1, u64_c arg2, u64_c arg3, u64_c arg4,
+               u64_c arg5, u64_c arg6) {
   u64_c ret;
   register u64_c r10 __asm__("r10") = arg4;
   register u64_c r8 __asm__("r8") = arg5;
@@ -99,4 +95,4 @@ u64_c syscall6(u64_c num, u64_c arg1, u64_c arg2,
   return ret;
 }
 
-} // export namespace zx
+} // namespace zx

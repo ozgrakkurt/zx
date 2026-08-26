@@ -6,21 +6,19 @@ import :sys;
 export namespace zx {
 
 struct RawFmt {
-  u8* m_mem;
+  u8 *m_mem;
   u64 m_capacity;
   u64 m_offset;
 
-  static RawFmt init(u8* mem, u64 capacity) {
-    return RawFmt {
-      .m_mem = mem,
-      .m_capacity = capacity,
-      .m_offset = 0,
+  static RawFmt init(u8 *mem, u64 capacity) {
+    return RawFmt{
+        .m_mem = mem,
+        .m_capacity = capacity,
+        .m_offset = 0,
     };
   }
 
-  u8 const* mem() const {
-    return this->m_mem; 
-  }
+  u8 const *mem() const { return this->m_mem; }
 
   u64 n_written() const {
     raw_assert_dev(this->m_capacity >= this->m_offset);
@@ -44,8 +42,8 @@ struct RawFmt {
     this->m_offset = 0;
   }
 
-  RawFmt* push_str(u8 const* str, u64 len, bool* overflow) {
-    u8* const mem = this->m_mem;
+  RawFmt *push_str(u8 const *str, u64 len, bool *overflow) {
+    u8 *const mem = this->m_mem;
     u64 const offset = this->m_offset;
     u64 const capacity_left = this->capacity_left();
     u64 const n_write = (capacity_left > len) ? len : capacity_left;
@@ -57,8 +55,8 @@ struct RawFmt {
     return this;
   }
 
-  RawFmt* push_char(u8 ch, bool* overflow) {
-    u8* const mem = this->m_mem;
+  RawFmt *push_char(u8 ch, bool *overflow) {
+    u8 *const mem = this->m_mem;
     u64 const offset = this->m_offset;
     bool const capacity_left = this->capacity_left() > 0;
     *overflow |= !capacity_left;
@@ -69,7 +67,7 @@ struct RawFmt {
     return this;
   }
 
-  RawFmt* push_u64(u64 val, bool* overflow) {
+  RawFmt *push_u64(u64 val, bool *overflow) {
     constexpr u64 MAX_NUM_DIGITS = 20;
     u8 digits[MAX_NUM_DIGITS];
 
@@ -80,12 +78,12 @@ struct RawFmt {
       digits[pos] = (u8)'0' + (u8)(val % 10);
       val /= 10;
     } while (val > 0);
-    u64 const len = MAX_NUM_DIGITS -  pos;
+    u64 const len = MAX_NUM_DIGITS - pos;
     this->push_str(&digits[pos], len, overflow);
     return this;
   }
 
-  RawFmt* push_i64(i64 val, bool* overflow) {
+  RawFmt *push_i64(i64 val, bool *overflow) {
     if (val >= 0) {
       this->push_u64((u64)val, overflow);
     } else {
@@ -96,12 +94,12 @@ struct RawFmt {
     return this;
   }
 
-  RawFmt* push_u64_hex(u64 val, bool* overflow) {
+  RawFmt *push_u64_hex(u64 val, bool *overflow) {
     constexpr u64 MAX_NUM_DIGITS = 22;
     u8 digits[MAX_NUM_DIGITS];
 
     constexpr u8 TABLE[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                                 '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+                              '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
     u64 pos = MAX_NUM_DIGITS;
     do {
@@ -136,7 +134,8 @@ struct RawFmt {
     }
 
     u64 n_written = 0;
-    if (sys::WriteStatus::Ok != sys::write(fd, this->m_mem, this->m_offset, &n_written)) {
+    if (sys::WriteStatus::Ok !=
+        sys::write(fd, this->m_mem, this->m_offset, &n_written)) {
       return PrintStatus::UnexpectedErr;
     }
     if (n_written < this->m_offset) {
@@ -145,13 +144,9 @@ struct RawFmt {
     return PrintStatus::Ok;
   }
 
-  PrintStatus print() const {
-    return this->print_(sys::STDOUT);
-  }
+  PrintStatus print() const { return this->print_(sys::STDOUT); }
 
-  PrintStatus eprint() const {    
-    return this->print_(sys::STDERR);
-  }
+  PrintStatus eprint() const { return this->print_(sys::STDERR); }
 };
 
-} // export namespace zx
+} // namespace zx

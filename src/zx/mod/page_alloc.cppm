@@ -26,7 +26,7 @@ enum class [[nodiscard]] AllocStatus : u8_c {
   InvalidInput,
 };
 
-AllocStatus alloc_(u64 size, u64 page_size, i32 huge_page_flags, u8** out) {
+AllocStatus alloc_(u64 size, u64 page_size, i32 huge_page_flags, u8 **out) {
   if (out == nullptr) {
     return AllocStatus::Nullptr;
   }
@@ -38,18 +38,19 @@ AllocStatus alloc_(u64 size, u64 page_size, i32 huge_page_flags, u8** out) {
   }
 
   i32 const prot = sys::PROT_READ | sys::PROT_WRITE;
-  i32 const flags = sys::MAP_PRIVATE | sys::MAP_ANONYMOUS |
-                       sys::MAP_POPULATE | huge_page_flags;
+  i32 const flags = sys::MAP_PRIVATE | sys::MAP_ANONYMOUS | sys::MAP_POPULATE |
+                    huge_page_flags;
 
   u8 *mem = nullptr;
-  if (sys::MMapStatus const status = sys::mmap(nullptr, size, prot, flags, -1, 0, &mem);
+  if (sys::MMapStatus const status =
+          sys::mmap(nullptr, size, prot, flags, -1, 0, &mem);
       sys::MMapStatus::Ok != status) {
     switch (status) {
     case sys::MMapStatus::EPerm: {
       return AllocStatus::PermissionErr;
     }
     case sys::MMapStatus::ENoMem: {
-      return AllocStatus::NoMem;    
+      return AllocStatus::NoMem;
     }
     case sys::MMapStatus::EInval: {
       return AllocStatus::InvalidInput;
@@ -68,15 +69,15 @@ AllocStatus alloc_(u64 size, u64 page_size, i32 huge_page_flags, u8** out) {
   return AllocStatus::Ok;
 }
 
-AllocStatus alloc_4kb(u64 size, u8** out) {
+AllocStatus alloc_4kb(u64 size, u8 **out) {
   return alloc_(size, u64{1} << 12, 0, out);
 }
 
-AllocStatus alloc_huge_2mb(u64 size, u8** out) {
+AllocStatus alloc_huge_2mb(u64 size, u8 **out) {
   return alloc_(size, u64{1} << 21, sys::MAP_HUGETLB | sys::MAP_HUGE_2MB, out);
 }
 
-AllocStatus alloc_huge_1gb(u64 size, u8** out) {
+AllocStatus alloc_huge_1gb(u64 size, u8 **out) {
   return alloc_(size, u64{1} << 30, sys::MAP_HUGETLB | sys::MAP_HUGE_1GB, out);
 }
 
@@ -88,7 +89,7 @@ enum class [[nodiscard]] FreeStatus : u8_c {
   UnexpectedErr,
 };
 
-FreeStatus free(u8* mem, u64 size) {
+FreeStatus free(u8 *mem, u64 size) {
   if (mem == nullptr) {
     return FreeStatus::Nullptr;
   }
@@ -114,4 +115,4 @@ FreeStatus free(u8* mem, u64 size) {
 
 } // namespace page_alloc
 
-} // export namespace zx
+} // namespace zx

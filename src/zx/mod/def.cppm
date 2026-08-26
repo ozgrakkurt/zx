@@ -78,5 +78,5 @@ static_assert(alignof(f32) == 4);
 typedef double f64;
 static_assert(sizeof(f64) == 8);
 static_assert(alignof(f64) == 8);
-  
-} // export namespace zx
+
+} // namespace zx

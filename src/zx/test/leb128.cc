@@ -3,7 +3,8 @@ import zx;
 static void testcase_unsigned(zx::u8 const *buf, zx::u64 buf_len, zx::u64 num) {
   zx::u64 out_num = zx::U64_MAX;
   zx::u64 offset = 0;
-  zx::raw_assert(zx::leb128::DecodeStatus::Ok == zx::leb128::decode_u64(buf, buf_len, &offset, &out_num));
+  zx::raw_assert(zx::leb128::DecodeStatus::Ok ==
+                 zx::leb128::decode_u64(buf, buf_len, &offset, &out_num));
   zx::raw_assert(offset == buf_len);
   zx::raw_assert(out_num == num);
 
@@ -12,7 +13,8 @@ static void testcase_unsigned(zx::u8 const *buf, zx::u64 buf_len, zx::u64 num) {
   __builtin_memset(out_buf, 0xaa, OUT_BUF_SIZE);
 
   offset = 0;
-  zx::raw_assert(zx::leb128::EncodeStatus::Ok == zx::leb128::encode_u64(num, out_buf, OUT_BUF_SIZE, &offset));
+  zx::raw_assert(zx::leb128::EncodeStatus::Ok ==
+                 zx::leb128::encode_u64(num, out_buf, OUT_BUF_SIZE, &offset));
   zx::raw_assert(offset == buf_len);
   zx::raw_assert(0 == __builtin_memcmp(out_buf, buf, offset));
 }
@@ -20,7 +22,8 @@ static void testcase_unsigned(zx::u8 const *buf, zx::u64 buf_len, zx::u64 num) {
 static void testcase_signed(zx::u8 const *buf, zx::u64 buf_len, zx::i64 num) {
   zx::i64 out_num = zx::I64_MAX;
   zx::u64 offset = 0;
-  zx::raw_assert(zx::leb128::DecodeStatus::Ok == zx::leb128::decode_i64(buf, buf_len, &offset, &out_num));
+  zx::raw_assert(zx::leb128::DecodeStatus::Ok ==
+                 zx::leb128::decode_i64(buf, buf_len, &offset, &out_num));
   zx::raw_assert(offset == buf_len);
   zx::raw_assert(out_num == num);
 
@@ -29,7 +32,8 @@ static void testcase_signed(zx::u8 const *buf, zx::u64 buf_len, zx::i64 num) {
   __builtin_memset(out_buf, 0xaa, OUT_BUF_SIZE);
 
   offset = 0;
-  zx::raw_assert(zx::leb128::EncodeStatus::Ok == zx::leb128::encode_i64(num, out_buf, OUT_BUF_SIZE, &offset));
+  zx::raw_assert(zx::leb128::EncodeStatus::Ok ==
+                 zx::leb128::encode_i64(num, out_buf, OUT_BUF_SIZE, &offset));
   zx::raw_assert(offset == buf_len);
   zx::raw_assert(0 == __builtin_memcmp(out_buf, buf, offset));
 }
@@ -53,25 +57,29 @@ static void test_signed() {
   testcase_signed((zx::u8[]){0x7f__wbu | 0x80__wbu, 0x7e__wbu}, 2, -129);
 }
 
-static void signed_roundtrip(zx::u8* slice, zx::u64 len, zx::i64 i) {
+static void signed_roundtrip(zx::u8 *slice, zx::u64 len, zx::i64 i) {
   zx::u64 write_offset = 0;
-  zx::raw_assert(zx::leb128::EncodeStatus::Ok == zx::leb128::encode_i64(i, slice, len, &write_offset));
+  zx::raw_assert(zx::leb128::EncodeStatus::Ok ==
+                 zx::leb128::encode_i64(i, slice, len, &write_offset));
 
   zx::u64 read_offset = 0;
   zx::i64 num = zx::I64_MAX;
-  zx::raw_assert(zx::leb128::DecodeStatus::Ok == zx::leb128::decode_i64(slice, len, &read_offset, &num));
+  zx::raw_assert(zx::leb128::DecodeStatus::Ok ==
+                 zx::leb128::decode_i64(slice, len, &read_offset, &num));
 
   zx::raw_assert(num == i);
   zx::raw_assert(read_offset == write_offset);
 }
 
-static void unsigned_roundtrip(zx::u8* slice, zx::u64 len, zx::u64 i) {
+static void unsigned_roundtrip(zx::u8 *slice, zx::u64 len, zx::u64 i) {
   zx::u64 write_offset = 0;
-  zx::raw_assert(zx::leb128::EncodeStatus::Ok == zx::leb128::encode_u64(i, slice, len, &write_offset));
+  zx::raw_assert(zx::leb128::EncodeStatus::Ok ==
+                 zx::leb128::encode_u64(i, slice, len, &write_offset));
 
   zx::u64 read_offset = 0;
   zx::u64 num = zx::U64_MAX;
-  zx::raw_assert(zx::leb128::DecodeStatus::Ok == zx::leb128::decode_u64(slice, len, &read_offset, &num));
+  zx::raw_assert(zx::leb128::DecodeStatus::Ok ==
+                 zx::leb128::decode_u64(slice, len, &read_offset, &num));
 
   zx::raw_assert(num == i);
   zx::raw_assert(read_offset == write_offset);
@@ -114,11 +122,13 @@ static void test_read_with_overflow() {
 
   zx::u64 offset = 0;
   zx::u64 num = 0;
-  zx::raw_assert(zx::leb128::DecodeStatus::InvalidInput == zx::leb128::decode_u64(buf, SIZE, &offset, &num));
+  zx::raw_assert(zx::leb128::DecodeStatus::InvalidInput ==
+                 zx::leb128::decode_u64(buf, SIZE, &offset, &num));
 
   offset = 0;
   zx::i64 inum = 0;
-  zx::raw_assert(zx::leb128::DecodeStatus::InvalidInput == zx::leb128::decode_i64(buf, SIZE, &offset, &inum));
+  zx::raw_assert(zx::leb128::DecodeStatus::InvalidInput ==
+                 zx::leb128::decode_i64(buf, SIZE, &offset, &inum));
 }
 
 int main(void) {

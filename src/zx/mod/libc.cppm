@@ -12,8 +12,7 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
   u64 offset = 0;
 
-  for (; offset + 256__wbu <= count;
-       offset += 256__wbu) {
+  for (; offset + 256__wbu <= count; offset += 256__wbu) {
     __asm__("vmovups (%[input]), %%zmm31\n\t"
             "vmovups 64(%[input]), %%zmm30\n\t"
             "vmovups 128(%[input]), %%zmm29\n\t"
@@ -41,20 +40,18 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
   if (remainder > 0) {
     register u64_c const storemask __asm__("k7") =
         __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-    __asm__(
-        "vmovdqu8 %[input], %%zmm31 %{%[storemask]%}\n\t"
-        "vmovdqu8 %%zmm31, %[output] %{%[storemask]%}\n\t"
-        : [output] "=m"(*(u8(*)[64]) & output[offset])
-        : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "k"(
-                                                                  storemask)
-        : "zmm31");
+    __asm__("vmovdqu8 %[input], %%zmm31 %{%[storemask]%}\n\t"
+            "vmovdqu8 %%zmm31, %[output] %{%[storemask]%}\n\t"
+            : [output] "=m"(*(u8(*)[64]) & output[offset])
+            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "k"(
+                                                                   storemask)
+            : "zmm31");
   }
 
   return dest;
 }
 
-__attribute__((no_builtin)) void *
-memset(void *dest, i32_c ch, u64_c count) {
+__attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
   u8 *output = (u8 *)dest;
   u64_c const byte = (u8)ch;
 
@@ -86,14 +83,13 @@ memset(void *dest, i32_c ch, u64_c count) {
   return dest;
 }
 
-__attribute__((no_builtin)) i32_c
-memcmp(void const *lhs, void const *rhs, u64_c count) {
+__attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
+                                         u64_c count) {
   u8 const *left = (u8 const *)lhs;
   u8 const *right = (u8 const *)rhs;
 
   u64 offset = 0;
-  for (; offset + 64__wbu <= count;
-       offset += 64__wbu) {
+  for (; offset + 64__wbu <= count; offset += 64__wbu) {
     u64_c nonzero_mask;
     __asm__("vmovdqu8 %[left], %%zmm31\n\t"
             "vmovdqu8 %[right], %%zmm30\n\t"
@@ -160,8 +156,7 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
     u64 const diff64 = addr - down_addr;
     raw_assert_dev(diff64 < 64);
     u8 const diff = (u8)diff64;
-    register u64_c const storemask __asm__("k7") =
-        U64_MAX << diff;
+    register u64_c const storemask __asm__("k7") = U64_MAX << diff;
     char const *down = (char const *)down_addr;
     u64_c nonzero_mask;
     __asm__(
@@ -204,6 +199,6 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
       return offset + idx;
     }
   }
-} 
+}
 
-} // export namespace zx
+} // namespace zx
