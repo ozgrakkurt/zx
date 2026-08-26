@@ -1194,6 +1194,230 @@ i64 u64_to_i64(u64 a, bool *failure) {
   return res;
 }
 
+u8 u16_to_u8_unsafe(u16 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, u16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 u32_to_u8_unsafe(u32 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, u32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 u64_to_u8_unsafe(u64 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 i8_to_u8_unsafe(i8 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, i8{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 i16_to_u8_unsafe(i16 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, i16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 i32_to_u8_unsafe(i32 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, i32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u8 i64_to_u8_unsafe(i64 a) {
+  u8 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u16 u32_to_u16_unsafe(u32 a) {
+  u16 res;
+  bool overflow = __builtin_add_overflow(a, u32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u16 u64_to_u16_unsafe(u64 a) {
+  u16 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u16 i16_to_u16_unsafe(i16 a) {
+  u16 res;
+  bool overflow = __builtin_add_overflow(a, i16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u16 i32_to_u16_unsafe(i32 a) {
+  u16 res;
+  bool overflow = __builtin_add_overflow(a, i32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u16 i64_to_u16_unsafe(i64 a) {
+  u16 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u32 u64_to_u32_unsafe(u64 a) {
+  u32 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u32 i32_to_u32_unsafe(i32 a) {
+  u32 res;
+  bool overflow = __builtin_add_overflow(a, i32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u32 i64_to_u32_unsafe(i64 a) {
+  u32 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+u64 i64_to_u64_unsafe(i64 a) {
+  u64 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 u8_to_i8_unsafe(u8 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, u8{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 u16_to_i8_unsafe(u16 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, u16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 u32_to_i8_unsafe(u32 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, u32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 u64_to_i8_unsafe(u64 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 i16_to_i8_unsafe(i16 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, i16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 i32_to_i8_unsafe(i32 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, i32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i8 i64_to_i8_unsafe(i64 a) {
+  i8 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i16 u16_to_i16_unsafe(u16 a) {
+  i16 res;
+  bool overflow = __builtin_add_overflow(a, u16{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i16 u32_to_i16_unsafe(u32 a) {
+  i16 res;
+  bool overflow = __builtin_add_overflow(a, u32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i16 u64_to_i16_unsafe(u64 a) {
+  i16 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i16 i32_to_i16_unsafe(i32 a) {
+  i16 res;
+  bool overflow = __builtin_add_overflow(a, i32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i16 i64_to_i16_unsafe(i64 a) {
+  i16 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i32 u32_to_i32_unsafe(u32 a) {
+  i32 res;
+  bool overflow = __builtin_add_overflow(a, u32{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i32 u64_to_i32_unsafe(u64 a) {
+  i32 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i32 i64_to_i32_unsafe(i64 a) {
+  i32 res;
+  bool overflow = __builtin_add_overflow(a, i64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
+i64 u64_to_i64_unsafe(u64 a) {
+  i64 res;
+  bool overflow = __builtin_add_overflow(a, u64{0}, &res);
+  zx::assert_dev(!overflow);
+  return res;
+}
+
 u64 align_up_u64(u64 val, u64 align, bool* failure) {
   *failure |= !is_pow_two_u64(align) || (align == 0);
   return (add_u64(val, align, failure) -  1) & ~(align - 1);
