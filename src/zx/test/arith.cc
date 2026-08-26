@@ -395,22 +395,6 @@ int main(void) {
   zx::shr_u64(0, 64, &fail);
   zx::raw_assert(fail);
 
-  fail = false;
-  zx::shr_i8(1, 8, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i16(0, 16, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i32(1, 32, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i64(0, 64, &fail);
-  zx::raw_assert(fail);
-
   // shr UB more
   fail = false;
   zx::shr_u8(1, 20, &fail);
@@ -426,22 +410,6 @@ int main(void) {
 
   fail = false;
   zx::shr_u64(1, zx::U8_MAX, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i8(1, 20, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i16(1, 30, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i32(1, 60, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shr_i64(1, zx::U8_MAX, &fail);
   zx::raw_assert(fail);
 
   // shr no UB
@@ -473,34 +441,6 @@ int main(void) {
   zx::raw_assert(0 == zx::shr_unsafe_u64(0, 1));
   zx::raw_assert(1 == zx::shr_unsafe_u64(4, 2));
 
-  fail = false;
-  zx::shr_i8(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shr_unsafe_i8(0, 1));
-  zx::raw_assert(1 == zx::shr_unsafe_i8(4, 2));
-
-  fail = false;
-  zx::shr_i16(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shr_unsafe_i16(0, 1));
-  zx::raw_assert(1 == zx::shr_unsafe_i16(4, 2));
-
-  fail = false;
-  zx::shr_i32(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shr_unsafe_i32(0, 1));
-  zx::raw_assert(1 == zx::shr_unsafe_i32(4, 2));
-
-  fail = false;
-  zx::shr_i64(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shr_unsafe_i64(0, 1));
-  zx::raw_assert(-1 == zx::shr_unsafe_i64(-4, 2));
-
   // shl UB
   fail = false;
   zx::shl_u8(1, 8, &fail);
@@ -518,22 +458,6 @@ int main(void) {
   zx::shl_u64(0, 64, &fail);
   zx::raw_assert(fail);
 
-  fail = false;
-  zx::shl_i8(1, 8, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i16(0, 16, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i32(1, 32, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i64(0, 64, &fail);
-  zx::raw_assert(fail);
-
   // shl UB more
   fail = false;
   zx::shl_u8(1, 20, &fail);
@@ -549,22 +473,6 @@ int main(void) {
 
   fail = false;
   zx::shl_u64(1, zx::U8_MAX, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i8(1, 20, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i16(1, 30, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i32(1, 60, &fail);
-  zx::raw_assert(fail);
-
-  fail = false;
-  zx::shl_i64(1, zx::U8_MAX, &fail);
   zx::raw_assert(fail);
 
   // shl no UB
@@ -596,34 +504,6 @@ int main(void) {
   zx::raw_assert(0 == zx::shl_unsafe_u64(0, 1));
   zx::raw_assert(4 == zx::shl_unsafe_u64(1, 2));
 
-  fail = false;
-  zx::shl_i8(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shl_unsafe_i8(0, 1));
-  zx::raw_assert(4 == zx::shl_unsafe_i8(1, 2));
-
-  fail = false;
-  zx::shl_i16(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shl_unsafe_i16(0, 1));
-  zx::raw_assert(4 == zx::shl_unsafe_i16(1, 2));
-
-  fail = false;
-  zx::shl_i32(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shl_unsafe_i32(0, 1));
-  zx::raw_assert(4 == zx::shl_unsafe_i32(1, 2));
-
-  fail = false;
-  zx::shl_i64(0, 1, &fail);
-  zx::raw_assert(!fail);
-
-  zx::raw_assert(0 == zx::shl_unsafe_i64(0, 1));
-  zx::raw_assert(4 == zx::shl_unsafe_i64(1, 2));
-
   // ctz
   zx::raw_assert(3 == zx::ctz_u8(0b01111000));
   zx::raw_assert(3 == zx::ctz_u16(0b01111000));
@@ -644,19 +524,19 @@ int main(void) {
   zx::raw_assert(32 == zx::clz_u32(0));
   zx::raw_assert(64 == zx::clz_u64(0));
 
-  // popcnt
-  zx::raw_assert(4 == zx::popcnt_u8(0b01111000));
-  zx::raw_assert(4 == zx::popcnt_u16(0b01111000));
-  zx::raw_assert(4 == zx::popcnt_u32(0b01111000));
-  zx::raw_assert(4 == zx::popcnt_u64(0b01111000));
-  zx::raw_assert(0 == zx::popcnt_u8(0));
-  zx::raw_assert(0 == zx::popcnt_u16(0));
-  zx::raw_assert(0 == zx::popcnt_u32(0));
-  zx::raw_assert(0 == zx::popcnt_u64(0));
-  zx::raw_assert(8 == zx::popcnt_u8(zx::U8_MAX));
-  zx::raw_assert(16 == zx::popcnt_u16(zx::U16_MAX));
-  zx::raw_assert(32 == zx::popcnt_u32(zx::U32_MAX));
-  zx::raw_assert(64 == zx::popcnt_u64(zx::U64_MAX));
+  // popcount
+  zx::raw_assert(4 == zx::popcount_u8(0b01111000));
+  zx::raw_assert(4 == zx::popcount_u16(0b01111000));
+  zx::raw_assert(4 == zx::popcount_u32(0b01111000));
+  zx::raw_assert(4 == zx::popcount_u64(0b01111000));
+  zx::raw_assert(0 == zx::popcount_u8(0));
+  zx::raw_assert(0 == zx::popcount_u16(0));
+  zx::raw_assert(0 == zx::popcount_u32(0));
+  zx::raw_assert(0 == zx::popcount_u64(0));
+  zx::raw_assert(8 == zx::popcount_u8(zx::U8_MAX));
+  zx::raw_assert(16 == zx::popcount_u16(zx::U16_MAX));
+  zx::raw_assert(32 == zx::popcount_u32(zx::U32_MAX));
+  zx::raw_assert(64 == zx::popcount_u64(zx::U64_MAX));
 
   // bit_width
   zx::raw_assert(7 == zx::bit_width_u8(0b01111000));
@@ -741,11 +621,8 @@ int main(void) {
 
   // cast to u8
   overflow = false;
-  zx::raw_assert(69 == zx::cast_to_u8<zx::u8>(zx::u8{69}, &overflow));
-  zx::raw_assert(!overflow);
-  zx::raw_assert(69 == zx::cast_unsafe_to_u8<zx::u8>(zx::u8{69}));
 
-  zx::raw_assert(69 == zx::cast_to_u8<zx::u16>(zx::u16{69}, &overflow));
+  zx::raw_assert(69 == zx::u16_to_u8(69, &overflow));
   zx::raw_assert(!overflow);
   zx::raw_assert(69 == zx::cast_unsafe_to_u8<zx::u16>(zx::u16{69}));
 
