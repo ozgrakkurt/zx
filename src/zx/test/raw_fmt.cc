@@ -1,6 +1,6 @@
 import zx;
 
-static void basic_test() {  
+static void basic_test() {
   constexpr zx::u64 cap = zx::u64{1} << 12;
   zx::u8 arr[cap];
   __builtin_memset(arr, 0xaa, cap);
