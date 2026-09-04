@@ -1,34 +1,28 @@
 export module zx:alloc;
 import :def;
 import :assert;
+import :slice;
+import :arith;
 
 export namespace zx {
 
-enum class [[nodiscard]] AllocStatus : u8_c {
-    Ok = 0,
-    Fail,
-    OutOfMemory,
-};
-
 struct Alloc {
-    u8 *m_mem;
-    u64 m_capacity;
+    Slice<u8> m_mem;
     u64 m_offset;
 
-    static Alloc init(u8 *mem, u64 capacity) {
+    static Alloc init(Slice<u8> mem) {
 #ifdef ZX_DEV
-        __builtin_memset(mem, 0xaa, capacity);
+        mem.memset(0xaa);
 #endif
-        assert(mem != nullptr);
         return Alloc{
             .m_mem = mem,
-            .m_capacity = capacity,
             .m_offset = 0,
         };
     }
 
     u64 capacity_left() const {
-        raw_assert_dev(this->m_offset <= this->m_capacity);
+        assert_dev(this->m_offset <= this->m_capacity);
+        return 
         return this->m_capacity - this->m_offset;
     }
 
@@ -38,6 +32,13 @@ struct Alloc {
 #endif
         this->m_offset = 0;
     }
+
+    enum class [[nodiscard]] Status: u8_c {
+        Ok = 0,
+        Fail,
+        OutOfMemory,
+        Nullptr,
+    };
 
     template <typename T>
     RawAllocStatus aligned_alloc(u16 align, u64 len, T **out) {
