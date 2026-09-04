@@ -1,6 +1,6 @@
 export module zx:leb128;
 import :def;
-import :raw_assert;
+import :assert;
 
 export namespace zx {
 
@@ -30,7 +30,7 @@ EncodeStatus encode_u64(u64 num, u8 *out, u64 capacity, u64 *offset) {
     }
 
     while (true) {
-        raw_assert_dev(offs <= capacity);
+        assert_dev(offs <= capacity);
         if (offs == capacity) {
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
@@ -72,7 +72,7 @@ DecodeStatus decode_u64(u8 const *input, u64 len, u64 *offset, u64 *num) {
     u64 out = 0;
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
-        raw_assert_dev(offs <= len);
+        assert_dev(offs <= len);
         if (offs == len) {
             *num = 0;
             *offset = offs;
@@ -82,7 +82,7 @@ DecodeStatus decode_u64(u8 const *input, u64 len, u64 *offset, u64 *num) {
         u8 const byte = input[offs];
         offs++;
 
-        raw_assert_dev(shift < 64);
+        assert_dev(shift < 64);
         out |= u64{getval_(byte)} << shift;
         shift += 7__wbu;
         if ((byte & CONT_BIT) == 0) {
@@ -109,7 +109,7 @@ EncodeStatus encode_i64(i64 num, u8 *out, u64 capacity, u64 *offset) {
     }
 
     while (true) {
-        raw_assert_dev(offs <= capacity);
+        assert_dev(offs <= capacity);
         if (offs == capacity) {
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
@@ -145,7 +145,7 @@ DecodeStatus decode_i64(u8 const *input, u64 len, u64 *offset, i64 *num) {
     u64 out = 0;
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
-        raw_assert_dev(offs <= len);
+        assert_dev(offs <= len);
         if (offs == len) {
             *num = 0;
             *offset = offs;
@@ -154,7 +154,7 @@ DecodeStatus decode_i64(u8 const *input, u64 len, u64 *offset, i64 *num) {
 
         u8 const byte = input[offs];
         offs++;
-        raw_assert_dev(shift < 64);
+        assert_dev(shift < 64);
         out |= u64{getval_(byte)} << shift;
         shift += 7__wbu;
         if ((byte & CONT_BIT) == 0) {

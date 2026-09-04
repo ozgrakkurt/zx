@@ -1,7 +1,7 @@
 export module zx:page_alloc;
 import :sys;
 import :def;
-import :raw_assert;
+import :assert;
 
 #ifndef __linux__
 #error "expected linux"
@@ -31,7 +31,7 @@ AllocStatus alloc_(u64 size, u64 page_size, i32 huge_page_flags, u8 **out) {
         return AllocStatus::Nullptr;
     }
 
-    raw_assert(__builtin_popcountg(page_size) == 1);
+    assert(__builtin_popcountg(page_size) == 1);
 
     if (__builtin_popcountg(size) != 1 || size < page_size) {
         return AllocStatus::InvalidSize;
