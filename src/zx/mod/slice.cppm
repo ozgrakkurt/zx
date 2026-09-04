@@ -114,19 +114,16 @@ template <typename T> struct Slice {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         assert_dev(ptr != nullptr);
-        assert_dev(out != nullptr);
 
         assert_dev(__builtin_is_aligned(ptr, alignof(T)));
         assert_dev(__builtin_is_aligned(ptr, alignof(U)));
 
         constexpr u64 len = sizeof(U) / sizeof(T);
 
-        *out = Slice{
+        return Slice{
             .m_ptr = (T const *)ptr,
             .m_len = len,
         };
-
-        return SliceInitStatus::Ok;
     }
 
     static Slice init_dangling() {
@@ -137,7 +134,7 @@ template <typename T> struct Slice {
     }
 
     template <u16 ALIGN> static Slice aligned_init_dangling() {
-        static_assert(is_pow_two(ALIGN));
+        static_assert(is_pow_two_u16(ALIGN));
         static_assert(ALIGN >= alignof(T));
 
         return Slice{
@@ -181,7 +178,7 @@ template <typename T> struct Slice {
             .m_ptr = (U const *)this->m_ptr,
             .m_len = new_len,
         };
-        return SLiceCastStatus::Ok;
+        return SliceCastStatus::Ok;
     }
 
     template <typename U> Slice<U> cast_unsafe() const {
@@ -193,11 +190,10 @@ template <typename T> struct Slice {
             assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
         }
 
-        *out = Slice<U>{
+        return Slice<U>{
             .m_ptr = (U const *)this->m_ptr,
             .m_len = new_len,
         };
-        return SliceCastStatus::Ok;
     }
 
     template <typename U> Slice<U> cast_static() const {
@@ -466,19 +462,16 @@ template <typename T> struct SliceMut {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         assert_dev(ptr != nullptr);
-        assert_dev(out != nullptr);
 
         assert_dev(__builtin_is_aligned(ptr, alignof(T)));
         assert_dev(__builtin_is_aligned(ptr, alignof(U)));
 
         constexpr u64 len = sizeof(U) / sizeof(T);
 
-        *out = SliceMut{
+        return SliceMut{
             .m_ptr = (T *)ptr,
             .m_len = len,
         };
-
-        return SliceInitStatus::Ok;
     }
 
     static SliceMut init_dangling() {
@@ -489,7 +482,7 @@ template <typename T> struct SliceMut {
     }
 
     template <u16 ALIGN> static SliceMut aligned_init_dangling() {
-        static_assert(is_pow_two(ALIGN));
+        static_assert(is_pow_two_u16(ALIGN));
         static_assert(ALIGN >= alignof(T));
 
         return SliceMut{
@@ -545,11 +538,10 @@ template <typename T> struct SliceMut {
             assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
         }
 
-        *out = SliceMut<U>{
+        return SliceMut<U>{
             .m_ptr = (U *)this->m_ptr,
             .m_len = new_len,
         };
-        return SliceCastStatus::Ok;
     }
 
     template <typename U> SliceMut<U> cast_static() const {
@@ -895,10 +887,10 @@ struct CString {
     static CString init_unsafe(char const *cstr) {
         assert_dev(cstr != nullptr);
 
-        u64 const len = __builtin_len(cstr);
+        u64 const len = __builtin_strlen(cstr);
 
         return CString{
-            .m_slice = Slice<u8>::init_unsafe(cstr, len),
+            .m_slice = Slice<u8>::init_unsafe((u8 const*)cstr, len),
         };
     }
 
