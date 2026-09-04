@@ -7,16 +7,25 @@ import :arith;
 export namespace zx {
 
 enum class [[nodiscard]] SliceInitStatus : u8_c {
-  Nullptr = 0,
+  Ok = 0,
+  Nullptr,
   UnalignedPtr,
   IntegerOverflow,
 };
 
 enum class [[nodiscard]] SliceCastStatus : u8_c {
-  Nullptr = 0,
+  Ok = 0,
+  Nullptr,
   IntegerOverflow,
   SizeMismatch,
   AlignMismatch,
+};
+
+enum class [[nodiscard]] SliceSliceStatus : u8_c {
+  Ok = 0,
+  Nullptr,
+  OutOfBounds,
+  IntegerOverflow,
 };
 
 template <typename T>
@@ -194,6 +203,65 @@ struct Slice {
     return Slice<U> {
       .m_ptr = (U const*)this->m_ptr,
       .m_len = new_len,
+    };
+  }
+
+  SliceSliceStatus slice(u64 offset, u64 len, Slice* out) const {
+    if (out == nullptr) {
+      return SliceSliceStatus::Nullptr;
+    }
+
+    bool overflow = false;    
+    u64 const end = add_u64(offset, len, &overflow);
+    if (overflow) {
+      return SliceSliceStatus::IntegerOverflow;
+    }
+
+    if (end > this->m_len) {
+      return SliceSliceStatus::OutOfBounds;
+    }
+
+    *out = Slice {
+      .ptr = &this->m_ptr[offset],
+      .m_len = len,
+    };
+    
+    return SliceSliceStatus::Ok;
+  }
+
+  Slice slice_unsafe(u64 offset, u64 len) const {
+    u64 const end = add_unsafe_u64(offset, len);
+    assert_dev(end <= this->m_len);
+
+    return Slice {
+      .ptr = &this->m_ptr[offset],
+      .m_len = len,
+    };
+  }
+
+  SliceSliceStatus slice_at(u64 offset, Slice* out) const {
+    if (out == nullptr) {
+      return SliceSliceStatus::Nullptr;
+    }
+
+    if (offset > this->m_len) {
+      return SliceSliceStatus::OutOfBounds;
+    }
+
+    u64 const len = sub_unsafe_u64(this->m_len, offset);
+
+    *out = Slice {
+      .m_ptr = &this->m_ptr[offset],
+      .m_len = len,
+    };
+    return SliceSliceStatus::Ok;
+  }
+
+  Slice slice_at_unsafe(u64 offset) const {
+    assert_dev(offset <= this->m_len);
+
+    return Slice {
+    
     };
   }
 };
