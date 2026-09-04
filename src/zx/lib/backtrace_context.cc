@@ -18,7 +18,6 @@ __asm__(".text\n"
         "movq 0(%rsp), %rax\n\t"
         "movq %rax, 56(%rdi)\n\t"
         "xorq %rax, %rax\n\t"
-        "retq\n\t"
-        );
+        "retq\n\t");
 
 #endif // ifdef ZX_DEBUG_INFO

@@ -186,454 +186,455 @@ constexpr u64 SIGBUS = 7;
 u64 const SUCCESS = 0;
 
 u64 errno_(u64 ret) {
-  i64 const sgnd = (i64)ret;
-  if (sgnd > -4096 && sgnd < 0) {
-    return (u64)-sgnd;
-  } else {
-    return SUCCESS;
-  }
+    i64 const sgnd = (i64)ret;
+    if (sgnd > -4096 && sgnd < 0) {
+        return (u64)-sgnd;
+    } else {
+        return SUCCESS;
+    }
 }
 
 enum class [[nodiscard]] ReadStatus : u8_c {
-  Ok = 0,
-  Nullptr,
-  UnexpectedErr,
-  EAgain,
-  EBadF,
-  EFault,
-  EIntr,
-  EInval,
-  EIo,
-  EIsDir,
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EBadF,
+    EFault,
+    EIntr,
+    EInval,
+    EIo,
+    EIsDir,
 };
 
 ReadStatus read(i32 fd, u8 *buf, u64 count, u64 *n_read) {
-  if (n_read == nullptr || buf == nullptr) {
-    return ReadStatus::Nullptr;
-  }
+    if (n_read == nullptr || buf == nullptr) {
+        return ReadStatus::Nullptr;
+    }
 
-  u64 const res = syscall3(0, (u64)fd, (u64)buf, count);
-  u64 const errno = errno_(res);
-  if (errno != SUCCESS) {
-    // The returned n_read count isn't supposed to be used on error case.
-    // Set to max value so the caller will do something unexpected if it tries
-    // to use this value on error case. Then we can hope to catch this in tests.
-    *n_read = U64_MAX;
+    u64 const res = syscall3(0, (u64)fd, (u64)buf, count);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        // The returned n_read count isn't supposed to be used on error case.
+        // Set to max value so the caller will do something unexpected if it
+        // tries to use this value on error case. Then we can hope to catch this
+        // in tests.
+        *n_read = U64_MAX;
 
-    // don't need to handle these separately since they are the same value.
-    static_assert(EAGAIN == EWOULDBLOCK);
+        // don't need to handle these separately since they are the same value.
+        static_assert(EAGAIN == EWOULDBLOCK);
 
-    switch (errno) {
-    case EAGAIN: {
-      return ReadStatus::EAgain;
+        switch (errno) {
+        case EAGAIN: {
+            return ReadStatus::EAgain;
+        }
+        case EBADF: {
+            return ReadStatus::EBadF;
+        }
+        case EFAULT: {
+            return ReadStatus::EFault;
+        }
+        case EINTR: {
+            return ReadStatus::EIntr;
+        }
+        case EINVAL: {
+            return ReadStatus::EInval;
+        }
+        case EIO: {
+            return ReadStatus::EIo;
+        }
+        case EISDIR: {
+            return ReadStatus::EIsDir;
+        }
+        default: {
+            return ReadStatus::UnexpectedErr;
+        }
+        }
     }
-    case EBADF: {
-      return ReadStatus::EBadF;
-    }
-    case EFAULT: {
-      return ReadStatus::EFault;
-    }
-    case EINTR: {
-      return ReadStatus::EIntr;
-    }
-    case EINVAL: {
-      return ReadStatus::EInval;
-    }
-    case EIO: {
-      return ReadStatus::EIo;
-    }
-    case EISDIR: {
-      return ReadStatus::EIsDir;
-    }
-    default: {
-      return ReadStatus::UnexpectedErr;
-    }
-    }
-  }
-  *n_read = res;
-  return ReadStatus::Ok;
+    *n_read = res;
+    return ReadStatus::Ok;
 }
 
 enum class [[nodiscard]] WriteStatus : u8_c {
-  Ok = 0,
-  Nullptr,
-  UnexpectedErr,
-  EAgain,
-  EBadF,
-  EDestAddrReq,
-  EDQuot,
-  EFault,
-  EFBig,
-  EIntr,
-  EInval,
-  EIo,
-  ENoSpc,
-  EPerm,
-  EPipe,
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EBadF,
+    EDestAddrReq,
+    EDQuot,
+    EFault,
+    EFBig,
+    EIntr,
+    EInval,
+    EIo,
+    ENoSpc,
+    EPerm,
+    EPipe,
 };
 
 WriteStatus write(i32 fd, u8 const *buf, u64 count, u64 *n_written) {
-  if (n_written == nullptr || buf == nullptr) {
-    return WriteStatus::Nullptr;
-  }
+    if (n_written == nullptr || buf == nullptr) {
+        return WriteStatus::Nullptr;
+    }
 
-  u64 const res = syscall3(1, (u64)fd, (u64)buf, count);
-  u64 const errno = errno_(res);
-  if (errno != SUCCESS) {
-    *n_written = U64_MAX;
+    u64 const res = syscall3(1, (u64)fd, (u64)buf, count);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        *n_written = U64_MAX;
 
-    switch (errno) {
-    case EAGAIN: {
-      return WriteStatus::EAgain;
+        switch (errno) {
+        case EAGAIN: {
+            return WriteStatus::EAgain;
+        }
+        case EBADF: {
+            return WriteStatus::EBadF;
+        }
+        case EDESTADDRREQ: {
+            return WriteStatus::EDestAddrReq;
+        }
+        case EDQUOT: {
+            return WriteStatus::EDQuot;
+        }
+        case EFAULT: {
+            return WriteStatus::EFault;
+        }
+        case EFBIG: {
+            return WriteStatus::EFBig;
+        }
+        case EINTR: {
+            return WriteStatus::EIntr;
+        }
+        case EINVAL: {
+            return WriteStatus::EInval;
+        }
+        case EIO: {
+            return WriteStatus::EIo;
+        }
+        case ENOSPC: {
+            return WriteStatus::ENoSpc;
+        }
+        case EPERM: {
+            return WriteStatus::EPerm;
+        }
+        case EPIPE: {
+            return WriteStatus::EPipe;
+        }
+        default: {
+            return WriteStatus::UnexpectedErr;
+        }
+        }
     }
-    case EBADF: {
-      return WriteStatus::EBadF;
-    }
-    case EDESTADDRREQ: {
-      return WriteStatus::EDestAddrReq;
-    }
-    case EDQUOT: {
-      return WriteStatus::EDQuot;
-    }
-    case EFAULT: {
-      return WriteStatus::EFault;
-    }
-    case EFBIG: {
-      return WriteStatus::EFBig;
-    }
-    case EINTR: {
-      return WriteStatus::EIntr;
-    }
-    case EINVAL: {
-      return WriteStatus::EInval;
-    }
-    case EIO: {
-      return WriteStatus::EIo;
-    }
-    case ENOSPC: {
-      return WriteStatus::ENoSpc;
-    }
-    case EPERM: {
-      return WriteStatus::EPerm;
-    }
-    case EPIPE: {
-      return WriteStatus::EPipe;
-    }
-    default: {
-      return WriteStatus::UnexpectedErr;
-    }
-    }
-  }
 
-  *n_written = res;
-  return WriteStatus::Ok;
+    *n_written = res;
+    return WriteStatus::Ok;
 }
 
 enum class [[nodiscard]] OpenStatus : u8_c {
-  Ok = 0,
-  Nullptr,
-  UnexpectedErr,
-  EAcces,
-  EBadF,
-  EBusy,
-  EDQuot,
-  EExist,
-  EFault,
-  EFBig,
-  EIntr,
-  EInval,
-  EIsDir,
-  ELoop,
-  EMFile,
-  ENameTooLong,
-  ENFile,
-  ENoDev,
-  ENoEnt,
-  ENoMem,
-  ENoSpc,
-  ENotDir,
-  ENxIo,
-  EOpNotSupp,
-  EOverflow,
-  EPerm,
-  ERoFs,
-  ETxtBsy,
-  EWouldBlock,
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAcces,
+    EBadF,
+    EBusy,
+    EDQuot,
+    EExist,
+    EFault,
+    EFBig,
+    EIntr,
+    EInval,
+    EIsDir,
+    ELoop,
+    EMFile,
+    ENameTooLong,
+    ENFile,
+    ENoDev,
+    ENoEnt,
+    ENoMem,
+    ENoSpc,
+    ENotDir,
+    ENxIo,
+    EOpNotSupp,
+    EOverflow,
+    EPerm,
+    ERoFs,
+    ETxtBsy,
+    EWouldBlock,
 };
 
 OpenStatus open(u8 const *path, i32 flags, u32 mode, i32 *fd) {
-  if (path == nullptr || fd == nullptr) {
-    return OpenStatus::Nullptr;
-  }
+    if (path == nullptr || fd == nullptr) {
+        return OpenStatus::Nullptr;
+    }
 
-  u64 const res = syscall3(2, (u64)path, (u64)flags, mode);
-  u64 const errno = errno_(res);
-  if (errno != SUCCESS) {
-    *fd = -1;
+    u64 const res = syscall3(2, (u64)path, (u64)flags, mode);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        *fd = -1;
 
-    switch (errno) {
-    case EACCES: {
-      return OpenStatus::EAcces;
+        switch (errno) {
+        case EACCES: {
+            return OpenStatus::EAcces;
+        }
+        case EBADF: {
+            return OpenStatus::EBadF;
+        }
+        case EBUSY: {
+            return OpenStatus::EBusy;
+        }
+        case EDQUOT: {
+            return OpenStatus::EDQuot;
+        }
+        case EEXIST: {
+            return OpenStatus::EExist;
+        }
+        case EFAULT: {
+            return OpenStatus::EFault;
+        }
+        case EFBIG: {
+            return OpenStatus::EFBig;
+        }
+        case EINTR: {
+            return OpenStatus::EIntr;
+        }
+        case EINVAL: {
+            return OpenStatus::EInval;
+        }
+        case EISDIR: {
+            return OpenStatus::EIsDir;
+        }
+        case ELOOP: {
+            return OpenStatus::ELoop;
+        }
+        case EMFILE: {
+            return OpenStatus::EMFile;
+        }
+        case ENAMETOOLONG: {
+            return OpenStatus::ENameTooLong;
+        }
+        case ENFILE: {
+            return OpenStatus::ENFile;
+        }
+        case ENODEV: {
+            return OpenStatus::ENoDev;
+        }
+        case ENOENT: {
+            return OpenStatus::ENoEnt;
+        }
+        case ENOMEM: {
+            return OpenStatus::ENoMem;
+        }
+        case ENOSPC: {
+            return OpenStatus::ENoSpc;
+        }
+        case ENOTDIR: {
+            return OpenStatus::ENotDir;
+        }
+        case ENXIO: {
+            return OpenStatus::ENxIo;
+        }
+        case EOPNOTSUPP: {
+            return OpenStatus::EOpNotSupp;
+        }
+        case EOVERFLOW: {
+            return OpenStatus::EOverflow;
+        }
+        case EPERM: {
+            return OpenStatus::EPerm;
+        }
+        case EROFS: {
+            return OpenStatus::ERoFs;
+        }
+        case ETXTBSY: {
+            return OpenStatus::ETxtBsy;
+        }
+        case EWOULDBLOCK: {
+            return OpenStatus::EWouldBlock;
+        }
+        default: {
+            return OpenStatus::UnexpectedErr;
+        }
+        }
     }
-    case EBADF: {
-      return OpenStatus::EBadF;
-    }
-    case EBUSY: {
-      return OpenStatus::EBusy;
-    }
-    case EDQUOT: {
-      return OpenStatus::EDQuot;
-    }
-    case EEXIST: {
-      return OpenStatus::EExist;
-    }
-    case EFAULT: {
-      return OpenStatus::EFault;
-    }
-    case EFBIG: {
-      return OpenStatus::EFBig;
-    }
-    case EINTR: {
-      return OpenStatus::EIntr;
-    }
-    case EINVAL: {
-      return OpenStatus::EInval;
-    }
-    case EISDIR: {
-      return OpenStatus::EIsDir;
-    }
-    case ELOOP: {
-      return OpenStatus::ELoop;
-    }
-    case EMFILE: {
-      return OpenStatus::EMFile;
-    }
-    case ENAMETOOLONG: {
-      return OpenStatus::ENameTooLong;
-    }
-    case ENFILE: {
-      return OpenStatus::ENFile;
-    }
-    case ENODEV: {
-      return OpenStatus::ENoDev;
-    }
-    case ENOENT: {
-      return OpenStatus::ENoEnt;
-    }
-    case ENOMEM: {
-      return OpenStatus::ENoMem;
-    }
-    case ENOSPC: {
-      return OpenStatus::ENoSpc;
-    }
-    case ENOTDIR: {
-      return OpenStatus::ENotDir;
-    }
-    case ENXIO: {
-      return OpenStatus::ENxIo;
-    }
-    case EOPNOTSUPP: {
-      return OpenStatus::EOpNotSupp;
-    }
-    case EOVERFLOW: {
-      return OpenStatus::EOverflow;
-    }
-    case EPERM: {
-      return OpenStatus::EPerm;
-    }
-    case EROFS: {
-      return OpenStatus::ERoFs;
-    }
-    case ETXTBSY: {
-      return OpenStatus::ETxtBsy;
-    }
-    case EWOULDBLOCK: {
-      return OpenStatus::EWouldBlock;
-    }
-    default: {
-      return OpenStatus::UnexpectedErr;
-    }
-    }
-  }
 
-  *fd = (i32)res;
-  return OpenStatus::Ok;
+    *fd = (i32)res;
+    return OpenStatus::Ok;
 }
 
 enum class [[nodiscard]] CloseStatus : u8_c {
-  Ok = 0,
-  UnexpectedErr,
-  EBadF,
-  EIntr,
-  EIo,
-  ENoSpc,
-  EDQuot,
+    Ok = 0,
+    UnexpectedErr,
+    EBadF,
+    EIntr,
+    EIo,
+    ENoSpc,
+    EDQuot,
 };
 
 CloseStatus close(i32 fd) {
-  u64 const res = syscall1(3, (u64)fd);
-  u64 const errno = errno_(res);
-  if (errno != SUCCESS) {
-    switch (errno) {
-    case EBADF: {
-      return CloseStatus::EBadF;
+    u64 const res = syscall1(3, (u64)fd);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EBADF: {
+            return CloseStatus::EBadF;
+        }
+        case EINTR: {
+            return CloseStatus::EIntr;
+        }
+        case EIO: {
+            return CloseStatus::EIo;
+        }
+        case ENOSPC: {
+            return CloseStatus::ENoSpc;
+        }
+        case EDQUOT: {
+            return CloseStatus::EDQuot;
+        }
+        default: {
+            return CloseStatus::UnexpectedErr;
+        }
+        }
     }
-    case EINTR: {
-      return CloseStatus::EIntr;
-    }
-    case EIO: {
-      return CloseStatus::EIo;
-    }
-    case ENOSPC: {
-      return CloseStatus::ENoSpc;
-    }
-    case EDQUOT: {
-      return CloseStatus::EDQuot;
-    }
-    default: {
-      return CloseStatus::UnexpectedErr;
-    }
-    }
-  }
 
-  return CloseStatus::Ok;
+    return CloseStatus::Ok;
 }
 
 enum class [[nodiscard]] MMapStatus : u8_c {
-  Ok = 0,
-  Nullptr,
-  UnexpectedErr,
-  EAcces,
-  EAgain,
-  EBadF,
-  EExist,
-  EInval,
-  ENFile,
-  ENoDev,
-  ENoMem,
-  EOverflow,
-  EPerm,
-  ETxtBsy,
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAcces,
+    EAgain,
+    EBadF,
+    EExist,
+    EInval,
+    ENFile,
+    ENoDev,
+    ENoMem,
+    EOverflow,
+    EPerm,
+    ETxtBsy,
 };
 
 MMapStatus mmap_err_(u64 errno) {
-  switch (errno) {
-  case EACCES: {
-    return MMapStatus::EAcces;
-  }
-  case EAGAIN: {
-    return MMapStatus::EAgain;
-  }
-  case EBADF: {
-    return MMapStatus::EBadF;
-  }
-  case EEXIST: {
-    return MMapStatus::EExist;
-  }
-  case EINVAL: {
-    return MMapStatus::EInval;
-  }
-  case ENFILE: {
-    return MMapStatus::ENFile;
-  }
-  case ENODEV: {
-    return MMapStatus::ENoDev;
-  }
-  case ENOMEM: {
-    return MMapStatus::ENoMem;
-  }
-  case EOVERFLOW: {
-    return MMapStatus::EOverflow;
-  }
-  case EPERM: {
-    return MMapStatus::EPerm;
-  }
-  case ETXTBSY: {
-    return MMapStatus::ETxtBsy;
-  }
-  default: {
-    return MMapStatus::UnexpectedErr;
-  }
-  }
+    switch (errno) {
+    case EACCES: {
+        return MMapStatus::EAcces;
+    }
+    case EAGAIN: {
+        return MMapStatus::EAgain;
+    }
+    case EBADF: {
+        return MMapStatus::EBadF;
+    }
+    case EEXIST: {
+        return MMapStatus::EExist;
+    }
+    case EINVAL: {
+        return MMapStatus::EInval;
+    }
+    case ENFILE: {
+        return MMapStatus::ENFile;
+    }
+    case ENODEV: {
+        return MMapStatus::ENoDev;
+    }
+    case ENOMEM: {
+        return MMapStatus::ENoMem;
+    }
+    case EOVERFLOW: {
+        return MMapStatus::EOverflow;
+    }
+    case EPERM: {
+        return MMapStatus::EPerm;
+    }
+    case ETXTBSY: {
+        return MMapStatus::ETxtBsy;
+    }
+    default: {
+        return MMapStatus::UnexpectedErr;
+    }
+    }
 }
 
 MMapStatus mmap(u8 *addr, u64 length, i32 prot, i32 flags, i32 fd, i64 offset,
                 u8 **mem) {
-  if (mem == nullptr) {
-    return MMapStatus::Nullptr;
-  }
+    if (mem == nullptr) {
+        return MMapStatus::Nullptr;
+    }
 
-  u64 const res = syscall6(9, (u64)addr, length, (u64)prot, (u64)flags, (u64)fd,
-                           (u64)offset);
-  u64 const errno = errno_(res);
+    u64 const res = syscall6(9, (u64)addr, length, (u64)prot, (u64)flags,
+                             (u64)fd, (u64)offset);
+    u64 const errno = errno_(res);
 
-  if (errno != SUCCESS) {
-    *mem = nullptr;
-    return mmap_err_(errno);
-  }
+    if (errno != SUCCESS) {
+        *mem = nullptr;
+        return mmap_err_(errno);
+    }
 
-  *mem = (u8 *)res;
-  return MMapStatus::Ok;
+    *mem = (u8 *)res;
+    return MMapStatus::Ok;
 }
 
 MMapStatus munmap(u8 *mem, u64 length) {
-  if (mem == nullptr) {
-    return MMapStatus::Nullptr;
-  }
+    if (mem == nullptr) {
+        return MMapStatus::Nullptr;
+    }
 
-  u64 const res = syscall2(11, (u64)mem, length);
-  u64 const errno = errno_(res);
+    u64 const res = syscall2(11, (u64)mem, length);
+    u64 const errno = errno_(res);
 
-  if (errno != SUCCESS) {
-    return mmap_err_(errno);
-  }
+    if (errno != SUCCESS) {
+        return mmap_err_(errno);
+    }
 
-  return MMapStatus::Ok;
+    return MMapStatus::Ok;
 }
 
 enum class [[nodiscard]] MProtectStatus : u8_c {
-  Ok = 0,
-  Nullptr,
-  UnexpectedErr,
-  EAcces,
-  EInval,
-  ENoMem,
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAcces,
+    EInval,
+    ENoMem,
 };
 
 MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
-  if (addr == nullptr) {
-    return MProtectStatus::Nullptr;
-  }
+    if (addr == nullptr) {
+        return MProtectStatus::Nullptr;
+    }
 
-  u64 const res = syscall3(10, (u64)addr, length, (u64)prot);
-  u64 const errno = errno_(res);
+    u64 const res = syscall3(10, (u64)addr, length, (u64)prot);
+    u64 const errno = errno_(res);
 
-  if (errno != SUCCESS) {
-    switch (errno) {
-    case EACCES: {
-      return MProtectStatus::EAcces;
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EACCES: {
+            return MProtectStatus::EAcces;
+        }
+        case EINVAL: {
+            return MProtectStatus::EInval;
+        }
+        case ENOMEM: {
+            return MProtectStatus::ENoMem;
+        }
+        default: {
+            return MProtectStatus::UnexpectedErr;
+        }
+        }
     }
-    case EINVAL: {
-      return MProtectStatus::EInval;
-    }
-    case ENOMEM: {
-      return MProtectStatus::ENoMem;
-    }
-    default: {
-      return MProtectStatus::UnexpectedErr;
-    }
-    }
-  }
 
-  return MProtectStatus::Ok;
+    return MProtectStatus::Ok;
 }
 
 [[noreturn]] void exit_group(int status) {
-  syscall1(231, (u64)status);
-  // should never reach this but we put it to make sure
-  // that this function doesn't return and the compiler is happy
-  // about the [[noreturn]] annotation.
-  __builtin_trap();
+    syscall1(231, (u64)status);
+    // should never reach this but we put it to make sure
+    // that this function doesn't return and the compiler is happy
+    // about the [[noreturn]] annotation.
+    __builtin_trap();
 }
 
 } // namespace sys

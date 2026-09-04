@@ -3,7 +3,8 @@ __asm__(".text\n"
         ".global _start\n"
         "_start:\n\t"
         ".cfi_startproc\n\t"
-        // stop eh_frame based unwinder from going past this function frame since there is nothing above.
+        // stop eh_frame based unwinder from going past this function frame
+        // since there is nothing above.
         ".cfi_undefined rip\n\t"
         "xorq %rbp, %rbp\n\t"
         "popq %rdi\n\t"
@@ -13,5 +14,4 @@ __asm__(".text\n"
         "movq %rax, %rdi\n\t"
         "movq $60, %rax\n\t"
         "syscall\n\t"
-        ".cfi_endproc\n\t"
-        );
+        ".cfi_endproc\n\t");

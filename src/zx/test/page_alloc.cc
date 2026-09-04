@@ -3,29 +3,29 @@ import zx;
 typedef zx::page_alloc::AllocStatus allocfn(zx::u64 size, zx::u8 **out);
 
 static void do_test(allocfn alloc, zx::u64 size) {
-  zx::u8 *mem = nullptr;
-  zx::raw_assert(zx::page_alloc::AllocStatus::Ok == alloc(size, &mem));
-  zx::raw_assert(mem != nullptr);
+    zx::u8 *mem = nullptr;
+    zx::raw_assert(zx::page_alloc::AllocStatus::Ok == alloc(size, &mem));
+    zx::raw_assert(mem != nullptr);
 
-  zx::raw_assert(size > 0);
+    zx::raw_assert(size > 0);
 
-  zx::u8 const first = mem[0];
-  zx::u8 const last = mem[size - 1];
+    zx::u8 const first = mem[0];
+    zx::u8 const last = mem[size - 1];
 
-  mem[size / 2] = first + last;
+    mem[size / 2] = first + last;
 
-  zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
-                 zx::page_alloc::free(mem, size));
+    zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
+                   zx::page_alloc::free(mem, size));
 
-  // munmaping an already unmapped region doesn't fail
-  zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
-                 zx::page_alloc::free(mem, size));
+    // munmaping an already unmapped region doesn't fail
+    zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
+                   zx::page_alloc::free(mem, size));
 }
 
 int main(void) {
-  do_test(zx::page_alloc::alloc_4kb, zx::u64{1} << 16);
-  // do_test(zx::page_alloc::alloc_huge_2mb, zx::u64{1} << 21);
-  // do_test(zx::page_alloc::alloc_huge_1gb, zx::u64{1} << 30);
+    do_test(zx::page_alloc::alloc_4kb, zx::u64{1} << 16);
+    // do_test(zx::page_alloc::alloc_huge_2mb, zx::u64{1} << 21);
+    // do_test(zx::page_alloc::alloc_huge_1gb, zx::u64{1} << 30);
 
-  return 0;
+    return 0;
 }
