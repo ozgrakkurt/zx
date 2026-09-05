@@ -6,6 +6,13 @@ import :arith;
 
 export namespace zx {
 
+enum class [[nodiscard]] AllocStatus : u8_c {
+    Ok = 0,
+    IntegerOverflow,
+    OutOfMemory,
+    Nullptr,
+};
+
 struct Alloc {
     SliceMut<u8> m_mem;
     u64 m_offset;
@@ -31,13 +38,6 @@ struct Alloc {
         this->m_offset = 0;
     }
 
-    enum class [[nodiscard]] AllocStatus : u8_c {
-        Ok = 0,
-        IntegerOverflow,
-        OutOfMemory,
-        Nullptr,
-    };
-
     template <u16 ALIGN, typename T>
     AllocStatus aligned_alloc(u64 len, SliceMut<T> *out) {
         static_assert(ALIGN >= alignof(T));
@@ -49,7 +49,7 @@ struct Alloc {
         }
 
         if (len == 0) {
-            *out = SliceMut<T>::aligned_init_dangling();
+            *out = SliceMut<T>::template aligned_init_dangling<ALIGN>();
             return AllocStatus::Ok;
         }
 

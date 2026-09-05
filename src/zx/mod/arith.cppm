@@ -858,13 +858,13 @@ u64 next_pow_two_unsafe_u64(u64 a) {
     return shl_unsafe_u64(1, shift);
 }
 
-bool is_pow_two_u8(u8 a) { return __builtin_popcountg(a) == 1; }
+constexpr bool is_pow_two_u8(u8 a) { return __builtin_popcountg(a) == 1; }
 
-bool is_pow_two_u16(u16 a) { return __builtin_popcountg(a) == 1; }
+constexpr bool is_pow_two_u16(u16 a) { return __builtin_popcountg(a) == 1; }
 
-bool is_pow_two_u32(u32 a) { return __builtin_popcountg(a) == 1; }
+constexpr bool is_pow_two_u32(u32 a) { return __builtin_popcountg(a) == 1; }
 
-bool is_pow_two_u64(u64 a) { return __builtin_popcountg(a) == 1; }
+constexpr bool is_pow_two_u64(u64 a) { return __builtin_popcountg(a) == 1; }
 
 u8 inverse_u8(u8 a) { return wrapping_add_u8(~a, 1); }
 
