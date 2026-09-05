@@ -26,12 +26,11 @@ struct Fmt {
 
     u64 capacity() const {
         assert_dev(this->m_mem.len() >= this->m_offset);
-        return this->m_capacity;
+        return this->m_mem.len();
     }
 
     u64 capacity_left() const {
-        assert_dev(this->m_mem.len() >= this->m_offset);
-        return this->m_capacity - this->m_offset;
+        return sub_unsafe_u64(this->m_mem.len(), this->m_offset);
     }
 
     void reset() {
@@ -42,10 +41,11 @@ struct Fmt {
     }
 
     void push_str(Slice<u8> str, bool *overflow) {
-        Slice<u8> const mem = this->m_mem;
+        SliceMut<u8> const mem = this->m_mem;
         u64 const offset = this->m_offset;
         u64 const capacity_left = this->capacity_left();
-        u64 const n_write = (capacity_left > str.len()) ? str.len() : capacity_left;
+        u64 const n_write =
+            (capacity_left > str.len()) ? str.len() : capacity_left;
         *overflow |= (n_write < str.len());
         if (n_write > 0) {
             mem.slice_unsafe(offset, n_write).memcpy_from_unsafe(str);
@@ -54,7 +54,7 @@ struct Fmt {
     }
 
     void push_char(u8 ch, bool *overflow) {
-        Slice<u8> const mem = this->m_mem;
+        SliceMut<u8> const mem = this->m_mem;
         u64 const offset = this->m_offset;
         bool const capacity_left = this->capacity_left() > 0;
         *overflow |= !capacity_left;

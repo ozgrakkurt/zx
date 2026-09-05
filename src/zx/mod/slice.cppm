@@ -585,7 +585,7 @@ template <typename T> struct SliceMut {
         assert_dev(end <= this->m_len);
 
         return SliceMut{
-            .ptr = &this->m_ptr[offset],
+            .m_ptr = &this->m_ptr[offset],
             .m_len = len,
         };
     }
@@ -890,7 +890,7 @@ struct CString {
         u64 const len = __builtin_strlen(cstr);
 
         return CString{
-            .m_slice = Slice<u8>::init_unsafe((u8 const*)cstr, len),
+            .m_slice = Slice<u8>::init_unsafe((u8 const *)cstr, len),
         };
     }
 

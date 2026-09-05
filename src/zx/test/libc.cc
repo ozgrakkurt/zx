@@ -8,10 +8,10 @@ __attribute__((no_builtin)) static void check_memcpy(zx::u8 *dst, zx::u8 *src,
     }
 
     void *out_dst = zx::memcpy(dst, src, len);
-    zx::raw_assert(out_dst == dst);
+    zx::assert(out_dst == dst);
 
     for (zx::u64 i = 0; i < len; i++) {
-        zx::raw_assert(src[i] == dst[i]);
+        zx::assert(src[i] == dst[i]);
     }
 }
 
@@ -21,10 +21,10 @@ __attribute__((no_builtin)) static void check_memset(zx::u8 *dst, zx::u64 len) {
     }
 
     void *out_dst = zx::memset(dst, 69, len);
-    zx::raw_assert(out_dst == dst);
+    zx::assert(out_dst == dst);
 
     for (zx::u64 i = 0; i < len; i++) {
-        zx::raw_assert(dst[i] == 69);
+        zx::assert(dst[i] == 69);
     }
 }
 
@@ -40,7 +40,7 @@ check_memcmp(zx::u8 *left, zx::u8 *right, zx::u64 len) {
         right[i] = (zx::u8)i;
     }
 
-    zx::raw_assert(0 == zx::memcmp(left, right, len));
+    zx::assert(0 == zx::memcmp(left, right, len));
 
     // the rest of tests don't make sense for zero length;
     if (len == 0) {
@@ -53,11 +53,11 @@ check_memcmp(zx::u8 *left, zx::u8 *right, zx::u64 len) {
     // lt
     for (zx::u64 i = 0; i < n_indices; i++) {
         zx::u64 const idx = indices[i];
-        zx::raw_assert(idx < len);
+        zx::assert(idx < len);
         zx::u8 const orig = left[idx];
         left[idx] = 69;
         right[idx] = 79;
-        zx::raw_assert(0 > zx::memcmp(left, right, len));
+        zx::assert(0 > zx::memcmp(left, right, len));
         left[idx] = orig;
         right[idx] = orig;
     }
@@ -65,11 +65,11 @@ check_memcmp(zx::u8 *left, zx::u8 *right, zx::u64 len) {
     // gt
     for (zx::u64 i = 0; i < n_indices; i++) {
         zx::u64 const idx = indices[i];
-        zx::raw_assert(idx < len);
+        zx::assert(idx < len);
         zx::u8 const orig = left[idx];
         left[idx] = 79;
         right[idx] = 69;
-        zx::raw_assert(0 < zx::memcmp(left, right, len));
+        zx::assert(0 < zx::memcmp(left, right, len));
         left[idx] = orig;
         right[idx] = orig;
     }
@@ -86,19 +86,19 @@ __attribute__((no_builtin)) static void check_strlen(zx::u8 *str, zx::u64 len) {
     if (len >= 2) {
         zx::u64 const pos = len - 2;
         str[pos] = 0;
-        zx::raw_assert(pos == zx::strlen((char const *)str));
+        zx::assert(pos == zx::strlen((char const *)str));
         str[pos] = 69;
     }
 
     zx::u64 const pos = len - 1;
     str[pos] = 0;
-    zx::raw_assert(pos == zx::strlen((char const *)str));
+    zx::assert(pos == zx::strlen((char const *)str));
 }
 
 __attribute__((no_builtin)) static zx::u8 *make_alloc(zx::u64 capacity) {
     // has to be power of two
-    zx::raw_assert(__builtin_popcountg(capacity) == 1);
-    zx::raw_assert(capacity >= 4096);
+    zx::assert(__builtin_popcountg(capacity) == 1);
+    zx::assert(capacity >= 4096);
 
     zx::u8 *alloc;
     if (zx::page_alloc::AllocStatus const status =
@@ -108,7 +108,7 @@ __attribute__((no_builtin)) static zx::u8 *make_alloc(zx::u64 capacity) {
     }
     zx::sys::MProtectStatus const sys_status =
         zx::sys::mprotect(&alloc[capacity], capacity, zx::sys::PROT_NONE);
-    zx::raw_assert(sys_status == zx::sys::MProtectStatus::Ok);
+    zx::assert(sys_status == zx::sys::MProtectStatus::Ok);
 
     return alloc;
 }
@@ -125,7 +125,7 @@ int main() {
 
     for (zx::u64 i = 0; i < n_lengths; i++) {
         zx::u64 const len = lengths[i];
-        zx::raw_assert(capacity >= len);
+        zx::assert(capacity >= len);
         zx::u64 const offset = capacity - len;
         zx::u8 *b0 = &buf0[offset];
         zx::u8 *b1 = &buf1[offset];

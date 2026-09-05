@@ -4,22 +4,22 @@ typedef zx::page_alloc::AllocStatus allocfn(zx::u64 size, zx::u8 **out);
 
 static void do_test(allocfn alloc, zx::u64 size) {
     zx::u8 *mem = nullptr;
-    zx::raw_assert(zx::page_alloc::AllocStatus::Ok == alloc(size, &mem));
-    zx::raw_assert(mem != nullptr);
+    zx::assert(zx::page_alloc::AllocStatus::Ok == alloc(size, &mem));
+    zx::assert(mem != nullptr);
 
-    zx::raw_assert(size > 0);
+    zx::assert(size > 0);
 
     zx::u8 const first = mem[0];
     zx::u8 const last = mem[size - 1];
 
     mem[size / 2] = first + last;
 
-    zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
-                   zx::page_alloc::free(mem, size));
+    zx::assert(zx::page_alloc::FreeStatus::Ok ==
+               zx::page_alloc::free(mem, size));
 
     // munmaping an already unmapped region doesn't fail
-    zx::raw_assert(zx::page_alloc::FreeStatus::Ok ==
-                   zx::page_alloc::free(mem, size));
+    zx::assert(zx::page_alloc::FreeStatus::Ok ==
+               zx::page_alloc::free(mem, size));
 }
 
 int main(void) {

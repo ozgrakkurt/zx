@@ -7,10 +7,10 @@ import :arith;
 export namespace zx {
 
 struct Alloc {
-    Slice<u8> m_mem;
+    SliceMut<u8> m_mem;
     u64 m_offset;
 
-    static Alloc init(Slice<u8> mem) {
+    static Alloc init(SliceMut<u8> mem) {
 #ifdef ZX_DEV
         mem.memset(0xaa);
 #endif
@@ -21,81 +21,76 @@ struct Alloc {
     }
 
     u64 capacity_left() const {
-        assert_dev(this->m_offset <= this->m_capacity);
-        return 
-        return this->m_capacity - this->m_offset;
+        return sub_unsafe_u64(this->m_mem.len(), this->m_offset);
     }
 
     void reset() {
 #ifdef ZX_DEV
-        __builtin_memset(this->m_mem, 0xaa, this->m_capacity);
+        this->m_mem.memset(0xaa);
 #endif
         this->m_offset = 0;
     }
 
-    enum class [[nodiscard]] Status: u8_c {
+    enum class [[nodiscard]] AllocStatus : u8_c {
         Ok = 0,
-        Fail,
+        IntegerOverflow,
         OutOfMemory,
         Nullptr,
     };
 
-    template <typename T>
-    RawAllocStatus aligned_alloc(u16 align, u64 len, T **out) {
-        bool const invalid_input = (align < alignof(T)) | (align > 128) |
-                                   (__builtin_popcountg(align) != 1) |
-                                   (out == nullptr);
+    template <u16 ALIGN, typename T>
+    AllocStatus aligned_alloc(u64 len, SliceMut<T> *out) {
+        static_assert(ALIGN >= alignof(T));
+        static_assert(ALIGN <= 128);
+        static_assert(is_pow_two_u16(ALIGN));
 
-        if (invalid_input) {
-            return RawAllocStatus::Fail;
+        if (out == nullptr) {
+            return AllocStatus::Nullptr;
         }
 
         if (len == 0) {
-            *out = (T *)alignof(T);
-            return RawAllocStatus::Ok;
+            *out = SliceMut<T>::aligned_init_dangling();
+            return AllocStatus::Ok;
         }
 
-        u8 *const mem = this->m_mem;
+        SliceMut<u8> const mem = this->m_mem;
         u64 const offset = this->m_offset;
-
-        static_assert(sizeof(void *) == sizeof(u64));
 
         bool overflow = false;
 
-        u64 mem_pos;
-        overflow |= __builtin_add_overflow((u64)mem, offset, &mem_pos);
-        u64 const mem_aligned = __builtin_align_up(mem_pos, align);
-        u64 padding;
-        overflow |= __builtin_sub_overflow(mem_aligned, mem_pos, &padding);
+        u64 const mem_pos = add_u64((u64)mem.ptr(), offset, &overflow);
+        u64 const mem_aligned = align_up_u64(mem_pos, ALIGN, &overflow);
+        u64 const padding = sub_u64(mem_aligned, mem_pos, &overflow);
 
-        u64 size;
-        overflow |= __builtin_mul_overflow(len, sizeof(T), &size);
-        u64 alloc_offset;
-        overflow |= __builtin_add_overflow(offset, padding, &alloc_offset);
-        u64 new_offset;
-        overflow |= __builtin_add_overflow(alloc_offset, size, &new_offset);
+        u64 const size = mul_u64(len, sizeof(T), &overflow);
+        u64 const alloc_offset = add_u64(offset, padding, &overflow);
+        u64 const new_offset = add_u64(alloc_offset, size, &overflow);
 
         if (overflow) {
-            return RawAllocStatus::Fail;
+            return AllocStatus::IntegerOverflow;
         }
 
-        if (new_offset > this->m_capacity) {
-            return RawAllocStatus::OutOfMemory;
+        if (new_offset > mem.len()) {
+            return AllocStatus::OutOfMemory;
         }
 
-        u8 *out_mem = &mem[alloc_offset];
+        // should be safe since we check bounds beforehand
+        SliceMut<u8> out_mem = mem.slice_unsafe(alloc_offset, size);
 
 #ifdef ZX_DEV
-        __builtin_memset(out_mem, 0xaa, size);
+        out_mem.memset(0xaa);
 #endif
 
         this->m_offset = new_offset;
-        *out = (T *)out_mem;
-        return RawAllocStatus::Ok;
+        // safe since we precisely construct the out_mem to be a valid slice of
+        // T
+        *out = out_mem.cast_unsafe<T>();
+
+        return AllocStatus::Ok;
     }
 
-    template <typename T> RawAllocStatus alloc(u64 len, T **out) {
-        return this->aligned_alloc(alignof(T), len, out);
+    template <typename T> AllocStatus alloc(u64 len, SliceMut<u8> *out) {
+        return this->aligned_alloc<alignof(T), T>(len, out);
     }
 };
 
