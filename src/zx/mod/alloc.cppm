@@ -89,8 +89,23 @@ struct Alloc {
         return AllocStatus::Ok;
     }
 
-    template <typename T> AllocStatus alloc(u64 len, SliceMut<u8> *out) {
+    template <typename T> AllocStatus alloc(u64 len, SliceMut<T> *out) {
         return this->aligned_alloc<alignof(T), T>(len, out);
+    }
+
+    template <typename T> AllocStatus create(T **out) {
+        if (out == nullptr) {
+            return AllocStatus::Nullptr;
+        }
+
+        SliceMut<T> slice;
+        AllocStatus const status = this->alloc<T>(1, &slice);
+        if (status != AllocStatus::Ok) {
+            return status;
+        }
+
+        *out = slice.offset_unsafe(0);
+        return AllocStatus::Ok;
     }
 };
 

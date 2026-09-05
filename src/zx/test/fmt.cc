@@ -14,35 +14,36 @@ static void basic_test() {
         fmt.push_i64(-1212, &overflow);
         zx::assert(fmt.n_written() == 5);
         zx::assert(!overflow);
-        zx::assert(0 == __builtin_memcmp(fmt.mem(), "-1212", 5));
+        zx::assert(0 == __builtin_memcmp(fmt.mem().ptr(), "-1212", 5));
 
         fmt.push_char('x', &overflow);
         zx::assert(fmt.n_written() == 6);
         zx::assert(!overflow);
-        zx::assert(0 == __builtin_memcmp(fmt.mem(), "-1212x", 6));
+        zx::assert(0 == __builtin_memcmp(fmt.mem().ptr(), "-1212x", 6));
 
         fmt.push_i64(10, &overflow);
         zx::assert(fmt.n_written() == 8);
         zx::assert(!overflow);
-        zx::assert(0 == __builtin_memcmp(fmt.mem(), "-1212x10", 8));
+        zx::assert(0 == __builtin_memcmp(fmt.mem().ptr(), "-1212x10", 8));
 
         fmt.push_u64(1010, &overflow);
         zx::assert(fmt.n_written() == 12);
         zx::assert(!overflow);
-        zx::assert(0 == __builtin_memcmp(fmt.mem(), "-1212x101010", 12));
+        zx::assert(0 == __builtin_memcmp(fmt.mem().ptr(), "-1212x101010", 12));
 
         fmt.push_i64(9'223'372'036'854'775'807__wb, &overflow);
         zx::assert(fmt.n_written() == 31);
         zx::assert(!overflow);
-        zx::assert(0 == __builtin_memcmp(
-                            fmt.mem(), "-1212x1010109223372036854775807", 31));
+        zx::assert(0 == __builtin_memcmp(fmt.mem().ptr(),
+                                         "-1212x1010109223372036854775807",
+                                         31));
 
         fmt.push_i64(-9'223'372'036'854'775'808__wb, &overflow);
         zx::assert(fmt.n_written() == 51);
         zx::assert(!overflow);
         zx::assert(0 ==
                    __builtin_memcmp(
-                       fmt.mem(),
+                       fmt.mem().ptr(),
                        "-1212x1010109223372036854775807-9223372036854775808",
                        51));
 
@@ -51,7 +52,7 @@ static void basic_test() {
         zx::assert(!overflow);
         zx::assert(0 ==
                    __builtin_memcmp(
-                       fmt.mem(),
+                       fmt.mem().ptr(),
                        "-1212x1010109223372036854775807-92233720368547758080",
                        52));
 
@@ -60,7 +61,7 @@ static void basic_test() {
         zx::assert(!overflow);
         zx::assert(0 ==
                    __builtin_memcmp(
-                       fmt.mem(),
+                       fmt.mem().ptr(),
                        "-1212x1010109223372036854775807-922337203685477580800",
                        53));
 
@@ -68,7 +69,7 @@ static void basic_test() {
         zx::assert(fmt.n_written() == 73);
         zx::assert(!overflow);
         zx::assert(0 ==
-                   __builtin_memcmp(fmt.mem(),
+                   __builtin_memcmp(fmt.mem().ptr(),
                                     "-1212x1010109223372036854775807-"
                                     "92233720368547758080018446744073709551615",
                                     73));

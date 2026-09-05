@@ -476,7 +476,7 @@ template <typename T> struct SliceMut {
 
     static SliceMut init_dangling() {
         return SliceMut{
-            .m_ptr = (T const *)u64{alignof(T)},
+            .m_ptr = (T *)u64{alignof(T)},
             .m_len = 0,
         };
     }
