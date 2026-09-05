@@ -104,7 +104,7 @@ struct Alloc {
             return status;
         }
 
-        *out = slice.offset_unsafe(0);
+        *out = slice.offset_mut_unsafe(0);
         return AllocStatus::Ok;
     }
 };

@@ -9,7 +9,7 @@ static void do_test(zx::Alloc *alloc) {
 
     for (zx::u64 i = 0; i < 100; i++) {
         zx::assert(zx::AllocStatus::Ok ==
-                   alloc->create<zx::i32>(slice.offset_unsafe(i)));
+                   alloc->create<zx::i32>(slice.offset_mut_unsafe(i)));
         *slice.read_unsafe(i) = (zx::i32)i;
     }
 

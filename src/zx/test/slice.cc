@@ -2,8 +2,121 @@ import zx;
 
 using namespace zx;
 
+// this is how to pass a template to a template
+template <template <typename T> class S> static void test_slicing_impl() {
+    u16 data[] = {1, 2, 3, 4, 5};
+    u64 const data_len = sizeof(data) / sizeof(data[0]);
+    S<u16> const slice = S<u16>::init_unsafe(data, data_len);
+    S<u16> other;
+
+    // SLICE
+    assert(SliceStatus::Ok == slice.slice(0, 5, &other));
+    assert(slice.equals(other));
+
+    assert(SliceStatus::Ok == slice.slice(4, 0, &other));
+    assert(other.len() == 0);
+
+    // edge
+    assert(SliceStatus::Ok == slice.slice(5, 0, &other));
+    assert(other.len() == 0);
+
+    // oob
+    assert(SliceStatus::OutOfBounds == slice.slice(6, 0, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice(1, 5, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice(0, 6, &other));
+
+    // SLICE_UNSAFE
+    other = slice.slice_unsafe(0, 5);
+    assert(slice.equals(other));
+
+    other = slice.slice_unsafe(4, 0);
+    assert(other.len() == 0);
+
+    other = slice.slice_unsafe(5, 0);
+    assert(other.len() == 0);
+
+    // SLICE_AT
+    assert(SliceStatus::Ok == slice.slice_at(0, &other));
+    assert(other.equals(slice));
+
+    assert(SliceStatus::Ok == slice.slice_at(4, &other));
+    assert(other.len() == 1);
+    assert(other.equals(slice.slice_unsafe(4, 1)));
+
+    assert(SliceStatus::Ok == slice.slice_at(5, &other));
+    assert(other.len() == 0);
+
+    // oob
+    assert(SliceStatus::OutOfBounds == slice.slice_at(6, &other));
+
+    // SLICE_AT_UNSAFE
+    other = slice.slice_at_unsafe(0);
+    assert(other.equals(slice));
+
+    other = slice.slice_at_unsafe(4);
+    assert(other.len() == 1);
+    assert(other.equals(slice.slice_unsafe(4, 1)));
+
+    other = slice.slice_at_unsafe(5);
+    assert(other.len() == 0);
+}
+
 static void test_slicing() {
-    // slice // slice_at // slice_unsafe // slice_at_unsafe
+    test_slicing_impl<Slice>();
+    test_slicing_impl<SliceMut>();
+}
+
+template <template <typename T> class S> static void test_read_access_impl() {
+    u16 data[] = {1, 2, 3, 4, 5};
+    u64 const data_len = sizeof(data) / sizeof(data[0]);
+    S<u16> const slice = S<u16>::init_unsafe(data, data_len);
+    // for offset_ methods
+    u16 const *ptr = nullptr;
+    // for read_ methods
+    u16 val = 69;
+    // for read_unaligned_ methods
+    u64 big_val = 1131;
+    u8 small_val = 211;
+
+    // OFFSET
+    assert(SliceStatus::Ok == slice.offset(0, &ptr));
+    assert(*ptr == 1);
+
+    assert(SliceStatus::Ok == slice.offset(4, &ptr));
+    assert(*ptr == 5);
+
+    // oob
+    assert(SliceStatus::OutOfBounds == slice.offset(5, &ptr));
+    assert(SliceStatus::OutOfBounds == slice.offset(55, &ptr));
+
+    // OFFSET_UNSAFE
+    ptr = slice.offset_unsafe(0);
+    assert(*ptr == 1);
+
+    ptr = slice.offset_unsafe(4);
+    assert(*ptr == 5);
+
+    // READ
+    assert(SliceStatus::Ok == slice.read(0, &val));
+    assert(val == 1);
+
+    assert(SliceStatus::Ok == slice.read(3, &val));
+    assert(val == 4);
+
+    // READ_UNSAFE
+    val = slice.read_unsafe(0);
+    assert(val == 1);
+
+    val = slice.read_unsafe(3);
+    assert(val == 4);
+
+    // READ_UNALIGNED
+
+}
+
+static void test_read_access() {
+    test_read_access_impl<Slice>();
+    test_read_access_impl<SliceMut>();
 }
 
 static void test_cast_static() {
@@ -160,10 +273,10 @@ static void test_mut() {
     assert((u64)&data[10] == (u64)sli.offset_unsafe(10));
 
     u32 *pp = nullptr;
-    SliceStatus status = sli.offset(20, &pp);
+    SliceStatus status = sli.offset_mut(20, &pp);
     assert(status == SliceStatus::OutOfBounds);
 
-    status = sli.offset(3, &pp);
+    status = sli.offset_mut(3, &pp);
     assert(status == SliceStatus::Ok);
     assert((u64)&data[3] == (u64)pp);
 
@@ -204,6 +317,7 @@ int main(void) {
     test_aligned_init_dangling();
     test_cast_static();
     test_slicing();
+    test_read_access();
 
     return 0;
 }

@@ -226,7 +226,7 @@ template <typename T> struct Slice {
         }
 
         *out = Slice{
-            .ptr = &this->m_ptr[offset],
+            .m_ptr = &this->m_ptr[offset],
             .m_len = len,
         };
 
@@ -575,7 +575,7 @@ template <typename T> struct SliceMut {
         }
 
         *out = SliceMut{
-            .ptr = &this->m_ptr[offset],
+            .m_ptr = &this->m_ptr[offset],
             .m_len = len,
         };
 
@@ -621,7 +621,7 @@ template <typename T> struct SliceMut {
         };
     }
 
-    SliceStatus offset(u64 offset, T **out) const {
+    SliceStatus offset(u64 offset, T const **out) const {
         if (out == nullptr) {
             return SliceStatus::Nullptr;
         }
@@ -635,7 +635,26 @@ template <typename T> struct SliceMut {
         return SliceStatus::Ok;
     }
 
-    T *offset_unsafe(u64 offset) const {
+    T const *offset_unsafe(u64 offset) const {
+        assert_dev(offset < this->m_len);
+        return &this->m_ptr[offset];
+    }
+
+    SliceStatus offset_mut(u64 offset, T **out) const {
+        if (out == nullptr) {
+            return SliceStatus::Nullptr;
+        }
+
+        if (offset >= this->m_len) {
+            return SliceStatus::OutOfBounds;
+        }
+
+        *out = &this->m_ptr[offset];
+
+        return SliceStatus::Ok;
+    }
+
+    T *offset_mut_unsafe(u64 offset) const {
         assert_dev(offset < this->m_len);
         return &this->m_ptr[offset];
     }
