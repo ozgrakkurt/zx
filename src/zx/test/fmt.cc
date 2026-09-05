@@ -74,6 +74,22 @@ static void basic_test() {
                                     "92233720368547758080018446744073709551615",
                                     73));
 
+        fmt.push_u64_hex(69, &overflow);
+        zx::assert(fmt.n_written() == 77);
+        zx::assert(0 == __builtin_memcmp(
+                            fmt.mem().ptr(),
+                            "-1212x1010109223372036854775807-"
+                            "922337203685477580800184467440737095516150x45",
+                            77));
+
+        fmt.push_u64_hex(0, &overflow);
+        zx::assert(fmt.n_written() == 80);
+        zx::assert(0 == __builtin_memcmp(
+                            fmt.mem().ptr(),
+                            "-1212x1010109223372036854775807-"
+                            "922337203685477580800184467440737095516150x450x0",
+                            80));
+
         fmt.reset();
     }
 }

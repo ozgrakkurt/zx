@@ -54,7 +54,7 @@ template <typename T> struct Slice {
             return SliceInitStatus::Nullptr;
         }
 
-        if (__builtin_is_aligned(ptr, alignof(T))) {
+        if (!__builtin_is_aligned(ptr, alignof(T))) {
             return SliceInitStatus::UnalignedPtr;
         }
 
@@ -136,6 +136,7 @@ template <typename T> struct Slice {
     template <u16 ALIGN> static Slice aligned_init_dangling() {
         static_assert(is_pow_two_u16(ALIGN));
         static_assert(ALIGN >= alignof(T));
+        static_assert(ALIGN > 0);
 
         return Slice{
             .m_ptr = (T const *)u64{ALIGN},
@@ -237,7 +238,7 @@ template <typename T> struct Slice {
         assert_dev(end <= this->m_len);
 
         return Slice{
-            .ptr = &this->m_ptr[offset],
+            .m_ptr = &this->m_ptr[offset],
             .m_len = len,
         };
     }
@@ -402,7 +403,7 @@ template <typename T> struct SliceMut {
             return SliceInitStatus::Nullptr;
         }
 
-        if (__builtin_is_aligned(ptr, alignof(T))) {
+        if (!__builtin_is_aligned(ptr, alignof(T))) {
             return SliceInitStatus::UnalignedPtr;
         }
 
@@ -484,6 +485,7 @@ template <typename T> struct SliceMut {
     template <u16 ALIGN> static SliceMut aligned_init_dangling() {
         static_assert(is_pow_two_u16(ALIGN));
         static_assert(ALIGN >= alignof(T));
+        static_assert(ALIGN > 0);
 
         return SliceMut{
             .m_ptr = (T *)u64{ALIGN},

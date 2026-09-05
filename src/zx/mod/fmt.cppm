@@ -48,7 +48,8 @@ struct Fmt {
             (capacity_left > str.len()) ? str.len() : capacity_left;
         *overflow |= (n_write < str.len());
         if (n_write > 0) {
-            mem.slice_unsafe(offset, n_write).memcpy_from_unsafe(str);
+            mem.slice_unsafe(offset, n_write)
+                .memcpy_from_unsafe(str.slice_unsafe(0, n_write));
         }
         this->m_offset = add_unsafe_u64(offset, n_write);
     }
@@ -75,7 +76,7 @@ struct Fmt {
             val /= 10;
         } while (val > 0);
         u64 const len = sub_unsafe_u64(MAX_NUM_DIGITS, pos);
-        this->push_str(Slice<u8>::init_unsafe(digits, len), overflow);
+        this->push_str(Slice<u8>::init_unsafe(&digits[pos], len), overflow);
     }
 
     void push_i64(i64 val, bool *overflow) {
@@ -107,7 +108,7 @@ struct Fmt {
         digits[pos] = '0';
 
         u64 const len = sub_unsafe_u64(MAX_NUM_DIGITS, pos);
-        this->push_str(Slice<u8>::init_unsafe(digits, len), overflow);
+        this->push_str(Slice<u8>::init_unsafe(&digits[pos], len), overflow);
     }
 
     enum class [[nodiscard]] PrintStatus : u8_c {
@@ -130,6 +131,8 @@ struct Fmt {
         }
         if (n_written < this->m_offset) {
             return PrintStatus::ShortWrite;
+        } else if (n_written != this->m_offset) {
+            return PrintStatus::UnexpectedErr;
         }
         return PrintStatus::Ok;
     }

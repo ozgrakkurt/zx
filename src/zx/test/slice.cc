@@ -1,0 +1,209 @@
+import zx;
+
+using namespace zx;
+
+static void test_slicing() {
+    // slice // slice_at // slice_unsafe // slice_at_unsafe
+}
+
+static void test_cast_static() {
+    // zero len
+    {
+        Slice<u16> slice = Slice<u16>::init_dangling();
+        Slice<u8> slice8 = slice.cast_static<u8>();
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+    {
+        SliceMut<u16> slice = SliceMut<u16>::init_dangling();
+        SliceMut<u8> slice8 = slice.cast_static<u8>();
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // with len > 0
+    u16 data = 69;
+    {
+        Slice<u16> slice = Slice<u16>::init_unsafe(&data, 1);
+        Slice<u8> slice8 = slice.cast_static<u8>();
+        assert(slice8.len() == 2);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+    {
+        SliceMut<u16> slice = SliceMut<u16>::init_unsafe(&data, 1);
+        SliceMut<u8> slice8 = slice.cast_static<u8>();
+        assert(slice8.len() == 2);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+}
+
+static void test_aligned_init_dangling() {
+    {
+        Slice<u8> slice = Slice<u8>::template aligned_init_dangling<128>();
+        assert((u64)slice.ptr() % 128 == 0);
+        assert(slice.len() == 0);
+    }
+
+    SliceMut<u8> slice = SliceMut<u8>::template aligned_init_dangling<128>();
+    assert((u64)slice.ptr() % 128 == 0);
+    assert(slice.len() == 0);
+}
+
+static void test_is_overlapping() {
+    assert(
+        !Slice<u8>::init_dangling().is_overlapping(Slice<u8>::init_dangling()));
+    assert(!Slice<u256>::init_dangling().is_overlapping(
+        Slice<u256>::init_dangling()));
+
+    u256 arr[16];
+
+    assert(!Slice<u256>::init_unsafe(arr, 16).is_overlapping(
+        Slice<u256>::init_unsafe(arr, 0)));
+    assert(Slice<u256>::init_unsafe(arr, 16).is_overlapping(
+        Slice<u256>::init_unsafe(arr, 1)));
+}
+
+static void test_from_ptr() {
+    u256 data = 69;
+    u256 *ptr_mut = &data;
+    SliceMut<u16> slice_mut;
+    assert(SliceInitStatus::Ok ==
+           SliceMut<u16>::init_from_ptr(ptr_mut, &slice_mut));
+    assert(slice_mut.len() == sizeof(u256) / sizeof(u16));
+
+    u256 const *ptr = &data;
+    Slice<u32> slice;
+    assert(SliceInitStatus::Ok == Slice<u32>::init_from_ptr(ptr, &slice));
+    assert(slice.len() == sizeof(u256) / sizeof(u32));
+}
+
+static void test_from_ptr_unsafe() {
+    u256 data = 69;
+    u256 *ptr_mut = &data;
+    SliceMut<u16> const slice_mut =
+        SliceMut<u16>::init_from_ptr_unsafe(ptr_mut);
+    assert(slice_mut.len() == sizeof(u256) / sizeof(u16));
+
+    u256 const *ptr = &data;
+    Slice<u32> const slice = Slice<u32>::init_from_ptr_unsafe(ptr);
+    assert(slice.len() == sizeof(u256) / sizeof(u32));
+}
+
+static void test_cstr() {
+    CString const v = CString::init_unsafe("anan");
+    assert(v.as_slice().len() == 4);
+}
+
+static void test_immut() {
+    u32 data[20];
+    Slice<u32> sli;
+    assert(Slice<u32>::init(data, 20, &sli) == SliceInitStatus::Ok);
+
+    for (u64 i = 0; i < 20; i++) {
+        data[i] = 100;
+    }
+
+    data[10] = 69;
+    assert(sli.read_unsafe(10) == 69);
+
+    assert((u64)&data[10] == (u64)sli.offset_unsafe(10));
+
+    u32 const *pp = nullptr;
+    SliceStatus status = sli.offset(20, &pp);
+    assert(status == SliceStatus::OutOfBounds);
+
+    status = sli.offset(3, &pp);
+    assert(status == SliceStatus::Ok);
+    assert((u64)&data[3] == (u64)pp);
+
+    Slice<u16> sli16;
+    SliceCastStatus cast_status = sli.cast<u16>(&sli16);
+    assert(cast_status == SliceCastStatus::Ok);
+    assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
+
+    Slice<u8> sli8 = sli.cast_unsafe<u8>();
+    assert(sli8.len() == mul_unsafe_u64(sli.len(), 4));
+
+    Slice<u32> slisli = sli.slice_unsafe(0, sli.len() / 2);
+    assert(slisli.len() == sli16.len() / 4);
+
+    assert(sli8.read_unaligned_unsafe<u32>(0) == sli.read_unsafe(0));
+
+    assert(sli8.equals(sli.cast_unsafe<u8>()));
+
+    assert(sli8.is_overlapping(sli.cast_unsafe<u8>()));
+
+    Slice<u8> dangler = Slice<u8>::init_dangling();
+    assert(!sli8.is_overlapping(dangler));
+
+    assert(dangler.compare(sli8) == Comparison::Less);
+    assert(sli8.compare(dangler) == Comparison::Greater);
+    assert(sli8.compare(sli.cast_unsafe<u8>()) == Comparison::Equal);
+}
+
+static void test_mut() {
+    u32 data[20];
+    SliceMut<u32> sli;
+    assert(SliceMut<u32>::init(data, 20, &sli) == SliceInitStatus::Ok);
+
+    sli.fill(100);
+
+    SliceMut<u32> slik = SliceMut<u32>::init_unsafe(data, 20);
+    assert(sli.as_const().equals(slik.as_const()));
+
+    data[10] = 69;
+    assert(sli.as_const().read_unsafe(10) == 69);
+
+    sli.write_unsafe(u64{5}, u32{199});
+    assert(data[5] == 199);
+
+    assert((u64)&data[10] == (u64)sli.offset_unsafe(10));
+
+    u32 *pp = nullptr;
+    SliceStatus status = sli.offset(20, &pp);
+    assert(status == SliceStatus::OutOfBounds);
+
+    status = sli.offset(3, &pp);
+    assert(status == SliceStatus::Ok);
+    assert((u64)&data[3] == (u64)pp);
+
+    SliceMut<u16> sli16;
+    SliceCastStatus cast_status = sli.cast<u16>(&sli16);
+    assert(cast_status == SliceCastStatus::Ok);
+    assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
+
+    SliceMut<u8> sli8 = sli.cast_unsafe<u8>();
+    assert(sli8.len() == mul_unsafe_u64(sli.len(), 4));
+
+    SliceMut<u32> slisli = sli.slice_unsafe(0, sli.len() / 2);
+    assert(slisli.len() == sli16.len() / 4);
+
+    assert(sli8.as_const().read_unaligned_unsafe<u32>(0) ==
+           sli.as_const().read_unsafe(0));
+
+    assert(sli8.as_const().equals(sli.cast_unsafe<u8>().as_const()));
+
+    assert(sli8.as_const().is_overlapping(sli.cast_unsafe<u8>().as_const()));
+
+    SliceMut<u8> dangler = SliceMut<u8>::init_dangling();
+    assert(!sli8.as_const().is_overlapping(dangler.as_const()));
+
+    assert(dangler.as_const().compare(sli8.as_const()) == Comparison::Less);
+    assert(sli8.as_const().compare(dangler.as_const()) == Comparison::Greater);
+    assert(sli8.as_const().compare(sli.cast_unsafe<u8>().as_const()) ==
+           Comparison::Equal);
+}
+
+int main(void) {
+    test_mut();
+    test_immut();
+    test_cstr();
+    test_from_ptr();
+    test_from_ptr_unsafe();
+    test_is_overlapping();
+    test_aligned_init_dangling();
+    test_cast_static();
+    test_slicing();
+
+    return 0;
+}
