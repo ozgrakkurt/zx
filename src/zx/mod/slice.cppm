@@ -337,6 +337,7 @@ template <typename T> struct Slice {
             return SliceStatus::OutOfBounds;
         }
 
+        __builtin_memcpy(out, &this->m_ptr[offset], sizeof(U));
         return SliceStatus::Ok;
     }
 
@@ -705,6 +706,7 @@ template <typename T> struct SliceMut {
             return SliceStatus::OutOfBounds;
         }
 
+        __builtin_memcpy(out, &this->m_ptr[offset], sizeof(U));
         return SliceStatus::Ok;
     }
 

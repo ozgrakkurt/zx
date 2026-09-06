@@ -111,7 +111,37 @@ template <template <typename T> class S> static void test_read_access_impl() {
     assert(val == 4);
 
     // READ_UNALIGNED
+    u64 expected;
+    __builtin_memcpy(&expected, &data[1], sizeof(u64));
+    assert(SliceStatus::Ok == slice.template read_unaligned<u64>(1, &big_val));
+    assert(big_val == expected);
 
+    assert(SliceStatus::Ok == slice.template read_unaligned<u8>(2, &small_val));
+    assert(small_val == 3);
+
+    // oob
+    assert(SliceStatus::OutOfBounds ==
+           slice.template read_unaligned<u64>(2, &big_val));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template read_unaligned<u64>(5, &big_val));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template read_unaligned<u64>(77, &big_val));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template read_unaligned<u8>(77, &small_val));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template read_unaligned<u8>(5, &small_val));
+
+    // READ_UNALIGNED_UNSAFE
+    __builtin_memcpy(&expected, &data[0], sizeof(u64));
+    big_val = slice.template read_unaligned_unsafe<u64>(0);
+    assert(big_val == expected);
+
+    __builtin_memcpy(&expected, &data[1], sizeof(u64));
+    big_val = slice.template read_unaligned_unsafe<u64>(1);
+    assert(big_val == expected);
+
+    small_val = slice.template read_unaligned_unsafe<u8>(4);
+    assert(small_val == 5);
 }
 
 static void test_read_access() {
