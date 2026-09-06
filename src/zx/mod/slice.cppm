@@ -40,11 +40,6 @@ enum class [[nodiscard]] SliceMemcpyStatus : u8_c {
     Overlapping,
 };
 
-enum class [[nodiscard]] SliceMemmoveStatus : u8_c {
-    Ok = 0,
-    SizeMismatch,
-};
-
 template <typename T> struct Slice {
     u64 m_len;
     T const *m_ptr;
@@ -360,8 +355,10 @@ template <typename T> struct Slice {
 
         // These additions are ok because the overflow condition is checked in
         // init method.
-        u64 const self_end = add_unsafe_u64(self_start, this->m_len);
-        u64 const other_end = add_unsafe_u64(other_start, other.m_len);
+        u64 const self_end =
+            add_unsafe_u64(self_start, mul_unsafe_u64(this->m_len, sizeof(T)));
+        u64 const other_end =
+            add_unsafe_u64(other_start, mul_unsafe_u64(other.m_len, sizeof(T)));
 
         return this->m_len > 0 && other.m_len > 0 && self_start < other_end &&
                other_start < self_end;
@@ -729,8 +726,10 @@ template <typename T> struct SliceMut {
 
         // These additions are ok because the overflow condition is checked in
         // init method.
-        u64 const self_end = add_unsafe_u64(self_start, this->m_len);
-        u64 const other_end = add_unsafe_u64(other_start, other.m_len);
+        u64 const self_end =
+            add_unsafe_u64(self_start, mul_unsafe_u64(this->m_len, sizeof(T)));
+        u64 const other_end =
+            add_unsafe_u64(other_start, mul_unsafe_u64(other.m_len, sizeof(T)));
 
         return this->m_len > 0 && other.m_len > 0 && self_start < other_end &&
                other_start < self_end;
@@ -858,29 +857,6 @@ template <typename T> struct SliceMut {
         u64 const n_bytes = mul_unsafe_u64(this->m_len, sizeof(T));
 
         __builtin_memcpy(this->m_ptr, other.m_ptr, n_bytes);
-    }
-
-    SliceMemmoveStatus memmove_from(Slice<T> other) const {
-        if (this->m_len != other.m_len) {
-            return SliceMemmoveStatus::SizeMismatch;
-        }
-
-        // this is safe to do because overflow condition is checked in the init
-        // method.
-        u64 const n_bytes = mul_unsafe_u64(this->m_len, sizeof(T));
-
-        __builtin_memmove(this->m_ptr, other.m_ptr, n_bytes);
-        return SliceMemmoveStatus::Ok;
-    }
-
-    void memmove_from_unsafe(Slice<T> other) const {
-        assert_dev(this->m_len == other.m_len);
-
-        // this is safe to do because overflow condition is checked in the init
-        // method.
-        u64 const n_bytes = mul_unsafe_u64(this->m_len, sizeof(T));
-
-        __builtin_memmove(this->m_ptr, other.m_ptr, n_bytes);
     }
 };
 

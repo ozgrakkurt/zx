@@ -66,6 +66,111 @@ static void test_slicing() {
     test_slicing_impl<SliceMut>();
 }
 
+static void test_cstring() {
+    char const *str = "hello";
+
+    CString cstr = CString::init_unsafe(str);
+    assert(cstr.as_slice().len() == 5);
+
+    Slice<u8> slice =
+        Slice<u8>::init_unsafe((u8 const *)str, __builtin_strlen(str));
+
+    assert(slice.equals(cstr.as_slice()));
+    assert(str == cstr.as_cstr());
+}
+
+static void test_memfunctions() {
+    u16 data[] = {1, 2, 3, 4, 5};
+    u64 const data_len = sizeof(data) / sizeof(data[0]);
+    SliceMut<u16> const slice = SliceMut<u16>::init_unsafe(data, data_len);
+
+    slice.fill(69);
+
+    for (u64 i = 0; i < 5; i++) {
+        assert(data[i] == 69);
+    }
+
+    slice.memset(0xaa);
+
+    for (u64 i = 0; i < 5; i++) {
+        assert(data[i] == 0xaaaa__wbu);
+    }
+
+    assert(slice.slice_unsafe(0, 2).is_overlapping(slice.slice_unsafe(1, 2)));
+    assert(SliceMemcpyStatus::Overlapping ==
+           slice.slice_unsafe(0, 2).memcpy_from(
+               slice.slice_unsafe(1, 2).as_const()));
+
+    assert(SliceMemcpyStatus::SizeMismatch ==
+           slice.slice_unsafe(0, 1).memcpy_from(slice.as_const()));
+
+    data[0] = 1131;
+    data[4] = 69;
+    assert(SliceMemcpyStatus::Ok == slice.slice_unsafe(0, 1).memcpy_from(
+                                        slice.slice_unsafe(4, 1).as_const()));
+    assert(data[0] == 69);
+
+    data[0] = 69;
+    data[4] = 1131;
+    slice.slice_unsafe(0, 1).memcpy_from_unsafe(
+        slice.slice_unsafe(4, 1).as_const());
+    assert(data[0] == 1131);
+
+    for (u16 i = 0; i < 5; i++) {
+        data[i] = i;
+    }
+}
+
+static void test_write_access() {
+    u16 data[] = {1, 2, 3, 4, 5};
+    u64 const data_len = sizeof(data) / sizeof(data[0]);
+    SliceMut<u16> const slice = SliceMut<u16>::init_unsafe(data, data_len);
+
+    // WRITE
+    assert(SliceStatus::Ok == slice.write(0, 69));
+    assert(data[0] == 69);
+
+    assert(SliceStatus::Ok == slice.write(4, 1131));
+    assert(data[4] == 1131);
+
+    // oob
+    assert(SliceStatus::OutOfBounds == slice.write(5, 100));
+    assert(SliceStatus::OutOfBounds == slice.write(500, 100));
+
+    // WRITE_UNSAFE
+    slice.write_unsafe(0, 10);
+    assert(data[0] == 10);
+
+    slice.write_unsafe(2, 11);
+    assert(data[2] == 11);
+
+    // WRITE_UNALIGNED
+    assert(SliceStatus::Ok == slice.template write_unaligned<u8>(1, 255));
+    assert(data[0] == 10);  // unchanged
+    assert(data[1] == 255); // low byte should be 255
+    assert(data[2] == 11);  // unchanged
+
+    assert(SliceStatus::Ok ==
+           slice.template write_unaligned<u64>(0, 0x0123456789ABCDEF__wbu));
+    u64 result;
+    __builtin_memcpy(&result, &data[0], sizeof(u64));
+    assert(result == 0x0123456789ABCDEF__wbu);
+
+    // oob
+    assert(SliceStatus::OutOfBounds ==
+           slice.template write_unaligned<u64>(5, 100));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template write_unaligned<u64>(50, 100));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template write_unaligned<u8>(5, 100));
+    assert(SliceStatus::OutOfBounds ==
+           slice.template write_unaligned<u8>(50, 100));
+
+    // Should still work for valid offset
+    assert(SliceStatus::Ok == slice.template write_unaligned<u16>(4, 42));
+    assert(data[4] == 42);
+}
+
 template <template <typename T> class S> static void test_read_access_impl() {
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
@@ -348,6 +453,9 @@ int main(void) {
     test_cast_static();
     test_slicing();
     test_read_access();
+    test_write_access();
+    test_memfunctions();
+    test_cstring();
 
     return 0;
 }
