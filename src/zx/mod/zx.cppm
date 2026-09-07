@@ -13,3 +13,4 @@ export import :vec;
 export import :page_alloc;
 export import :backtrace;
 export import :slice;
+export import :xoshiro256;
