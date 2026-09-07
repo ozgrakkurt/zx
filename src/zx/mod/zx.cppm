@@ -14,3 +14,4 @@ export import :page_alloc;
 export import :backtrace;
 export import :slice;
 export import :xoshiro256;
+export import :rapidhash_v3;
