@@ -5,14 +5,6 @@ import :perf_event;
 import :statx;
 import :io_uring;
 
-#ifndef __x86_64__
-#error "only x86_64 is supported"
-#endif
-
-#ifndef __linux__
-#error "only linux is supported"
-#endif
-
 export namespace zx {
 
 namespace sys {
@@ -34,11 +26,13 @@ constexpr i32 PROT_READ = 0x1;
 constexpr i32 PROT_WRITE = 0x2;
 
 // echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "O_RD"
-constexpr i32 SYS_O_RDONLY = 00;
+constexpr i32 O_RDONLY = 00;
+constexpr i32 O_WRONLY = 01;
+constexpr i32 O_RDWR = 02;
 
 // echo '#define _GNU_SOURCE 1
 // #include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "AT_"
-constexpr i32 SYS_AT_EMPTY_PATH = 0x1000;
+constexpr i32 AT_EMPTY_PATH = 0x1000;
 
 constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
