@@ -943,6 +943,74 @@ IoUringEnterStatus io_uring_enter(i32 fd, u32 to_submit, u32 min_complete,
     return IoUringEnterStatus::Ok;
 }
 
+enum class [[nodiscard]] IoUringRegisterStatus : u8_c {
+    Ok = 0,
+    UnexpectedError,
+    EAcces,
+    EBadF,
+    EBadFd,
+    EBusy,
+    EExist,
+    EFault,
+    EInval,
+    EMFile,
+    ENoMem,
+    ENXIo,
+    EOpNotSupp,
+    ENoEnt,
+};
+
+IoUringRegisterStatus io_uring_register(i32 fd, u32 opcode, void const *arg,
+                                        u32 nr_args) {
+    u64 const res =
+        syscall4(NR_IO_URING_REGISTER, (u64)fd, opcode, (u64)arg, nr_args);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EACCES: {
+            return IoUringRegisterStatus::EAcces;
+        }
+        case EBADF: {
+            return IoUringRegisterStatus::EBadF;
+        }
+        case EBADFD: {
+            return IoUringRegisterStatus::EBadFd;
+        }
+        case EBUSY: {
+            return IoUringRegisterStatus::EBusy;
+        }
+        case EEXIST: {
+            return IoUringRegisterStatus::EExist;
+        }
+        case EFAULT: {
+            return IoUringRegisterStatus::EFault;
+        }
+        case EINVAL: {
+            return IoUringRegisterStatus::EInval;
+        }
+        case EMFILE: {
+            return IoUringRegisterStatus::EMFile;
+        }
+        case ENOMEM: {
+            return IoUringRegisterStatus::ENoMem;
+        }
+        case ENXIO: {
+            return IoUringRegisterStatus::ENXIo;
+        }
+        case ENOTSUP: {
+            return IoUringRegisterStatus::EOpNotSupp;
+        }
+        case ENOENT: {
+            return IoUringRegisterStatus::ENoEnt;
+        }
+        default: {
+            return IoUringRegisterStatus::UnexpectedError;
+        }
+        }
+    }
+    return IoUringRegisterStatus::Ok;
+}
+
 } // namespace sys
 
 } // namespace zx
