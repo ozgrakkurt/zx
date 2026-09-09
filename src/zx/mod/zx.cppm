@@ -15,3 +15,4 @@ export import :backtrace;
 export import :slice;
 export import :xoshiro256;
 export import :rapidhash_v3;
+export import :perf_event;

@@ -1,6 +1,7 @@
 export module zx:sys;
 import :syscall;
 import :def;
+import :perf_event;
 
 #ifndef __x86_64__
 #error "only x86_64 is supported"
@@ -179,11 +180,33 @@ constexpr u64 EKEYREVOKED = 128;
 constexpr u64 ENOTDIR = 20;
 constexpr u64 EMEDIUMTYPE = 124;
 
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "read"
+constexpr zx_u64 NR_READ = 0;
+constexpr zx_u64 NR_WRITE = 1;
+constexpr zx_u64 NR_OPEN = 2;
+constexpr zx_u64 NR_CLOSE = 3;
+constexpr zx_u64 NR_MMAP = 9;
+constexpr zx_u64 NR_MPROTECT = 10;
+constexpr zx_u64 NR_MUNMAP = 11;
+constexpr zx_u64 NR_MADVISE = 28;
+constexpr zx_u64 NR_EXIT_GROUP = 231;
+
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
+constexpr zx_u64 NR_STATX = 332;
+
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "perf_event"
+constexpr zx_u64 NR_PERF_EVENT_OPEN = 298;
+
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "io_uring"
+constexpr zx_u64 NR_IO_URING_SETUP = 425;
+constexpr zx_u64 NR_IO_URING_ENTER = 426;
+constexpr zx_u64 NR_IO_URING_REGISTER = 427;
+
 // echo '#include <signal.h>' | gcc -E -dM -xc - | grep -E "SIGBUS"
 constexpr u64 SIGSEGV = 11;
 constexpr u64 SIGBUS = 7;
 
-u64 const SUCCESS = 0;
+constexpr u64 SUCCESS = 0;
 
 u64 errno_(u64 ret) {
     i64 const sgnd = (i64)ret;
@@ -212,7 +235,7 @@ ReadStatus read(i32 fd, u8 *buf, u64 count, u64 *n_read) {
         return ReadStatus::Nullptr;
     }
 
-    u64 const res = syscall3(0, (u64)fd, (u64)buf, count);
+    u64 const res = syscall3(NR_READ, (u64)fd, (u64)buf, count);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         // The returned n_read count isn't supposed to be used on error case.
@@ -278,7 +301,7 @@ WriteStatus write(i32 fd, u8 const *buf, u64 count, u64 *n_written) {
         return WriteStatus::Nullptr;
     }
 
-    u64 const res = syscall3(1, (u64)fd, (u64)buf, count);
+    u64 const res = syscall3(NR_WRITE, (u64)fd, (u64)buf, count);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         *n_written = U64_MAX;
@@ -367,7 +390,7 @@ OpenStatus open(u8 const *path, i32 flags, u32 mode, i32 *fd) {
         return OpenStatus::Nullptr;
     }
 
-    u64 const res = syscall3(2, (u64)path, (u64)flags, mode);
+    u64 const res = syscall3(NR_OPEN, (u64)path, (u64)flags, mode);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         *fd = -1;
@@ -472,7 +495,7 @@ enum class [[nodiscard]] CloseStatus : u8_c {
 };
 
 CloseStatus close(i32 fd) {
-    u64 const res = syscall1(3, (u64)fd);
+    u64 const res = syscall1(NR_CLOSE, (u64)fd);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         switch (errno) {
@@ -564,7 +587,7 @@ MMapStatus mmap(u8 *addr, u64 length, i32 prot, i32 flags, i32 fd, i64 offset,
         return MMapStatus::Nullptr;
     }
 
-    u64 const res = syscall6(9, (u64)addr, length, (u64)prot, (u64)flags,
+    u64 const res = syscall6(NR_MMAP, (u64)addr, length, (u64)prot, (u64)flags,
                              (u64)fd, (u64)offset);
     u64 const errno = errno_(res);
 
@@ -606,7 +629,7 @@ MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
         return MProtectStatus::Nullptr;
     }
 
-    u64 const res = syscall3(10, (u64)addr, length, (u64)prot);
+    u64 const res = syscall3(NR_MPROTECT, (u64)addr, length, (u64)prot);
     u64 const errno = errno_(res);
 
     if (errno != SUCCESS) {
@@ -635,6 +658,68 @@ MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
     // that this function doesn't return and the compiler is happy
     // about the [[noreturn]] annotation.
     __builtin_trap();
+}
+
+enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedError,
+    E2Big,
+    EAcces,
+    EBadF,
+    EBusy,
+    EFault,
+    EIntr,
+    EInval,
+    EMFile,
+    ENoDev,
+    ENoEnt,
+    ENoSpc,
+    ENoSys,
+    EOpNotSupp,
+    EOverflow,
+    EPerm,
+    ESrch,
+};
+
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "perf_event"
+constexpr u64 SYSCALL_PERF_EVENT_OPEN_ = 298;
+
+constexpr u64 SYSCALL_SUCCESS_ = 0;
+
+u64 errno_(u64 ret) {
+    i64 const sgnd = (i64)ret;
+    if (sgnd > -4096 && sgnd < 0) {
+        return (u64)-sgnd;
+    } else {
+        return SYSCALL_SUCCESS_;
+    }
+}
+
+OpenStatus open(Attr *attr, i32 pid, i32 cpu, i32 group_fd, u64 flags,
+                i32 *fd) {
+    if (fd == nullptr) {
+        return OpenStatus::Nullptr;
+    }
+
+    u64 const res =
+        syscall5(NR_PERF_EVENT_OPEN, (u64)attr, (u64)pid,
+                    (u64)cpu, (u64)group_fd, flags);
+
+    u64 const errno = errno_(res);
+    OpenStatus const status = sys_status_(ret);
+    if (status != ZXSysStatus::Ok) {
+        *fd = -1;
+        return status;
+    }
+    i32 const ret_fd = (i32)ret;
+    if (ret_fd <= 0) {
+        *fd = -1;
+        return ZXSysStatus::UnexpectedError;
+    }
+
+    *fd = ret_fd;
+    return ZXSysStatus::Ok;
 }
 
 } // namespace sys
