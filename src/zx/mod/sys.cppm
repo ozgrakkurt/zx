@@ -3,6 +3,7 @@ import :syscall;
 import :def;
 import :perf_event;
 import :statx;
+import :io_uring;
 
 #ifndef __x86_64__
 #error "only x86_64 is supported"

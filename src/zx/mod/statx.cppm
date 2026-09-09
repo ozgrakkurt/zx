@@ -1,6 +1,5 @@
 // These definitions are taken from
 // /usr/include/linux/stat.h
-// Types are changed to zx_* types.
 //
 // These defitions are only definitions used for interfacing with the kernel
 // through syscalls. So this is not derived work.

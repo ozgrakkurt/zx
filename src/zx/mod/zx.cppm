@@ -18,3 +18,4 @@ export import :rapidhash_v3;
 export import :perf_event;
 export import :time;
 export import :statx;
+export import :io_uring;
