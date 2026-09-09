@@ -15,9 +15,10 @@ struct TimeInfo {
 
     // function for cleaning up temporary resources that
     // are allocated in the `init` function.
-    static void cleanup_(sys::PerfEventMmapPage* mmap_page, i32 fd) {
+    static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
         if (mmap_page != nullptr) {
-            sys::MMapStatus const sys_status = sys::munmap((u8*)mmap_page, MMAP_LEN);
+            sys::MMapStatus const sys_status =
+                sys::munmap((u8 *)mmap_page, MMAP_LEN);
             // we silently ignore error on non-dev mode here.
             // this should be ok since this call shouldn't fail.
             assert_dev(sys_status == sys::MMapStatus::Ok);
@@ -43,7 +44,7 @@ struct TimeInfo {
         if (out == nullptr) {
             return InitStatus::Nullptr;
         }
-        
+
         sys::PerfEventAttr pattr;
         __builtin_memset(&pattr, 0, sizeof(pattr));
         pattr.type = (u32)sys::PerfEventTypeId::Hardware;
@@ -65,8 +66,8 @@ struct TimeInfo {
         assert_dev(fd != -1);
 
         sys::MMapStatus const mmap_status =
-            sys::mmap(nullptr, MMAP_LEN, sys::PROT_READ, sys::MAP_SHARED, fd,
-                        0, (u8 **)&mmap_page);
+            sys::mmap(nullptr, MMAP_LEN, sys::PROT_READ, sys::MAP_SHARED, fd, 0,
+                      (u8 **)&mmap_page);
         if (mmap_status != sys::MMapStatus::Ok) {
             cleanup_(mmap_page, fd);
             return InitStatus::MMapErr;

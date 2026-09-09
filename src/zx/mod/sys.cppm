@@ -2,6 +2,7 @@ export module zx:sys;
 import :syscall;
 import :def;
 import :perf_event;
+import :statx;
 
 #ifndef __x86_64__
 #error "only x86_64 is supported"
@@ -757,6 +758,68 @@ PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
 
     *fd = ret_fd;
     return PerfEventOpenStatus::Ok;
+}
+
+enum class [[nodiscard]] StatXStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedError,
+    EAcces,
+    EBadF,
+    EFault,
+    EInval,
+    ELoop,
+    ENameTooLong,
+    ENoEnt,
+    ENoMem,
+    ENotDir,
+};
+
+StatXStatus statx(i32 dirfd, char const *path, i32 flags, u32 mask,
+                  StatX *statxbuf) {
+    if (statxbuf == nullptr) {
+        return StatXStatus::Nullptr;
+    }
+    __builtin_memset(statxbuf, 0, sizeof(StatX));
+    u64 const res = syscall5(NR_STATX, (u64)dirfd, (u64)path, (u64)flags,
+                             (u64)mask, (u64)statxbuf);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EACCES: {
+            return StatXStatus::EAcces;
+        }
+        case EBADF: {
+            return StatXStatus::EBadF;
+        }
+        case EFAULT: {
+            return StatXStatus::EFault;
+        }
+        case EINVAL: {
+            return StatXStatus::EInval;
+        }
+        case ELOOP: {
+            return StatXStatus::ELoop;
+        }
+        case ENAMETOOLONG: {
+            return StatXStatus::ENameTooLong;
+        }
+        case ENOENT: {
+            return StatXStatus::ENoEnt;
+        }
+        case ENOMEM: {
+            return StatXStatus::ENoMem;
+        }
+        case ENOTDIR: {
+            return StatXStatus::ENotDir;
+        }
+        default: {
+            return StatXStatus::UnexpectedError;
+        }
+        }
+    }
+
+    return StatXStatus::Ok;
 }
 
 } // namespace sys
