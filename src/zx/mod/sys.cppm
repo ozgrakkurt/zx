@@ -181,26 +181,26 @@ constexpr u64 ENOTDIR = 20;
 constexpr u64 EMEDIUMTYPE = 124;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "read"
-constexpr zx_u64 NR_READ = 0;
-constexpr zx_u64 NR_WRITE = 1;
-constexpr zx_u64 NR_OPEN = 2;
-constexpr zx_u64 NR_CLOSE = 3;
-constexpr zx_u64 NR_MMAP = 9;
-constexpr zx_u64 NR_MPROTECT = 10;
-constexpr zx_u64 NR_MUNMAP = 11;
-constexpr zx_u64 NR_MADVISE = 28;
-constexpr zx_u64 NR_EXIT_GROUP = 231;
+constexpr u64 NR_READ = 0;
+constexpr u64 NR_WRITE = 1;
+constexpr u64 NR_OPEN = 2;
+constexpr u64 NR_CLOSE = 3;
+constexpr u64 NR_MMAP = 9;
+constexpr u64 NR_MPROTECT = 10;
+constexpr u64 NR_MUNMAP = 11;
+constexpr u64 NR_MADVISE = 28;
+constexpr u64 NR_EXIT_GROUP = 231;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
-constexpr zx_u64 NR_STATX = 332;
+constexpr u64 NR_STATX = 332;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "perf_event"
-constexpr zx_u64 NR_PERF_EVENT_OPEN = 298;
+constexpr u64 NR_PERF_EVENT_OPEN = 298;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "io_uring"
-constexpr zx_u64 NR_IO_URING_SETUP = 425;
-constexpr zx_u64 NR_IO_URING_ENTER = 426;
-constexpr zx_u64 NR_IO_URING_REGISTER = 427;
+constexpr u64 NR_IO_URING_SETUP = 425;
+constexpr u64 NR_IO_URING_ENTER = 426;
+constexpr u64 NR_IO_URING_REGISTER = 427;
 
 // echo '#include <signal.h>' | gcc -E -dM -xc - | grep -E "SIGBUS"
 constexpr u64 SIGSEGV = 11;
@@ -605,7 +605,7 @@ MMapStatus munmap(u8 *mem, u64 length) {
         return MMapStatus::Nullptr;
     }
 
-    u64 const res = syscall2(11, (u64)mem, length);
+    u64 const res = syscall2(NR_MUNMAP, (u64)mem, length);
     u64 const errno = errno_(res);
 
     if (errno != SUCCESS) {
@@ -653,7 +653,7 @@ MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
 }
 
 [[noreturn]] void exit_group(int status) {
-    syscall1(231, (u64)status);
+    syscall1(NR_EXIT_GROUP, (u64)status);
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
     // about the [[noreturn]] annotation.
@@ -664,6 +664,7 @@ enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
     Ok = 0,
     Nullptr,
     UnexpectedError,
+    InvalidFd,
     E2Big,
     EAcces,
     EBadF,
@@ -682,44 +683,80 @@ enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
     ESrch,
 };
 
-// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "perf_event"
-constexpr u64 SYSCALL_PERF_EVENT_OPEN_ = 298;
-
-constexpr u64 SYSCALL_SUCCESS_ = 0;
-
-u64 errno_(u64 ret) {
-    i64 const sgnd = (i64)ret;
-    if (sgnd > -4096 && sgnd < 0) {
-        return (u64)-sgnd;
-    } else {
-        return SYSCALL_SUCCESS_;
-    }
-}
-
-OpenStatus open(Attr *attr, i32 pid, i32 cpu, i32 group_fd, u64 flags,
-                i32 *fd) {
-    if (fd == nullptr) {
-        return OpenStatus::Nullptr;
+PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
+                                    i32 group_fd, u64 flags, i32 *fd) {
+    if (attr == nullptr || fd == nullptr) {
+        return PerfEventOpenStatus::Nullptr;
     }
 
-    u64 const res =
-        syscall5(NR_PERF_EVENT_OPEN, (u64)attr, (u64)pid,
-                    (u64)cpu, (u64)group_fd, flags);
-
+    u64 const res = syscall5(NR_PERF_EVENT_OPEN, (u64)attr, (u64)pid, (u64)cpu,
+                             (u64)group_fd, flags);
     u64 const errno = errno_(res);
-    OpenStatus const status = sys_status_(ret);
-    if (status != ZXSysStatus::Ok) {
+
+    if (errno != SUCCESS) {
         *fd = -1;
-        return status;
+        switch (errno) {
+        case E2BIG: {
+            return PerfEventOpenStatus::E2Big;
+        }
+        case EACCES: {
+            return PerfEventOpenStatus::EAcces;
+        }
+        case EBADF: {
+            return PerfEventOpenStatus::EBadF;
+        }
+        case EBUSY: {
+            return PerfEventOpenStatus::EBusy;
+        }
+        case EFAULT: {
+            return PerfEventOpenStatus::EFault;
+        }
+        case EINTR: {
+            return PerfEventOpenStatus::EIntr;
+        }
+        case EINVAL: {
+            return PerfEventOpenStatus::EInval;
+        }
+        case EMFILE: {
+            return PerfEventOpenStatus::EMFile;
+        }
+        case ENODEV: {
+            return PerfEventOpenStatus::ENoDev;
+        }
+        case ENOENT: {
+            return PerfEventOpenStatus::ENoEnt;
+        }
+        case ENOSPC: {
+            return PerfEventOpenStatus::ENoSpc;
+        }
+        case ENOSYS: {
+            return PerfEventOpenStatus::ENoSys;
+        }
+        case EOPNOTSUPP: {
+            return PerfEventOpenStatus::EOpNotSupp;
+        }
+        case EOVERFLOW: {
+            return PerfEventOpenStatus::EOverflow;
+        }
+        case EPERM: {
+            return PerfEventOpenStatus::EPerm;
+        }
+        case ESRCH: {
+            return PerfEventOpenStatus::ESrch;
+        }
+        default: {
+            return PerfEventOpenStatus::UnexpectedError;
+        }
+        }
     }
-    i32 const ret_fd = (i32)ret;
+    i32 const ret_fd = (i32)res;
     if (ret_fd <= 0) {
         *fd = -1;
-        return ZXSysStatus::UnexpectedError;
+        return PerfEventOpenStatus::InvalidFd;
     }
 
     *fd = ret_fd;
-    return ZXSysStatus::Ok;
+    return PerfEventOpenStatus::Ok;
 }
 
 } // namespace sys

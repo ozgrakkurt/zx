@@ -27,7 +27,7 @@ import :syscall;
 
 export namespace zx {
 
-namespace perf_event {
+namespace sys {
 
 extern "C" {
 
@@ -411,6 +411,6 @@ struct PerfEventAttr {
 
 } // extern "C"
 
-} // namespace perf_event
+} // namespace sys
 
 } // namespace zx
