@@ -823,6 +823,126 @@ StatXStatus statx(i32 dirfd, char const *path, i32 flags, u32 mask,
     return StatXStatus::Ok;
 }
 
+enum class [[nodiscard]] IoUringSetupStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedError,
+    EFault,
+    EInval,
+    EMFile,
+    ENFile,
+    ENoMem,
+    EPerm,
+    ENXIo,
+};
+
+IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params) {
+    if (params == nullptr) {
+        return IoUringSetupStatus::Nullptr;
+    }
+
+    u64 const res = syscall2(NR_IO_URING_SETUP, n_entries, (u64)params);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EFAULT: {
+            return IoUringSetupStatus::EFault;
+        }
+        case EINVAL: {
+            return IoUringSetupStatus::EInval;
+        }
+        case EMFILE: {
+            return IoUringSetupStatus::EMFile;
+        }
+        case ENFILE: {
+            return IoUringSetupStatus::ENFile;
+        }
+        case ENOMEM: {
+            return IoUringSetupStatus::ENoMem;
+        }
+        case EPERM: {
+            return IoUringSetupStatus::EPerm;
+        }
+        case ENXIO: {
+            return IoUringSetupStatus::ENXIo;
+        }
+        default: {
+            return IoUringSetupStatus::UnexpectedError;
+        }
+        }
+    }
+
+    return IoUringSetupStatus::Ok;
+}
+
+enum class [[nodiscard]] IoUringEnterStatus : u8_c {
+    Ok = 0,
+    UnexpectedError,
+    EAgain,
+    EBadF,
+    EBadFd,
+    EBadR,
+    EBusy,
+    EExist,
+    EInval,
+    EFault,
+    ENXIo,
+    EOpNotSupp,
+    EIntr,
+    EOwnerDead,
+};
+
+IoUringEnterStatus io_uring_enter(i32 fd, u32 to_submit, u32 min_complete,
+                                  u32 flags, void *arg, u64 sz) {
+    u64 const res = syscall6(NR_IO_URING_ENTER, (u64)fd, to_submit,
+                             min_complete, flags, (u64)arg, sz);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EAGAIN: {
+            return IoUringEnterStatus::EAgain;
+        }
+        case EBADF: {
+            return IoUringEnterStatus::EBadF;
+        }
+        case EBADFD: {
+            return IoUringEnterStatus::EBadFd;
+        }
+        case EBADR: {
+            return IoUringEnterStatus::EBadR;
+        }
+        case EBUSY: {
+            return IoUringEnterStatus::EBusy;
+        }
+        case EEXIST: {
+            return IoUringEnterStatus::EExist;
+        }
+        case EINVAL: {
+            return IoUringEnterStatus::EInval;
+        }
+        case EFAULT: {
+            return IoUringEnterStatus::EFault;
+        }
+        case ENXIO: {
+            return IoUringEnterStatus::ENXIo;
+        }
+        case EOPNOTSUPP: {
+            return IoUringEnterStatus::EOpNotSupp;
+        }
+        case EINTR: {
+            return IoUringEnterStatus::EIntr;
+        }
+        case EOWNERDEAD: {
+            return IoUringEnterStatus::EOwnerDead;
+        }
+        default: {
+            return IoUringEnterStatus::UnexpectedError;
+        }
+        }
+    }
+    return IoUringEnterStatus::Ok;
+}
+
 } // namespace sys
 
 } // namespace zx
