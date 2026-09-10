@@ -4,7 +4,10 @@ import :def;
 export namespace zx {
 namespace backtrace {
 
-#ifdef ZX_DEBUG_INFO
+enum class [[nodiscard]] GetContextStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+};
 
 extern "C" struct Context {
     u64 r12;
@@ -17,12 +20,9 @@ extern "C" struct Context {
     u64 rip;
 };
 
-extern "C" void zx_backtrace_getcontext_(Context *out);
+#ifdef ZX_DEBUG_INFO
 
-enum class [[nodiscard]] GetContextStatus : u8_c {
-    Ok = 0,
-    Nullptr,
-};
+extern "C" void zx_backtrace_getcontext_(Context *out);
 
 GetContextStatus getcontext(Context *out) {
     if (out == nullptr) {
@@ -30,6 +30,17 @@ GetContextStatus getcontext(Context *out) {
     }
 
     zx_backtrace_getcontext_(out);
+    return GetContextStatus::Ok;
+}
+
+#else // ifdef ZX_DEBUG_INFO
+
+GetContextStatus getcontext(Context *out) {
+    if (out == nullptr) {
+        return GetContextStatus::Nullptr;
+    }
+
+    __builtin_memset(out, 0, sizeof(Context));
     return GetContextStatus::Ok;
 }
 

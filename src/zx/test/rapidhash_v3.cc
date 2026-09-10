@@ -2,7 +2,7 @@ import zx;
 using namespace zx;
 
 int main(void) {
-    constexpr u64 len = 569;
+    constexpr u64 len = 200;
     u8 data[len];
 
     SliceMut<u8> const slice = SliceMut<u8>::init_unsafe(data, len);
