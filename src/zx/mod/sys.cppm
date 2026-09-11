@@ -29,6 +29,53 @@ constexpr i32 PROT_WRITE = 0x2;
 constexpr i32 O_RDONLY = 00;
 constexpr i32 O_WRONLY = 01;
 constexpr i32 O_RDWR = 02;
+constexpr i32 O_NOCTTY = 0400;
+constexpr i32 O_ACCMODE = 0003;
+constexpr i32 O_NONBLOCK = 04000;
+constexpr i32 O_NDELAY = O_NONBLOCK;
+constexpr i32 O_ASYNC = 020000;
+constexpr i32 O_SYNC = 04010000;
+constexpr i32 O_RSYNC = O_SYNC;
+constexpr i32 O_FSYNC = O_SYNC;
+constexpr i32 O_DSYNC = 010000;
+constexpr i32 O_APPEND = 02000;
+constexpr i32 O_DIRECTORY = 0200000;
+constexpr i32 O_EXCL = 0200;
+constexpr i32 O_CLOEXEC = 02000000;
+constexpr i32 O_CREAT = 0100;
+constexpr i32 O_TRUNC = 01000;
+constexpr i32 O_DIRECT = 040000;
+constexpr i32 O_NOFOLLOW = 0400000;
+constexpr i32 O_PATH = 010000000;
+constexpr i32 O_TMPFILE = (020000000 | O_DIRECTORY);
+
+// echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "S_"
+constexpr u32 S_IFBLK = 0060000;
+constexpr u32 S_IFIFO = 0010000;
+constexpr u32 S_IREAD = 0400;
+constexpr u32 S_ISVTX = 01000;
+constexpr u32 S_IFCHR = 0020000;
+constexpr u32 S_IFREG = 0100000;
+constexpr u32 S_IFDIR = 0040000;
+constexpr u32 S_IWRITE = 0200;
+constexpr u32 S_IEXEC = 0100;
+constexpr u32 S_IFLNK = 0120000;
+constexpr u32 S_IFSOCK = 0140000;
+constexpr u32 S_ISUID = 04000;
+constexpr u32 S_IFMT = 0170000;
+constexpr u32 S_ISGID = 02000;
+constexpr u32 S_IWUSR = S_IWRITE;
+constexpr u32 S_IXUSR = S_IEXEC;
+constexpr u32 S_IXGRP = (S_IXUSR >> 3);
+constexpr u32 S_IXOTH = (S_IXGRP >> 3);
+constexpr u32 S_IRWXU = (S_IREAD | S_IWRITE | S_IEXEC);
+constexpr u32 S_IWGRP = (S_IWUSR >> 3);
+constexpr u32 S_IRWXG = (S_IRWXU >> 3);
+constexpr u32 S_IRWXO = (S_IRWXG >> 3);
+constexpr u32 S_IRUSR = S_IREAD;
+constexpr u32 S_IWOTH = (S_IWGRP >> 3);
+constexpr u32 S_IRGRP = (S_IRUSR >> 3);
+constexpr u32 S_IROTH = (S_IRGRP >> 3);
 
 // echo '#define _GNU_SOURCE 1
 // #include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "AT_"

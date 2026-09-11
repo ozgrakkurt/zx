@@ -14,33 +14,6 @@ export namespace zx {
 
 namespace sys {
 
-constexpr i32 S_IFMT = 00170000;
-constexpr i32 S_IFSOCK = 0140000;
-constexpr i32 S_IFLNK = 0120000;
-constexpr i32 S_IFREG = 0100000;
-constexpr i32 S_IFBLK = 0060000;
-constexpr i32 S_IFDIR = 0040000;
-constexpr i32 S_IFCHR = 0020000;
-constexpr i32 S_IFIFO = 0010000;
-constexpr i32 S_ISUID = 0004000;
-constexpr i32 S_ISGID = 0002000;
-constexpr i32 S_ISVTX = 0001000;
-
-constexpr i32 S_IRWXU = 00700;
-constexpr i32 S_IRUSR = 00400;
-constexpr i32 S_IWUSR = 00200;
-constexpr i32 S_IXUSR = 00100;
-
-constexpr i32 S_IRWXG = 00070;
-constexpr i32 S_IRGRP = 00040;
-constexpr i32 S_IWGRP = 00020;
-constexpr i32 S_IXGRP = 00010;
-
-constexpr i32 S_IRWXO = 00007;
-constexpr i32 S_IROTH = 00004;
-constexpr i32 S_IWOTH = 00002;
-constexpr i32 S_IXOTH = 00001;
-
 extern "C" {
 
 /*
