@@ -25,7 +25,7 @@ constexpr i32 PROT_NONE = 0x0;
 constexpr i32 PROT_READ = 0x1;
 constexpr i32 PROT_WRITE = 0x2;
 
-// echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "O_RD"
+// echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "O_"
 constexpr i32 O_RDONLY = 00;
 constexpr i32 O_WRONLY = 01;
 constexpr i32 O_RDWR = 02;
