@@ -33,6 +33,7 @@ constexpr i32 O_RDWR = 02;
 // echo '#define _GNU_SOURCE 1
 // #include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "AT_"
 constexpr i32 AT_EMPTY_PATH = 0x1000;
+constexpr i32 AT_REMOVEDIR = 0x200;
 
 constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
@@ -186,6 +187,7 @@ constexpr u64 NR_MPROTECT = 10;
 constexpr u64 NR_MUNMAP = 11;
 constexpr u64 NR_MADVISE = 28;
 constexpr u64 NR_EXIT_GROUP = 231;
+constexpr u64 NR_UNLINKAT = 263;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -1003,6 +1005,43 @@ IoUringRegisterStatus io_uring_register(i32 fd, u32 opcode, void const *arg,
         }
     }
     return IoUringRegisterStatus::Ok;
+}
+
+enum class [[nodiscard]] UnlinkAtStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedError,
+    EBadF,
+    EInval,
+    ENotDir,
+};
+
+UnlinkAtStatus unlink_at(i32 dirfd, char const *pathname, int flags) {
+    if (pathname == nullptr) {
+        return UnlinkAtStatus::Nullptr;
+    }
+
+    u64 const res =
+        syscall3(NR_UNLINKAT, (u64)dirfd, (u64)pathname, (u64)flags);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EBADF: {
+            return UnlinkAtStatus::EBadF;
+        }
+        case EINVAL: {
+            return UnlinkAtStatus::EInval;
+        }
+        case ENOTDIR: {
+            return UnlinkAtStatus::ENotDir;
+        }
+        default: {
+            return UnlinkAtStatus::UnexpectedError;
+        }
+        }
+    }
+
+    return UnlinkAtStatus::Ok;
 }
 
 } // namespace sys
