@@ -1071,7 +1071,7 @@ enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     ENotDir,
 };
 
-UnlinkAtStatus unlink_at(i32 dirfd, char const *pathname, int flags) {
+UnlinkAtStatus unlink_at(i32 dirfd, u8 const *pathname, int flags) {
     if (pathname == nullptr) {
         return UnlinkAtStatus::Nullptr;
     }
