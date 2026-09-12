@@ -57,7 +57,8 @@ void format_simple_(u128 uuid, bool upper_case, SliceMut<u8> out) {
     u8 const alpha_offset = upper_case ? u8{0x07} : u8{0x27};
     u8 bytes[sizeof(u128)];
     static_assert(sizeof(bytes) == sizeof(u128));
-    __builtin_memcpy(bytes, &uuid, sizeof(u128));
+    u128 const swapped = __builtin_bswapg(uuid);
+    __builtin_memcpy(bytes, &swapped, sizeof(u128));
     for (u8 i = 0; i < sizeof(bytes); i++) {
         u8 const x = bytes[i];
         out.write_unsafe(i * 2__wbu, nibble_to_hex_(x >> 4, alpha_offset));

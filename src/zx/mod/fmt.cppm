@@ -24,6 +24,10 @@ struct Fmt {
         return this->m_offset;
     }
 
+    Slice<u8> written() const {
+        return this->m_mem.slice_unsafe(0, this->m_offset).as_const();
+    }
+
     u64 capacity() const {
         assert_dev(this->m_mem.len() >= this->m_offset);
         return this->m_mem.len();
