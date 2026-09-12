@@ -86,6 +86,11 @@ constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
 constexpr i32 STDERR = 2;
 
+// echo '#include <sys/types.h>' | gcc -E -dM | grep -E "SEEK_"
+constexpr i32 SEEK_SET = 0;
+constexpr i32 SEEK_CUR = 1;
+constexpr i32 SEEK_END = 2;
+
 // echo '#include <errno.h>' | gcc -E -dM -xc - | grep -E "^#define E"
 constexpr u64 EAGAIN = 11;
 constexpr u64 EMULTIHOP = 72;
@@ -237,6 +242,7 @@ constexpr u64 NR_EXIT_GROUP = 231;
 constexpr u64 NR_UNLINKAT = 263;
 constexpr u64 NR_PREAD64 = 17;
 constexpr u64 NR_PWRITE64 = 18;
+constexpr u64 NR_LSEEK = 8;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -1252,6 +1258,57 @@ PWriteStatus pwrite(i32 fd, u8 const *buf, u64 count, u64 offset,
 
     *n_written = res;
     return PWriteStatus::Ok;
+}
+
+enum class [[nodiscard]] LSeekStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EBadF,
+    EInval,
+    ENXIo,
+    EOverflow,
+    ESPipe,
+};
+
+LSeekStatus lseek(i32 fd, i64 offset, i32 whence, i64 *new_offset) {
+    if (new_offset == nullptr) {
+        return LSeekStatus::Nullptr;
+    }
+
+    u64 const res = syscall3(NR_LSEEK, (u64)fd, (u64)offset, (u64)whence);
+    u64 const errno = errno_(res);
+
+    if (errno != SUCCESS) {
+        // lseek(2) conventionally reports failure with -1.
+        // Make the output invalid so callers can detect misuse if they
+        // ignore the returned status.
+        *new_offset = -1;
+
+        switch (errno) {
+        case EBADF: {
+            return LSeekStatus::EBadF;
+        }
+        case EINVAL: {
+            return LSeekStatus::EInval;
+        }
+        case ENXIO: {
+            return LSeekStatus::ENXIo;
+        }
+        case EOVERFLOW: {
+            return LSeekStatus::EOverflow;
+        }
+        case ESPIPE: {
+            return LSeekStatus::ESPipe;
+        }
+        default: {
+            return LSeekStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    *new_offset = (i64)res;
+    return LSeekStatus::Ok;
 }
 
 } // namespace sys

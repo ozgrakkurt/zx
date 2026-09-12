@@ -7,7 +7,7 @@ static void test_mmap() {
 }
 
 static void test_file() {
-    // open close read write statx
+    // open close read write statx pread pwrite
 }
 
 static void test_perf_event_open() {}
