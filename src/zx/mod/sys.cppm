@@ -235,6 +235,8 @@ constexpr u64 NR_MUNMAP = 11;
 constexpr u64 NR_MADVISE = 28;
 constexpr u64 NR_EXIT_GROUP = 231;
 constexpr u64 NR_UNLINKAT = 263;
+constexpr u64 NR_PREAD64 = 17;
+constexpr u64 NR_PWRITE64 = 18;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -1089,6 +1091,167 @@ UnlinkAtStatus unlink_at(i32 dirfd, char const *pathname, int flags) {
     }
 
     return UnlinkAtStatus::Ok;
+}
+
+enum class [[nodiscard]] PReadStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EBadF,
+    EFault,
+    EIntr,
+    EInval,
+    EIo,
+    EIsDir,
+    EOverflow,
+    ESPipe,
+    ENXIo,
+};
+
+PReadStatus pread(i32 fd, u8 *buf, u64 count, u64 offset, u64 *n_read) {
+    if (n_read == nullptr || buf == nullptr) {
+        return PReadStatus::Nullptr;
+    }
+
+    u64 const res = syscall4(NR_PREAD64, (u64)fd, (u64)buf, count, offset);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        // The returned n_read count isn't supposed to be used on error case.
+        // Set to max value so the caller will do something unexpected if it
+        // tries to use this value on error case. Then we can hope to catch this
+        // in tests.
+        *n_read = U64_MAX;
+
+        // don't need to handle these separately since they are the same value.
+        static_assert(EAGAIN == EWOULDBLOCK);
+
+        switch (errno) {
+        case EAGAIN: {
+            return PReadStatus::EAgain;
+        }
+        case EBADF: {
+            return PReadStatus::EBadF;
+        }
+        case EFAULT: {
+            return PReadStatus::EFault;
+        }
+        case EINTR: {
+            return PReadStatus::EIntr;
+        }
+        case EINVAL: {
+            return PReadStatus::EInval;
+        }
+        case EIO: {
+            return PReadStatus::EIo;
+        }
+        case EISDIR: {
+            return PReadStatus::EIsDir;
+        }
+        case EOVERFLOW: {
+            return PReadStatus::EOverflow;
+        }
+        case ESPIPE: {
+            return PReadStatus::ESPipe;
+        }
+        case ENXIO: {
+            return PReadStatus::ENXIo;
+        }
+        default: {
+            return PReadStatus::UnexpectedErr;
+        }
+        }
+    }
+    *n_read = res;
+    return PReadStatus::Ok;
+}
+
+enum class [[nodiscard]] PWriteStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EBadF,
+    EDestAddrReq,
+    EDQuot,
+    EFault,
+    EFBig,
+    EIntr,
+    EInval,
+    EIo,
+    ENoSpc,
+    EPerm,
+    EPipe,
+    EOverflow,
+    ESPipe,
+    ENXIo,
+};
+
+PWriteStatus pwrite(i32 fd, u8 const *buf, u64 count, u64 offset,
+                    u64 *n_written) {
+    if (n_written == nullptr || buf == nullptr) {
+        return PWriteStatus::Nullptr;
+    }
+
+    u64 const res = syscall4(NR_PWRITE64, (u64)fd, (u64)buf, count, offset);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        *n_written = U64_MAX;
+
+        switch (errno) {
+        case EAGAIN: {
+            return PWriteStatus::EAgain;
+        }
+        case EBADF: {
+            return PWriteStatus::EBadF;
+        }
+        case EDESTADDRREQ: {
+            return PWriteStatus::EDestAddrReq;
+        }
+        case EDQUOT: {
+            return PWriteStatus::EDQuot;
+        }
+        case EFAULT: {
+            return PWriteStatus::EFault;
+        }
+        case EFBIG: {
+            return PWriteStatus::EFBig;
+        }
+        case EINTR: {
+            return PWriteStatus::EIntr;
+        }
+        case EINVAL: {
+            return PWriteStatus::EInval;
+        }
+        case EIO: {
+            return PWriteStatus::EIo;
+        }
+        case ENOSPC: {
+            return PWriteStatus::ENoSpc;
+        }
+        case EPERM: {
+            return PWriteStatus::EPerm;
+        }
+        case EPIPE: {
+            return PWriteStatus::EPipe;
+        }
+        case EOVERFLOW: {
+            return PWriteStatus::EOverflow;
+        }
+        case ESPIPE: {
+            return PWriteStatus::ESPipe;
+        }
+        case ENXIO: {
+            return PWriteStatus::ENXIo;
+        }
+        default: {
+            return PWriteStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    *n_written = res;
+    return PWriteStatus::Ok;
 }
 
 } // namespace sys

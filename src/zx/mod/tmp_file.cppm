@@ -3,25 +3,29 @@ import :sys;
 
 export namespace zx {
 
-enum class [[nodiscard]] MakeTmpFileStatus : u8_c {
+namespace tmp_file {
+
+enum class [[nodiscard]] OpenStatus : u8_c {
     Ok = 0,
     Nullptr,
-    CreateFileFail,
+    SysOpenFail,
 };
 
-MakeTmpFileStatus make_tmp_file(i32 *fd) {
+OpenStatus open(i32 *fd) {
     if (fd == nullptr) {
-        return MakeTmpFileStatus::Nullptr;
+        return OpenStatus::Nullptr;
     }
 
     if (sys::OpenStatus::Ok !=
         sys::open((u8 const *)"/tmp",
                   sys::O_TMPFILE | sys::O_EXCL | sys::O_RDWR,
                   sys::S_IWUSR | sys::S_IRUSR, fd)) {
-        return MakeTmpFileStatus::CreateFileFail;
+        return OpenStatus::SysOpenFail;
     }
 
-    return MakeTmpFileStatus::Ok;
+    return OpenStatus::Ok;
 }
+
+} // namespace tmp_file
 
 } // namespace zx
