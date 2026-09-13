@@ -244,6 +244,7 @@ constexpr u64 NR_PREAD64 = 17;
 constexpr u64 NR_PWRITE64 = 18;
 constexpr u64 NR_LSEEK = 8;
 constexpr u64 NR_GETRANDOM = 318;
+constexpr u64 NR_FTRUNCATE = 77;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -722,7 +723,7 @@ MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
 enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
     Ok = 0,
     Nullptr,
-    UnexpectedError,
+    UnexpectedErr,
     InvalidFd,
     E2Big,
     EAcces,
@@ -804,7 +805,7 @@ PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
             return PerfEventOpenStatus::ESrch;
         }
         default: {
-            return PerfEventOpenStatus::UnexpectedError;
+            return PerfEventOpenStatus::UnexpectedErr;
         }
         }
     }
@@ -821,7 +822,7 @@ PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
 enum class [[nodiscard]] StatXStatus : u8_c {
     Ok = 0,
     Nullptr,
-    UnexpectedError,
+    UnexpectedErr,
     EAcces,
     EBadF,
     EFault,
@@ -872,7 +873,7 @@ StatXStatus statx(i32 dirfd, char const *path, i32 flags, u32 mask,
             return StatXStatus::ENotDir;
         }
         default: {
-            return StatXStatus::UnexpectedError;
+            return StatXStatus::UnexpectedErr;
         }
         }
     }
@@ -883,7 +884,7 @@ StatXStatus statx(i32 dirfd, char const *path, i32 flags, u32 mask,
 enum class [[nodiscard]] IoUringSetupStatus : u8_c {
     Ok = 0,
     Nullptr,
-    UnexpectedError,
+    UnexpectedErr,
     EFault,
     EInval,
     EMFile,
@@ -924,7 +925,7 @@ IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params) {
             return IoUringSetupStatus::ENXIo;
         }
         default: {
-            return IoUringSetupStatus::UnexpectedError;
+            return IoUringSetupStatus::UnexpectedErr;
         }
         }
     }
@@ -934,7 +935,7 @@ IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params) {
 
 enum class [[nodiscard]] IoUringEnterStatus : u8_c {
     Ok = 0,
-    UnexpectedError,
+    UnexpectedErr,
     EAgain,
     EBadF,
     EBadFd,
@@ -993,7 +994,7 @@ IoUringEnterStatus io_uring_enter(i32 fd, u32 to_submit, u32 min_complete,
             return IoUringEnterStatus::EOwnerDead;
         }
         default: {
-            return IoUringEnterStatus::UnexpectedError;
+            return IoUringEnterStatus::UnexpectedErr;
         }
         }
     }
@@ -1002,7 +1003,7 @@ IoUringEnterStatus io_uring_enter(i32 fd, u32 to_submit, u32 min_complete,
 
 enum class [[nodiscard]] IoUringRegisterStatus : u8_c {
     Ok = 0,
-    UnexpectedError,
+    UnexpectedErr,
     EAcces,
     EBadF,
     EBadFd,
@@ -1061,7 +1062,7 @@ IoUringRegisterStatus io_uring_register(i32 fd, u32 opcode, void const *arg,
             return IoUringRegisterStatus::ENoEnt;
         }
         default: {
-            return IoUringRegisterStatus::UnexpectedError;
+            return IoUringRegisterStatus::UnexpectedErr;
         }
         }
     }
@@ -1071,7 +1072,7 @@ IoUringRegisterStatus io_uring_register(i32 fd, u32 opcode, void const *arg,
 enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     Ok = 0,
     Nullptr,
-    UnexpectedError,
+    UnexpectedErr,
     EBadF,
     EInval,
     ENotDir,
@@ -1097,7 +1098,7 @@ UnlinkAtStatus unlink_at(i32 dirfd, u8 const *pathname, int flags) {
             return UnlinkAtStatus::ENotDir;
         }
         default: {
-            return UnlinkAtStatus::UnexpectedError;
+            return UnlinkAtStatus::UnexpectedErr;
         }
         }
     }
@@ -1362,6 +1363,46 @@ GetRandomStatus getrandom(u8 *buf, u64 size, u32 flags, u64 *n_read) {
 
     *n_read = res;
     return GetRandomStatus::Ok;
+}
+
+enum class [[nodiscard]] FTruncateStatus : u8_c {
+    Ok = 0,
+    UnexpectedErr,
+    EIntr,
+    EInval,
+    EFBig,
+    EIo,
+    EBadF,
+};
+
+FTruncateStatus ftruncate(int fildes, u64 length) {
+    u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, length);
+    u64 const errno = errno_(res);
+
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EINTR: {
+            return FTruncateStatus::EIntr;
+        }
+        case EINVAL: {
+            return FTruncateStatus::EInval;
+        }
+        case EFBIG: {
+            return FTruncateStatus::EFBig;
+        }
+        case EIO: {
+            return FTruncateStatus::EIo;
+        }
+        case EBADF: {
+            return FTruncateStatus::EBadF;
+        }
+        default: {
+            return FTruncateStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    return FTruncateStatus::Ok;
 }
 
 } // namespace sys
