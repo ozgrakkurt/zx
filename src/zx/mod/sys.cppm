@@ -243,6 +243,7 @@ constexpr u64 NR_UNLINKAT = 263;
 constexpr u64 NR_PREAD64 = 17;
 constexpr u64 NR_PWRITE64 = 18;
 constexpr u64 NR_LSEEK = 8;
+constexpr u64 NR_GETRANDOM = 318;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -258,6 +259,11 @@ constexpr u64 NR_IO_URING_REGISTER = 427;
 // echo '#include <signal.h>' | gcc -E -dM -xc - | grep -E "SIGBUS"
 constexpr u64 SIGSEGV = 11;
 constexpr u64 SIGBUS = 7;
+
+// echo '#include <sys/random.h>' | gcc -E -dM -xc - | grep -E "GRND"
+constexpr u32 GRND_INSECURE = 0x04;
+constexpr u32 GRND_NONBLOCK = 0x01;
+constexpr u32 GRND_RANDOM = 0x02;
 
 constexpr u64 SUCCESS = 0;
 
@@ -1309,6 +1315,53 @@ LSeekStatus lseek(i32 fd, i64 offset, i32 whence, i64 *new_offset) {
 
     *new_offset = (i64)res;
     return LSeekStatus::Ok;
+}
+
+enum class [[nodiscard]] GetRandomStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EFault,
+    EIntr,
+    EInval,
+    ENoSys,
+};
+
+GetRandomStatus getrandom(u8 *buf, u64 size, u32 flags, u64 *n_read) {
+    if (buf == nullptr || n_read == nullptr) {
+        return GetRandomStatus::Nullptr;
+    }
+
+    u64 const res = syscall3(NR_GETRANDOM, (u64)buf, size, (u64)flags);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        *n_read = U64_MAX;
+
+        switch (errno) {
+        case EAGAIN: {
+            return GetRandomStatus::EAgain;
+        }
+        case EFAULT: {
+            return GetRandomStatus::EFault;
+        }
+        case EINTR: {
+            return GetRandomStatus::EIntr;
+        }
+        case EINVAL: {
+            return GetRandomStatus::EInval;
+        }
+        case ENOSYS: {
+            return GetRandomStatus::ENoSys;
+        }
+        default: {
+            return GetRandomStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    *n_read = res;
+    return GetRandomStatus::Ok;
 }
 
 } // namespace sys
