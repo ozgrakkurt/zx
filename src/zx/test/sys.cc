@@ -61,25 +61,85 @@ static void test_mmap() {
 }
 
 static void test_file() {
-    // open close read write fseek statx pread pwrite
+    // open close read write lseek statx pread pwrite
     i32 const fd = open_temporary_file();
 
-    u64 const len = 5000;
+    u64 const file_size = 5000;
 
-    assert(sys::FTruncateStatus::Ok == sys::ftruncate(fd, len));
+    assert(sys::FTruncateStatus::Ok == sys::ftruncate(fd, file_size));
 
     constexpr u64 data_len = 1020;
 
     u8 data_buf[data_len];
-    SliceMut<u8> data = SliceMut<u8>::init_unsafe(data, sizeof(data));
+    SliceMut<u8> data = SliceMut<u8>::init_unsafe(data_buf, sizeof(data_buf));
 
     Xoshiro256 rand = Xoshiro256::init(1131);
     rand.fill(data);
 
-    assert(sys::LSeekStatus::Ok == sys::lseek());
+    u64 offset = 0;
+    assert(sys::LSeekStatus::Ok ==
+           sys::lseek(fd, 2000, sys::SEEK_SET, &offset));
+    assert(offset == 2000);
 
     u64 n = 0;
-    assert(sys::WriteStatus::Ok == sys::write());
+    assert(sys::WriteStatus::Ok == sys::write(fd, data.ptr(), data.len(), &n));
+    assert(n == data.len());
+
+    u8 out_buf[data_len];
+    SliceMut<u8> out = SliceMut<u8>::init_unsafe(out_buf, sizeof(out_buf));
+
+    // read from improper position, the cursor on the file is pointing to 2000 +
+    // out.len() since we just did a write that advanced the cursor.
+    n = 0;
+    assert(sys::ReadStatus::Ok == sys::read(fd, out.ptr(), out.len(), &n));
+    assert(n == out.len());
+
+    assert(!out.equals(data));
+
+    // seek to proper position
+    assert(sys::LSeekStatus::Ok ==
+           sys::lseek(fd, 2000, sys::SEEK_SET, &offset));
+    assert(offset == 2000);
+
+    n = 0;
+    assert(sys::ReadStatus::Ok == sys::read(fd, out.ptr(), out.len(), &n));
+    assert(n == out.len());
+
+    assert(out.equals(data));
+
+    sys::StatX statx;
+    __builtin_memset(&statx, 0, sizeof(statx));
+    assert(sys::StatXStatus::Ok == sys::statx(fd, (u8 const *)"",
+                                              sys::AT_EMPTY_PATH,
+                                              sys::STATX_MODE, &statx));
+    assert(statx.stx_size == file_size);
+    assert((statx.stx_mask & sys::STATX_MODE) != 0);
+
+    rand.fill(data);
+    rand.fill(out);
+
+    u64 const p_offset = 1269;
+
+    n = 0;
+    assert(sys::PWriteStatus::Ok ==
+           sys::pwrite(fd, data.ptr(), data.len(), p_offset, &n));
+    assert(n == data.len());
+
+    // read from wrong offset
+    n = 0;
+    assert(sys::PReadStatus::Ok ==
+           sys::pread(fd, out.ptr(), out.len(), p_offset + 3, &n));
+    assert(n == out.len());
+
+    assert(!out.equals(data));
+
+    // read from right offset
+    n = 0;
+    assert(sys::PReadStatus::Ok ==
+           sys::pread(fd, out.ptr(), out.len(), p_offset, &n));
+    assert(n == out.len());
+
+    assert(out.equals(data));
 }
 
 static void test_perf_event_open() {}

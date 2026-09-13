@@ -81,6 +81,46 @@ constexpr u32 S_IROTH = (S_IRGRP >> 3);
 // #include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "AT_"
 constexpr i32 AT_EMPTY_PATH = 0x1000;
 constexpr i32 AT_REMOVEDIR = 0x200;
+constexpr i32 AT_NO_AUTOMOUNT = 0x800;
+constexpr i32 AT_SYMLINK_NOFOLLOW = 0x100;
+constexpr i32 AT_STATX_SYNC_AS_STAT = 0x0000;
+constexpr i32 AT_STATX_FORCE_SYNC = 0x2000;
+constexpr i32 AT_STATX_DONT_SYNC = 0x4000;
+
+// These are already defined in statx.cppm so comment them out here
+// echo '#define _GNU_SOURCE 1
+// #include <sys/stat.h>' | gcc -E -dM -xc - | grep -i "STATX_"
+// constexpr u32 STATX_SUBVOL = 0x00008000U;
+// constexpr u32 STATX_BASIC_STATS = 0x000007ffU;
+// constexpr u32 STATX_BTIME = 0x00000800U;
+// constexpr u32 STATX_MTIME = 0x00000040U;
+// constexpr u32 STATX_NLINK = 0x00000004U;
+// constexpr u32 STATX_UID = 0x00000008U;
+// constexpr u32 STATX_SIZE = 0x00000200U;
+// constexpr u32 STATX_DIOALIGN = 0x00002000U;
+// constexpr u32 STATX_GID = 0x00000010U;
+// constexpr u32 STATX_DIO_READ_ALIGN = 0x00020000U;
+// constexpr u32 STATX_CTIME = 0x00000080U;
+// constexpr u32 STATX_MODE = 0x00000002U;
+// constexpr u32 STATX_ATIME = 0x00000020U;
+// constexpr u32 STATX_WRITE_ATOMIC = 0x00010000U;
+// constexpr u32 STATX_ALL = 0x00000fffU;
+// constexpr u32 STATX__RESERVED = 0x80000000U;
+// constexpr u32 STATX_MNT_ID = 0x00001000U;
+// constexpr u32 STATX_MNT_ID_UNIQUE = 0x00004000U;
+// constexpr u32 STATX_BLOCKS = 0x00000400U;
+// constexpr u32 STATX_INO = 0x00000100U;
+// constexpr u32 STATX_TYPE = 0x00000001U;
+// constexpr u32 STATX_ATTR_AUTOMOUNT = 0x00001000;
+// constexpr u32 STATX_ATTR_VERITY = 0x00100000;
+// constexpr u32 STATX_ATTR_IMMUTABLE = 0x00000010;
+// constexpr u32 STATX_ATTR_COMPRESSED = 0x00000004;
+// constexpr u32 STATX_ATTR_MOUNT_ROOT = 0x00002000;
+// constexpr u32 STATX_ATTR_DAX = 0x00200000;
+// constexpr u32 STATX_ATTR_NODUMP = 0x00000040;
+// constexpr u32 STATX_ATTR_ENCRYPTED = 0x00000800;
+// constexpr u32 STATX_ATTR_APPEND = 0x00000020;
+// constexpr u32 STATX_ATTR_WRITE_ATOMIC = 0x00400000;
 
 constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
