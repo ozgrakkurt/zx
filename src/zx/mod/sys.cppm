@@ -436,7 +436,7 @@ enum class [[nodiscard]] OpenStatus : u8_c {
     ENoMem,
     ENoSpc,
     ENotDir,
-    ENxIo,
+    ENXIo,
     EOpNotSupp,
     EOverflow,
     EPerm,
@@ -514,7 +514,7 @@ OpenStatus open(u8 const *path, i32 flags, u32 mode, i32 *fd) {
             return OpenStatus::ENotDir;
         }
         case ENXIO: {
-            return OpenStatus::ENxIo;
+            return OpenStatus::ENXIo;
         }
         case EOPNOTSUPP: {
             return OpenStatus::EOpNotSupp;
@@ -684,7 +684,7 @@ enum class [[nodiscard]] MProtectStatus : u8_c {
     ENoMem,
 };
 
-MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
+MProtectStatus mprotect(u8 *addr, u64 length, i32 prot) {
     if (addr == nullptr) {
         return MProtectStatus::Nullptr;
     }
@@ -712,7 +712,7 @@ MProtectStatus mprotect(u8 *addr, u64 length, int prot) {
     return MProtectStatus::Ok;
 }
 
-[[noreturn]] void exit_group(int status) {
+[[noreturn]] void exit_group(i32 status) {
     syscall1(NR_EXIT_GROUP, (u64)status);
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
@@ -810,7 +810,7 @@ PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
         }
     }
     i32 const ret_fd = (i32)res;
-    if (ret_fd <= 0) {
+    if (ret_fd < 0) {
         *fd = -1;
         return PerfEventOpenStatus::InvalidFd;
     }
@@ -834,7 +834,7 @@ enum class [[nodiscard]] StatXStatus : u8_c {
     ENotDir,
 };
 
-StatXStatus statx(i32 dirfd, char const *path, i32 flags, u32 mask,
+StatXStatus statx(i32 dirfd, u8 const *path, i32 flags, u32 mask,
                   StatX *statxbuf) {
     if (statxbuf == nullptr) {
         return StatXStatus::Nullptr;
@@ -894,14 +894,16 @@ enum class [[nodiscard]] IoUringSetupStatus : u8_c {
     ENXIo,
 };
 
-IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params) {
-    if (params == nullptr) {
+IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params,
+                                  i32 *fd) {
+    if (fd == nullptr || params == nullptr) {
         return IoUringSetupStatus::Nullptr;
     }
 
     u64 const res = syscall2(NR_IO_URING_SETUP, n_entries, (u64)params);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
+        *fd = -1;
         switch (errno) {
         case EFAULT: {
             return IoUringSetupStatus::EFault;
@@ -930,6 +932,7 @@ IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params) {
         }
     }
 
+    *fd = (i32)res;
     return IoUringSetupStatus::Ok;
 }
 
@@ -1078,7 +1081,7 @@ enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     ENotDir,
 };
 
-UnlinkAtStatus unlink_at(i32 dirfd, u8 const *pathname, int flags) {
+UnlinkAtStatus unlink_at(i32 dirfd, u8 const *pathname, i32 flags) {
     if (pathname == nullptr) {
         return UnlinkAtStatus::Nullptr;
     }
@@ -1278,19 +1281,18 @@ enum class [[nodiscard]] LSeekStatus : u8_c {
     ESPipe,
 };
 
-LSeekStatus lseek(i32 fd, i64 offset, i32 whence, i64 *new_offset) {
+LSeekStatus lseek(i32 fd, u64 offset, i32 whence, u64 *new_offset) {
     if (new_offset == nullptr) {
         return LSeekStatus::Nullptr;
     }
 
-    u64 const res = syscall3(NR_LSEEK, (u64)fd, (u64)offset, (u64)whence);
+    u64 const res = syscall3(NR_LSEEK, (u64)fd, offset, (u64)whence);
     u64 const errno = errno_(res);
 
     if (errno != SUCCESS) {
-        // lseek(2) conventionally reports failure with -1.
         // Make the output invalid so callers can detect misuse if they
         // ignore the returned status.
-        *new_offset = -1;
+        *new_offset = U64_MAX;
 
         switch (errno) {
         case EBADF: {
@@ -1314,7 +1316,7 @@ LSeekStatus lseek(i32 fd, i64 offset, i32 whence, i64 *new_offset) {
         }
     }
 
-    *new_offset = (i64)res;
+    *new_offset = res;
     return LSeekStatus::Ok;
 }
 
@@ -1375,7 +1377,7 @@ enum class [[nodiscard]] FTruncateStatus : u8_c {
     EBadF,
 };
 
-FTruncateStatus ftruncate(int fildes, u64 length) {
+FTruncateStatus ftruncate(i32 fildes, u64 length) {
     u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, length);
     u64 const errno = errno_(res);
 

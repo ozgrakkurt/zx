@@ -61,7 +61,25 @@ static void test_mmap() {
 }
 
 static void test_file() {
-    // open close read write statx pread pwrite
+    // open close read write fseek statx pread pwrite
+    i32 const fd = open_temporary_file();
+
+    u64 const len = 5000;
+
+    assert(sys::FTruncateStatus::Ok == sys::ftruncate(fd, len));
+
+    constexpr u64 data_len = 1020;
+
+    u8 data_buf[data_len];
+    SliceMut<u8> data = SliceMut<u8>::init_unsafe(data, sizeof(data));
+
+    Xoshiro256 rand = Xoshiro256::init(1131);
+    rand.fill(data);
+
+    assert(sys::LSeekStatus::Ok == sys::lseek());
+
+    u64 n = 0;
+    assert(sys::WriteStatus::Ok == sys::write());
 }
 
 static void test_perf_event_open() {}
