@@ -21,3 +21,4 @@ export import :statx;
 export import :io_uring;
 export import :uuid_v4;
 export import :tmp_file;
+export import :signal;

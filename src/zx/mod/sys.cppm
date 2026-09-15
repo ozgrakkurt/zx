@@ -4,6 +4,7 @@ import :def;
 import :perf_event;
 import :statx;
 import :io_uring;
+import :signal;
 
 export namespace zx {
 
@@ -285,6 +286,7 @@ constexpr u64 NR_PWRITE64 = 18;
 constexpr u64 NR_LSEEK = 8;
 constexpr u64 NR_GETRANDOM = 318;
 constexpr u64 NR_FTRUNCATE = 77;
+constexpr u64 NR_RT_SIGACTION = 13;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -1445,6 +1447,36 @@ FTruncateStatus ftruncate(i32 fildes, u64 length) {
     }
 
     return FTruncateStatus::Ok;
+}
+
+
+enum class [[nodiscard]] SigActionStatus : u8_c {
+    Ok = 0,
+    UnexpectedErr,
+    EFault,
+    EInval,
+};
+
+SigActionStatus sigaction(i32 signum, SigAction const *__restrict act,
+                          SigAction *__restrict oldact) {
+    u64 const res =
+        syscall3(NR_RT_SIGACTION, (u64)signum, (u64)act, (u64)oldact);
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) {
+        switch (errno) {
+        case EFAULT: {
+            return SigActionStatus::EFault;
+        }
+        case EINVAL: {
+            return SigActionStatus::EInval;
+        }
+        default: {
+            return SigActionStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    return SigActionStatus::Ok;
 }
 
 } // namespace sys
