@@ -286,6 +286,7 @@ constexpr u64 NR_PWRITE64 = 18;
 constexpr u64 NR_LSEEK = 8;
 constexpr u64 NR_GETRANDOM = 318;
 constexpr u64 NR_FTRUNCATE = 77;
+constexpr u64 NR_RT_SIGRETURN = 15;
 constexpr u64 NR_RT_SIGACTION = 13;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
@@ -1449,6 +1450,14 @@ FTruncateStatus ftruncate(i32 fildes, u64 length) {
     return FTruncateStatus::Ok;
 }
 
+// internal trampoline to be used for sigaction impl.
+// https://www.man7.org/linux/man-pages/man2/sigreturn.2.html
+//
+// It essentially just returns control back to the kernel.
+//
+// Implementation is taken from zig implementation for the same thing on x86_64
+// linux.
+void sigreturn_() { syscall0(NR_RT_SIGRETURN); }
 
 enum class [[nodiscard]] SigActionStatus : u8_c {
     Ok = 0,
@@ -1457,10 +1466,19 @@ enum class [[nodiscard]] SigActionStatus : u8_c {
     EInval,
 };
 
-SigActionStatus sigaction(i32 signum, SigAction const *__restrict act,
+SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
                           SigAction *__restrict oldact) {
+    SigAction_ k_act;
+    if (act != nullptr) {
+        k_act = SigAction_ {
+            .sa_handler = act->handler, .sa_mask = act->mask,
+            .sa_flags = act->flags, .sa_restorer = sigreturn_,
+        };
+    }
+    SigAction_ k_oldact;
+    SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
     u64 const res =
-        syscall3(NR_RT_SIGACTION, (u64)signum, (u64)act, (u64)oldact);
+        syscall3(NR_RT_SIGACTION, u64{(u32)signum}, (u64)&k_act, (u64)old_ptr);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         switch (errno) {
@@ -1474,6 +1492,14 @@ SigActionStatus sigaction(i32 signum, SigAction const *__restrict act,
             return SigActionStatus::UnexpectedErr;
         }
         }
+    }
+
+    if (oldact != nullptr) {
+        *oldact = SigAction{
+            .handler = k_oldact.sa_handler,
+            .mask = k_oldact.sa_mask,
+            .flags = k_oldact.sa_flags,
+        };
     }
 
     return SigActionStatus::Ok;
