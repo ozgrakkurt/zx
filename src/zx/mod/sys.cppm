@@ -1461,26 +1461,33 @@ void sigreturn_() { syscall0(NR_RT_SIGRETURN); }
 
 enum class [[nodiscard]] SigActionStatus : u8_c {
     Ok = 0,
+    SigInfoFlagNotAllowed,
     UnexpectedErr,
     EFault,
     EInval,
 };
 
 SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
-                          SigAction *__restrict oldact) {
+                          SigAction *__restrict oldact) {    
     SigAction_ k_act;
     if (act != nullptr) {
+        if ((act->flags & SA_SIGINFO) != 0) {
+            // we don't allow this since we use the basic sa_handler signature and not the sa_sigaction signature.
+            return SigActionStatus::SigInfoFlagNotAllowed;
+        }
+
         k_act = SigAction_{
             .sa_handler = act->handler,
             .sa_mask = act->mask,
-            .sa_flags = act->flags | SA_RESTORER,
+            .sa_flags = act->flags | SA_RESTORER | SA_SIGINFO,
             .sa_restorer = sigreturn_,
         };
     }
     SigAction_ k_oldact;
+    SigAction_ const* new_ptr = (act == nullptr) ? nullptr : &k_act;
     SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
     u64 const res =
-        syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)&k_act, (u64)old_ptr, 8);
+        syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)new_ptr, (u64)old_ptr, sizeof(SigSet));
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         switch (errno) {

@@ -24,8 +24,7 @@ constexpr i32 SA_NOCLDWAIT = 2;
 // echo '#include <asm/signal.h>' | gcc -E -dM -xc - 2>/dev/null | grep -i 'SA_RESTORER'
 constexpr i32 SA_RESTORER = (i32)0x04000000__wbu;
 
-// echo "#include <signal.h>" | gcc -xc - -E | grep -i "__sighandler_t"
-typedef void (*SigHandler)(int);
+extern "C" {
 
 // echo "#include <signal.h>" | gcc -xc - -E | grep -i "SIG"
 enum class SIG : u32_c {
@@ -62,12 +61,17 @@ enum class SIG : u32_c {
     SYS = 31,
 };
 
+// echo "#include <signal.h>" | gcc -xc - -E | grep -i "__sighandler_t"
+typedef void (*SigHandler)(i32_c sig);
+
 // echo "#include <signal.h>" | gcc -xc - -E | grep -B 5 -i "__sigset_t"
 // This is essentially a bitmap and the SIG.. constants are indices into the
 // bitmap. We remove or add signals by setting/unsetting the bit that is indexed
 // by the signal constant (e.g. SIGSEGV).
 struct SigSet {
-    u32 m_data[32];
+    static constexpr u8 N_ELEM = 2;
+
+    u32 m_data[N_ELEM];
 
     static SigSet init() {
         SigSet out;
@@ -81,42 +85,43 @@ struct SigSet {
 
     void unset(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / 32__wbu;
-        u32 const mask = u32{1} << (s % 32);
-        assert_dev(pos < 32);
+        u32 const pos = s / N_ELEM;
+        u32 const mask = u32{1} << (s % N_ELEM);
+        assert_dev(pos < N_ELEM);
         this->m_data[pos] &= ~mask;
     }
 
     void set(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / 32__wbu;
-        u32 const mask = u32{1} << (s % 32);
-        assert_dev(pos < 32);
+        u32 const pos = s / N_ELEM;
+        u32 const mask = u32{1} << (s % N_ELEM);
+        assert_dev(pos < N_ELEM);
         this->m_data[pos] |= mask;
     }
 
     bool get(SIG sig) const {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / 32__wbu;
-        u32 const mask = u32{1} << (s % 32);
-        assert_dev(pos < 32);
+        u32 const pos = s / N_ELEM;
+        u32 const mask = u32{1} << (s % N_ELEM);
+        assert_dev(pos < N_ELEM);
         return (this->m_data[pos] & mask) != 0;
     }
 };
 
-// taken from /usr/include/bits/sigaction.h
 struct SigAction_ {
     SigHandler sa_handler;
-    SigSet sa_mask;
     i32 sa_flags;
     void (*sa_restorer)(void);
+    SigSet sa_mask;
 };
 
 struct SigAction {
     SigHandler handler;
-    SigSet mask;
     i32 flags;
+    SigSet mask;
 };
+
+} // extern C
 
 } // namespace sys
 
