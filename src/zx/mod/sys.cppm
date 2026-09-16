@@ -1468,11 +1468,12 @@ enum class [[nodiscard]] SigActionStatus : u8_c {
 };
 
 SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
-                          SigAction *__restrict oldact) {    
+                          SigAction *__restrict oldact) {
     SigAction_ k_act;
     if (act != nullptr) {
         if ((act->flags & SA_SIGINFO) != 0) {
-            // we don't allow this since we use the basic sa_handler signature and not the sa_sigaction signature.
+            // we don't allow this since we use the basic sa_handler signature
+            // and not the sa_sigaction signature.
             return SigActionStatus::SigInfoFlagNotAllowed;
         }
 
@@ -1484,10 +1485,10 @@ SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
         };
     }
     SigAction_ k_oldact;
-    SigAction_ const* new_ptr = (act == nullptr) ? nullptr : &k_act;
+    SigAction_ const *new_ptr = (act == nullptr) ? nullptr : &k_act;
     SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
-    u64 const res =
-        syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)new_ptr, (u64)old_ptr, sizeof(SigSet));
+    u64 const res = syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)new_ptr,
+                             (u64)old_ptr, sizeof(SigSet));
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         switch (errno) {
