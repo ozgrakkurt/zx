@@ -1470,15 +1470,17 @@ SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
                           SigAction *__restrict oldact) {
     SigAction_ k_act;
     if (act != nullptr) {
-        k_act = SigAction_ {
-            .sa_handler = act->handler, .sa_mask = act->mask,
-            .sa_flags = act->flags, .sa_restorer = sigreturn_,
+        k_act = SigAction_{
+            .sa_handler = act->handler,
+            .sa_mask = act->mask,
+            .sa_flags = act->flags | SA_RESTORER,
+            .sa_restorer = sigreturn_,
         };
     }
     SigAction_ k_oldact;
     SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
     u64 const res =
-        syscall3(NR_RT_SIGACTION, u64{(u32)signum}, (u64)&k_act, (u64)old_ptr);
+        syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)&k_act, (u64)old_ptr, 8);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) {
         switch (errno) {

@@ -21,6 +21,9 @@ constexpr i32 SA_INTERRUPT = (i32)0x20000000__wbu;
 constexpr i32 SA_NOMASK = SA_NODEFER;
 constexpr i32 SA_NOCLDWAIT = 2;
 
+// echo '#include <asm/signal.h>' | gcc -E -dM -xc - 2>/dev/null | grep -i 'SA_RESTORER'
+constexpr i32 SA_RESTORER = (i32)0x04000000__wbu;
+
 // echo "#include <signal.h>" | gcc -xc - -E | grep -i "__sighandler_t"
 typedef void (*SigHandler)(int);
 
