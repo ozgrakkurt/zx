@@ -442,7 +442,19 @@ static void test_mut() {
            Comparison::Equal);
 }
 
+void test_equals_same_but_diff_len() {
+    u8 a[] = {1, 2, 3, 4, 5};
+    u8 b[] = {1, 2, 3, 4, 5, 6};
+
+    assert(!Slice<u8>::init_unsafe(a, sizeof(a))
+                .equals(Slice<u8>::init_unsafe(b, sizeof(b))));
+
+    assert(!SliceMut<u8>::init_unsafe(a, sizeof(a))
+                .equals(SliceMut<u8>::init_unsafe(b, sizeof(b))));
+}
+
 int main(void) {
+    test_equals_same_but_diff_len();
     test_mut();
     test_immut();
     test_cstr();

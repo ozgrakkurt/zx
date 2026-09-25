@@ -388,6 +388,9 @@ template <typename T> struct Slice {
     }
 
     [[nodiscard]] bool equals(Slice other) const {
+        if (this->m_len != other.m_len) {
+            return false;
+        }
         return this->compare(other) == Comparison::Equal;
     }
 };
@@ -759,6 +762,9 @@ template <typename T> struct SliceMut {
     }
 
     [[nodiscard]] bool equals(SliceMut other) const {
+        if (this->m_len != other.m_len) {
+            return false;
+        }
         return this->compare(other) == Comparison::Equal;
     }
 

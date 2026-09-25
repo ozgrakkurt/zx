@@ -61,7 +61,6 @@ static void test_mmap() {
 }
 
 static void test_file() {
-    // open close read write lseek statx pread pwrite
     i32 const fd = open_temporary_file();
 
     u64 const file_size = 5000;
