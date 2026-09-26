@@ -87,6 +87,7 @@ ParseStringTableStatus parse_string_table(Slice<u8> data,
 }
 
 struct File {
+    Slice<u8> m_buf;
     ElfHeader const *m_header;
     Slice<Slice<u8>> m_section_names;
     Slice<SectionHeader> m_section_headers;
@@ -154,6 +155,14 @@ struct File {
             return InitStatus::UnexpectedErr;
         }
 
+        Slice<u8> dummy;
+        for (u64 i = 0; i < section_headers.len(); i++) {
+            SectionHeader const *hdr = section_headers.offset_unsafe(i);
+            if (SliceStatus::Ok != buf.slice(hdr->offset, hdr->size, &dummy)) {
+                return InitStatus::InvalidInput;
+            }
+        }
+
         SectionHeader const *names_header = nullptr;
         if (SliceStatus::Ok !=
             section_headers.offset(header->shstrndx, &names_header)) {
@@ -187,12 +196,47 @@ struct File {
             return InitStatus::InvalidInput;
         }
 
+        assert_dev(section_names.len() == section_headers.len());
+
         *out = File{
             .m_section_names = section_names.as_const(),
             .m_section_headers = section_headers,
             .m_header = header,
+            .m_buf = buf,
         };
         return InitStatus::Ok;
+    }
+
+    enum class [[nodiscard]] GetSectionStatus : u8_c {
+        Ok = 0,
+        Nullptr,
+        NotFound,
+        UnexpectedErr,
+    };
+
+    GetSectionStatus get_section(Slice<u8> name, Slice<u8> *out) const {
+        if (out == nullptr) {
+            return GetSectionStatus::Nullptr;
+        }
+
+        Slice<Slice<u8>> section_names = this->m_section_names;
+
+        for (u64 i = 0; i < section_names.len(); i++) {
+            Slice<u8> nm = section_names.read_unsafe(i);
+
+            if (nm.equals(name)) {
+                SectionHeader const *sh =
+                    this->m_section_headers.offset_unsafe(i);
+                if (SliceStatus::Ok !=
+                    this->m_buf.slice(sh->offset, sh->size, out)) {
+                    return GetSectionStatus::UnexpectedErr;
+                } else {
+                    return GetSectionStatus::Ok;
+                }
+            }
+        }
+
+        return GetSectionStatus::NotFound;
     }
 };
 
