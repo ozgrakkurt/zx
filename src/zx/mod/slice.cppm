@@ -393,6 +393,16 @@ template <typename T> struct Slice {
         }
         return this->compare(other) == Comparison::Equal;
     }
+
+    [[nodiscard]] u64 count(T elem) const {
+        u64 cnt = 0;
+
+        for (u64 i = 0; i < this->m_len; i++) {
+            cnt += (this->m_ptr[i] == elem);
+        }
+
+        return cnt;
+    }
 };
 
 template <typename T> struct SliceMut {
@@ -766,6 +776,16 @@ template <typename T> struct SliceMut {
             return false;
         }
         return this->compare(other) == Comparison::Equal;
+    }
+
+    [[nodiscard]] u64 count(T elem) const {
+        u64 cnt = 0;
+
+        for (u64 i = 0; i < this->m_len; i++) {
+            cnt += (this->m_ptr[i] == elem);
+        }
+
+        return cnt;
     }
 
     Slice<T> as_const() const {

@@ -453,8 +453,19 @@ void test_equals_same_but_diff_len() {
                 .equals(SliceMut<u8>::init_unsafe(b, sizeof(b))));
 }
 
+void test_count() {
+    u8 a[] = {1, 2, 1, 2, 1, 1, 3, 5};
+
+    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(1) == 4);
+    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(2) == 2);
+    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(69) == 0);
+
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(1) == 4);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(2) == 2);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(69) == 0);
+}
+
 int main(void) {
-    test_equals_same_but_diff_len();
     test_mut();
     test_immut();
     test_cstr();
@@ -468,6 +479,8 @@ int main(void) {
     test_write_access();
     test_memfunctions();
     test_cstring();
+    test_equals_same_but_diff_len();
+    test_count();
 
     return 0;
 }
