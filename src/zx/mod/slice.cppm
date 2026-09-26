@@ -17,7 +17,6 @@ enum class [[nodiscard]] SliceCastStatus : u8_c {
     Ok = 0,
     Nullptr,
     IntegerOverflow,
-    SizeMismatch,
     AlignMismatch,
 };
 
@@ -154,10 +153,6 @@ template <typename T> struct Slice {
             return SliceCastStatus::IntegerOverflow;
         }
 
-        if (byte_cap % sizeof(U) != 0) {
-            return SliceCastStatus::SizeMismatch;
-        }
-
         overflow = 0;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) {
@@ -165,7 +160,7 @@ template <typename T> struct Slice {
         }
 
         if (alignof(U) > alignof(T)) {
-            if (__builtin_is_aligned(this->m_ptr, alignof(U))) {
+            if (!__builtin_is_aligned(this->m_ptr, alignof(U))) {
                 return SliceCastStatus::AlignMismatch;
             }
         }
@@ -179,7 +174,6 @@ template <typename T> struct Slice {
 
     template <typename U> Slice<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
-        assert_dev(byte_cap % sizeof(U) == 0);
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
 
         if (alignof(U) > alignof(T)) {
@@ -519,10 +513,6 @@ template <typename T> struct SliceMut {
             return SliceCastStatus::IntegerOverflow;
         }
 
-        if (byte_cap % sizeof(U) != 0) {
-            return SliceCastStatus::SizeMismatch;
-        }
-
         overflow = 0;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) {
@@ -530,7 +520,7 @@ template <typename T> struct SliceMut {
         }
 
         if (alignof(U) > alignof(T)) {
-            if (__builtin_is_aligned(this->m_ptr, alignof(U))) {
+            if (!__builtin_is_aligned(this->m_ptr, alignof(U))) {
                 return SliceCastStatus::AlignMismatch;
             }
         }
@@ -544,7 +534,6 @@ template <typename T> struct SliceMut {
 
     template <typename U> SliceMut<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
-        assert_dev(byte_cap % sizeof(U) == 0);
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
 
         if (alignof(U) > alignof(T)) {

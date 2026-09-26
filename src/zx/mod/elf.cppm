@@ -4,6 +4,7 @@ import :assert;
 import :arith;
 import :slice;
 import :alloc;
+import :panic;
 
 export namespace zx {
 
@@ -44,38 +45,21 @@ extern "C" struct ElfHeader {
     u16 shstrndx;
 };
 
-enum class [[nodiscard]] ParseStringTableStatus : u8_c {
-    Ok = 0,
-    InvalidInput,
-};
-
-ParseStringTableStatus parse_string_table(Slice<u8> data,
-                                          SliceMut<Slice<u8>> out) {
+void parse_string_table_panic_(Slice<u8> data, SliceMut<Slice<u8>> out) {
     if (out.len() == 0) {
-        return ParseStringTableStatus::Ok;
+        return;
     }
 
     u8 starting_byte = 0xaa;
-    if (SliceStatus::Ok != data.read(0, &starting_byte)) {
-        return ParseStringTableStatus::InvalidInput;
-    }
-
-    if (starting_byte != 0) {
-        // first byte is defined to be the null byte.
-        return ParseStringTableStatus::InvalidInput;
-    }
+    assert(SliceStatus::Ok == data.read(0, &starting_byte));
+    assert(starting_byte == 0);
 
     bool overflow = false;
-    u64 const n_expected_nulls = add_u64(out.len(), 1, &overflow);
-    if (overflow) {
-        return ParseStringTableStatus::InvalidInput;
-    }
+    u64 const n_expected_nulls = out.len();
+    assert(!overflow);
+    assert(data.count(0) == n_expected_nulls);
 
-    if (data.count(0) != n_expected_nulls) {
-        return ParseStringTableStatus::InvalidInput;
-    }
-
-    u64 offset = 1;
+    u64 offset = 0;
     for (u64 i = 0; i < out.len(); i++) {
         u64 const len =
             __builtin_strlen((char const *)data.slice_at_unsafe(offset).ptr());
@@ -83,7 +67,7 @@ ParseStringTableStatus parse_string_table(Slice<u8> data,
         offset = add_unsafe_u64(offset, add_unsafe_u64(len, 1));
     }
 
-    return ParseStringTableStatus::Ok;
+    return;
 }
 
 struct File {
@@ -92,133 +76,76 @@ struct File {
     Slice<Slice<u8>> m_section_names;
     Slice<SectionHeader> m_section_headers;
 
-    enum class [[nodiscard]] InitStatus : u8_c {
-        Ok = 0,
-        Nullptr,
-        InvalidInput,
-        UnexpectedErr,
-        OutOfMemory,
-    };
-
-    static InitStatus init(Alloc *alloc, Slice<u8> buf, File *out) {
-        if (out == nullptr || alloc == nullptr) {
-            return InitStatus::Nullptr;
-        }
+    // Parses the buffer as an elf file, panics if there is a problem.
+    // The resulting structure's lifetime is tied to the allocator that was
+    // passed in.
+    static File init_panic(Alloc *alloc, Slice<u8> buf) {
+        assert(alloc != nullptr);
 
         Slice<u8> header_bytes;
-        if (SliceStatus::Ok != buf.slice(0, sizeof(ElfHeader), &header_bytes)) {
-            return InitStatus::InvalidInput;
-        }
+        assert(SliceStatus::Ok ==
+               buf.slice(0, sizeof(ElfHeader), &header_bytes));
 
         Slice<ElfHeader> header_list;
-        if (SliceCastStatus::Ok != header_bytes.cast<ElfHeader>(&header_list)) {
-            return InitStatus::UnexpectedErr;
-        }
-
-        if (header_list.len() != 1) {
-            return InitStatus::UnexpectedErr;
-        }
+        assert(__builtin_is_aligned(header_bytes.ptr(), alignof(ElfHeader)));
+        assert(SliceCastStatus::Ok ==
+               header_bytes.cast<ElfHeader>(&header_list));
+        assert(header_list.len() == 1);
 
         ElfHeader const *header = nullptr;
-        if (SliceStatus::Ok != header_list.offset(0, &header)) {
-            return InitStatus::UnexpectedErr;
-        }
+        assert(SliceStatus::Ok == header_list.offset(0, &header));
+        assert(header != nullptr);
 
-        if (header == nullptr) {
-            return InitStatus::UnexpectedErr;
-        }
-
-        if (header->shentsize != sizeof(SectionHeader)) {
-            return InitStatus::InvalidInput;
-        }
+        assert(header->shentsize == sizeof(SectionHeader));
 
         bool overflow = false;
         u64 const section_headers_nbytes =
             mul_u64(sizeof(SectionHeader), header->shnum, &overflow);
-        if (overflow) {
-            return InitStatus::InvalidInput;
-        }
+        assert(!overflow);
 
         Slice<u8> section_header_bytes;
-        if (SliceStatus::Ok != buf.slice(header->shoff, section_headers_nbytes,
-                                         &section_header_bytes)) {
-            return InitStatus::InvalidInput;
-        }
+        assert(SliceStatus::Ok == buf.slice(header->shoff,
+                                            section_headers_nbytes,
+                                            &section_header_bytes));
 
         Slice<SectionHeader> section_headers;
-        if (SliceCastStatus::Ok !=
-            section_header_bytes.cast<SectionHeader>(&section_headers)) {
-            return InitStatus::UnexpectedErr;
-        }
-
-        if (section_headers.len() != header->shnum) {
-            return InitStatus::UnexpectedErr;
-        }
+        assert(SliceCastStatus::Ok ==
+               section_header_bytes.cast<SectionHeader>(&section_headers));
+        assert(section_headers.len() == header->shnum);
 
         Slice<u8> dummy;
         for (u64 i = 0; i < section_headers.len(); i++) {
             SectionHeader const *hdr = section_headers.offset_unsafe(i);
-            if (SliceStatus::Ok != buf.slice(hdr->offset, hdr->size, &dummy)) {
-                return InitStatus::InvalidInput;
-            }
+            assert(SliceStatus::Ok ==
+                   buf.slice(hdr->offset, hdr->size, &dummy));
         }
 
         SectionHeader const *names_header = nullptr;
-        if (SliceStatus::Ok !=
-            section_headers.offset(header->shstrndx, &names_header)) {
-            return InitStatus::InvalidInput;
-        }
+        assert(SliceStatus::Ok ==
+               section_headers.offset(header->shstrndx, &names_header));
 
         SliceMut<Slice<u8>> section_names;
-        AllocStatus const alloc_status =
-            alloc->alloc<Slice<u8>>(header->shnum, &section_names);
-        switch (alloc_status) {
-        case AllocStatus::Ok: {
-            break;
-        }
-        case AllocStatus::OutOfMemory: {
-            return InitStatus::OutOfMemory;
-        }
-        default: {
-            return InitStatus::UnexpectedErr;
-        }
-        }
+        assert(AllocStatus::Ok ==
+               alloc->alloc<Slice<u8>>(header->shnum, &section_names));
 
         Slice<u8> section_names_data;
-        if (SliceStatus::Ok != buf.slice(names_header->offset,
-                                         names_header->size,
-                                         &section_names_data)) {
-            return InitStatus::InvalidInput;
-        }
+        assert(SliceStatus::Ok == buf.slice(names_header->offset,
+                                            names_header->size,
+                                            &section_names_data));
 
-        if (ParseStringTableStatus::Ok !=
-            parse_string_table(section_names_data, section_names)) {
-            return InitStatus::InvalidInput;
-        }
+        parse_string_table_panic_(section_names_data, section_names);
+        assert(section_names.len() == section_headers.len());
 
-        assert_dev(section_names.len() == section_headers.len());
-
-        *out = File{
+        return File{
             .m_section_names = section_names.as_const(),
             .m_section_headers = section_headers,
             .m_header = header,
             .m_buf = buf,
         };
-        return InitStatus::Ok;
     }
 
-    enum class [[nodiscard]] GetSectionStatus : u8_c {
-        Ok = 0,
-        Nullptr,
-        NotFound,
-        UnexpectedErr,
-    };
-
-    GetSectionStatus get_section(Slice<u8> name, Slice<u8> *out) const {
-        if (out == nullptr) {
-            return GetSectionStatus::Nullptr;
-        }
-
+    // returns the named section, panics if unable
+    Slice<u8> get_section_panic(Slice<u8> name) const {
         Slice<Slice<u8>> section_names = this->m_section_names;
 
         for (u64 i = 0; i < section_names.len(); i++) {
@@ -227,16 +154,14 @@ struct File {
             if (nm.equals(name)) {
                 SectionHeader const *sh =
                     this->m_section_headers.offset_unsafe(i);
-                if (SliceStatus::Ok !=
-                    this->m_buf.slice(sh->offset, sh->size, out)) {
-                    return GetSectionStatus::UnexpectedErr;
-                } else {
-                    return GetSectionStatus::Ok;
-                }
+                Slice<u8> out;
+                assert(SliceStatus::Ok ==
+                       this->m_buf.slice(sh->offset, sh->size, &out));
+                return out;
             }
         }
 
-        return GetSectionStatus::NotFound;
+        panic();
     }
 };
 
