@@ -70,6 +70,37 @@ void parse_string_table_panic_(Slice<u8> data, SliceMut<Slice<u8>> out) {
     return;
 }
 
+constexpr u8 EH_VALUE_MASK = 0x0f;
+constexpr u8 EH_APP_MASK = 0xf0;
+
+constexpr u8 EH_VALUE_OMIT = 0xff;
+constexpr u8 EH_VALUE_ULEB128 = 0x01;
+constexpr u8 EH_VALUE_UDATA2 = 0x02;
+constexpr u8 EH_VALUE_UDATA4 = 0x03;
+constexpr u8 EH_VALUE_UDATA8 = 0x04;
+constexpr u8 EH_VALUE_SLEB128 = 0x09;
+constexpr u8 EH_VALUE_SDATA2 = 0x0A;
+constexpr u8 EH_VALUE_SDATA4 = 0x0B;
+constexpr u8 EH_VALUE_SDATA8 = 0x0C;
+
+constexpr u8 EH_APP_ABSPTR = 0x00;
+constexpr u8 EH_APP_PCREL = 0x10;
+constexpr u8 EH_APP_DATAREL = 0x30;
+constexpr u8 EH_APP_OMIT = 0xff;
+
+struct EhFrameHeader {
+    u8 version;
+    u8 eh_frame_ptr_enc;
+    u8 fde_count_enc;
+    u8 table_enc;
+    u64 eh_frame_ptr;
+    u64 fde_count;
+};
+
+EhFrameHeader parse_eh_frame_header_panic(Slice<u8> raw) {
+    assert(raw.len() >= 4);
+}
+
 struct File {
     Slice<u8> m_buf;
     ElfHeader const *m_header;
