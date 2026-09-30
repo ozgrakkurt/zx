@@ -5,6 +5,7 @@ import :arith;
 import :slice;
 import :alloc;
 import :panic;
+import :leb128;
 
 export namespace zx {
 
@@ -70,37 +71,6 @@ void parse_string_table_panic_(Slice<u8> data, SliceMut<Slice<u8>> out) {
     return;
 }
 
-constexpr u8 EH_VALUE_MASK = 0x0f;
-constexpr u8 EH_APP_MASK = 0xf0;
-
-constexpr u8 EH_VALUE_OMIT = 0xff;
-constexpr u8 EH_VALUE_ULEB128 = 0x01;
-constexpr u8 EH_VALUE_UDATA2 = 0x02;
-constexpr u8 EH_VALUE_UDATA4 = 0x03;
-constexpr u8 EH_VALUE_UDATA8 = 0x04;
-constexpr u8 EH_VALUE_SLEB128 = 0x09;
-constexpr u8 EH_VALUE_SDATA2 = 0x0A;
-constexpr u8 EH_VALUE_SDATA4 = 0x0B;
-constexpr u8 EH_VALUE_SDATA8 = 0x0C;
-
-constexpr u8 EH_APP_ABSPTR = 0x00;
-constexpr u8 EH_APP_PCREL = 0x10;
-constexpr u8 EH_APP_DATAREL = 0x30;
-constexpr u8 EH_APP_OMIT = 0xff;
-
-struct EhFrameHeader {
-    u8 version;
-    u8 eh_frame_ptr_enc;
-    u8 fde_count_enc;
-    u8 table_enc;
-    u64 eh_frame_ptr;
-    u64 fde_count;
-};
-
-EhFrameHeader parse_eh_frame_header_panic(Slice<u8> raw) {
-    assert(raw.len() >= 4);
-}
-
 struct File {
     Slice<u8> m_buf;
     ElfHeader const *m_header;
@@ -108,8 +78,7 @@ struct File {
     Slice<SectionHeader> m_section_headers;
 
     // Parses the buffer as an elf file, panics if there is a problem.
-    // The resulting structure's lifetime is tied to the allocator that was
-    // passed in.
+    // The resulting structure's lifetime is tied to `alloc` and `buf`.
     static File init_panic(Alloc *alloc, Slice<u8> buf) {
         assert(alloc != nullptr);
 
@@ -193,6 +162,145 @@ struct File {
         }
 
         panic();
+    }
+};
+
+constexpr u8 EH_VALUE_MASK = 0x0f;
+constexpr u8 EH_APP_MASK = 0xf0;
+
+constexpr u8 EH_VALUE_OMIT = 0xff;
+constexpr u8 EH_VALUE_ULEB128 = 0x01;
+constexpr u8 EH_VALUE_UDATA2 = 0x02;
+constexpr u8 EH_VALUE_UDATA4 = 0x03;
+constexpr u8 EH_VALUE_UDATA8 = 0x04;
+constexpr u8 EH_VALUE_SLEB128 = 0x09;
+constexpr u8 EH_VALUE_SDATA2 = 0x0A;
+constexpr u8 EH_VALUE_SDATA4 = 0x0B;
+constexpr u8 EH_VALUE_SDATA8 = 0x0C;
+
+constexpr u8 EH_APP_ABSPTR = 0x00;
+constexpr u8 EH_APP_PCREL = 0x10;
+constexpr u8 EH_APP_DATAREL = 0x30;
+constexpr u8 EH_APP_OMIT = 0xff;
+
+struct EhFrame {
+    enum class InstructionKind: u8_c {
+        Wut = 0,  
+    };
+    
+    struct InstructionPtr {
+        u32 index;
+        InstructionKind kind;  
+    };
+
+    struct Instructions {
+        Slice<InstructionPtr> kinds;
+        // slice per different kind
+    };
+    
+    struct CIE {
+        u64 code_alignment_factor;
+        u64 data_alignment_factor;
+        u8 return_address_register;
+        Slice<u8> initial_instructions;
+    };
+
+    struct FDE {
+        CIE const* cie_pointer;
+        u64 pc_begin;
+        u64 pc_range;
+        Slice<u8> call_frame_instructions;
+    };
+
+    Slice<FDE> fd_entries;
+
+    static CIE parse_cie_panic(Slice<u8> buf, u64* offset) {
+        bool overflow = false;
+
+        u64 offs = *offset;
+
+        u32 is_64bit = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &is_64bit));
+        assert(is_64bit == ~u32{0});
+
+        offs = add_u64(offs, sizeof(u32), &overflow);
+        assert(!overflow);
+
+        u64 length = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<u64>(offs, &length));
+
+        offs = add_u64(offs, sizeof(u64), &overflow);
+        assert(!overflow);
+
+        u64 const cie_size = add_u64(length, 12, &overflow);
+        assert(!overflow);
+
+        u32 cie_id = 0xff;
+        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &cie_id));
+        assert(cie_id == 0);
+
+        offs = add_u64(offs, sizeof(u32), &overflow);
+        assert(!overflow);
+
+        u8 version = 0;
+        assert(SliceStatus::Ok == buf.read(offs, &version));
+        assert(version == 1);
+
+        offs = add_u64(offs, sizeof(u8), &overflow);
+        assert(!overflow);
+
+        // augmentation string should be empty so it should consist of a single NULL byte.
+        u8 should_be_null = 0xff;
+        assert(SliceStatus::Ok == buf.read(offs, &should_be_null));
+        assert(should_be_null == 0);
+
+        offs = add_u64(offs, sizeof(u8), &overflow);
+        assert(!overflow);
+
+        u64 code_alignment_factor = 0;
+        assert(leb128::DecodeStatus::Ok == leb128::decode_u64(buf, &offs, &code_alignment_factor));
+        assert(code_alignment_factor != 0);
+
+        i64 data_alignment_factor = 0;
+        assert(leb128::DecodeStatus::Ok == leb128::decode_i64(buf, &offs, &data_alignment_factor));
+        assert(data_alignment_factor != 0);
+
+        u8 return_address_register = 0;
+        assert(SliceStatus::Ok == buf.read(offs, &return_address_register));
+
+        u64 diff = sub_unsafe_u64(*offset, offs);
+        assert(length >= diff);
+
+        // u64 num_bytes_left = sub_unsafe_u64(cie_size, diff);
+        // TODO: parse instructions
+
+        *offset = add_u64(*offset, cie_size, &overflow);
+        assert(!overflow);
+
+        return CIE {};
+    }
+
+    // Parses .eh_frame section in `buf`. Panics if there is a problem.
+    // This resulting structure's lifetime is tied to the allocator that was passed in.
+    static EhFrame init_panic(Alloc *alloc, Slice<u8> buf) {
+        if (buf.len() == 0) {
+            return EhFrame {
+                .fd_entries = Slice<FDE>::init_dangling(),
+            };
+        }
+
+        (void)alloc;
+
+        u64 offset = 0;
+
+        while (offset <= buf.len()) {
+            CIE const cie = parse_cie_panic(buf, &offset);
+            (void)cie;
+        }
+        
+        return EhFrame {
+            .fd_entries = Slice<FDE>::init_dangling(),
+        };
     }
 };
 

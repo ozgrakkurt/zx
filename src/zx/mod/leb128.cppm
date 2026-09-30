@@ -1,6 +1,7 @@
 export module zx:leb128;
 import :def;
 import :assert;
+import :slice;
 
 export namespace zx {
 
@@ -18,20 +19,20 @@ enum class [[nodiscard]] EncodeStatus : u8_c {
     OutOfCapacity,
 };
 
-EncodeStatus encode_u64(u64 num, u8 *out, u64 capacity, u64 *offset) {
-    if (out == nullptr || offset == nullptr) {
+EncodeStatus encode_u64(u64 num, SliceMut<u8> out, u64 *offset) {
+    if (offset == nullptr) {
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > capacity) {
+    if (offs > out.len()) {
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
-        assert_dev(offs <= capacity);
-        if (offs == capacity) {
+        assert_dev(offs <= out.len());
+        if (offs == out.len()) {
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -39,10 +40,10 @@ EncodeStatus encode_u64(u64 num, u8 *out, u64 capacity, u64 *offset) {
         u8 const byte = getval_((u8)num);
         num = num >> 7;
         if (num != 0) {
-            out[offs] = byte | CONT_BIT;
+            out.write_unsafe(offs, byte | CONT_BIT);
             offs++;
         } else {
-            out[offs] = byte;
+            out.write_unsafe(offs, byte);
             offs++;
             *offset = offs;
             return EncodeStatus::Ok;
@@ -58,28 +59,28 @@ enum class [[nodiscard]] DecodeStatus : u8_c {
     InvalidInput,
 };
 
-DecodeStatus decode_u64(u8 const *input, u64 len, u64 *offset, u64 *num) {
-    if (input == nullptr || offset == nullptr || num == nullptr) {
+DecodeStatus decode_u64(Slice<u8> input, u64 *offset, u64 *num) {
+    if (offset == nullptr || num == nullptr) {
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > len) {
+    if (offs > input.len()) {
         return DecodeStatus::InvalidOffset;
     }
 
     u64 out = 0;
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
-        assert_dev(offs <= len);
-        if (offs == len) {
+        assert_dev(offs <= input.len());
+        if (offs == input.len()) {
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
         }
 
-        u8 const byte = input[offs];
+        u8 const byte = input.read_unsafe(offs);
         offs++;
 
         assert_dev(shift < 64);
@@ -97,20 +98,20 @@ DecodeStatus decode_u64(u8 const *input, u64 len, u64 *offset, u64 *num) {
     return DecodeStatus::InvalidInput;
 }
 
-EncodeStatus encode_i64(i64 num, u8 *out, u64 capacity, u64 *offset) {
-    if (out == nullptr || offset == nullptr) {
+EncodeStatus encode_i64(i64 num, SliceMut<u8> out, u64 *offset) {
+    if (offset == nullptr) {
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > capacity) {
+    if (offs > out.len()) {
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
-        assert_dev(offs <= capacity);
-        if (offs == capacity) {
+        assert_dev(offs <= out.len());
+        if (offs == out.len()) {
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -120,39 +121,39 @@ EncodeStatus encode_i64(i64 num, u8 *out, u64 capacity, u64 *offset) {
         bool const negative_end = num == -1 && (byte & SIGN_BIT) != 0;
         bool const positive_end = num == 0 && (byte & SIGN_BIT) == 0;
         if (negative_end || positive_end) {
-            out[offs] = byte;
+            out.write_unsafe(offs, byte);
             offs++;
             *offset = offs;
             return EncodeStatus::Ok;
         } else {
-            out[offs] = byte | CONT_BIT;
+            out.write_unsafe(offs, byte | CONT_BIT);
             offs++;
         }
     }
 }
 
-DecodeStatus decode_i64(u8 const *input, u64 len, u64 *offset, i64 *num) {
-    if (input == nullptr || offset == nullptr || num == nullptr) {
+DecodeStatus decode_i64(Slice<u8> input, u64 *offset, i64 *num) {
+    if (offset == nullptr || num == nullptr) {
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > len) {
+    if (offs > input.len()) {
         return DecodeStatus::InvalidOffset;
     }
 
     u64 out = 0;
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
-        assert_dev(offs <= len);
-        if (offs == len) {
+        assert_dev(offs <= input.len());
+        if (offs == input.len()) {
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
         }
 
-        u8 const byte = input[offs];
+        u8 const byte = input.read_unsafe(offs);
         offs++;
         assert_dev(shift < 64);
         out |= u64{getval_(byte)} << shift;

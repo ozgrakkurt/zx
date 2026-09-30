@@ -23,3 +23,4 @@ export import :uuid_v4;
 export import :tmp_file;
 export import :signal;
 export import :elf;
+export import :leb128;
