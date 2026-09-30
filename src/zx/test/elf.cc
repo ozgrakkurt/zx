@@ -40,7 +40,17 @@ int main() {
 
     Slice<u8> buf = read_self_bin(&alloc);
     elf::File const file = elf::File::init_panic(&alloc, buf);
-    (void)file;
+
+    u64 const section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".eh_frame").as_slice());
+
+    Slice<u8> eh_frame_raw = file.get_section_data_panic(section_idx);
+    elf::SectionHeader const *eh_frame_header =
+        file.get_section_header_panic(section_idx);
+
+    elf::EhFrame eh_frame =
+        elf::EhFrame::init_panic(&alloc, eh_frame_header, eh_frame_raw);
+    (void)eh_frame;
 
     assert(page_alloc::FreeStatus::Ok == page_alloc::free(mem, mem_size));
 

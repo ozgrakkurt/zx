@@ -6,7 +6,7 @@ static void testcase_unsigned(Slice<u8> buf, u64 num) {
     u64 out_num = U64_MAX;
     u64 offset = 0;
     assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_u64(buf, &offset, &out_num));
+           leb128::decode_u64(buf, &offset, &out_num));
     assert(offset == buf.len());
     assert(out_num == num);
 
@@ -16,8 +16,7 @@ static void testcase_unsigned(Slice<u8> buf, u64 num) {
     SliceMut<u8> out = SliceMut<u8>::init_unsafe(out_buf, sizeof(out_buf));
 
     offset = 0;
-    assert(leb128::EncodeStatus::Ok ==
-               leb128::encode_u64(num, out, &offset));
+    assert(leb128::EncodeStatus::Ok == leb128::encode_u64(num, out, &offset));
     assert(offset == buf.len());
     assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
 }
@@ -26,7 +25,7 @@ static void testcase_signed(Slice<u8> buf, i64 num) {
     i64 out_num = I64_MAX;
     u64 offset = 0;
     assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_i64(buf, &offset, &out_num));
+           leb128::decode_i64(buf, &offset, &out_num));
     assert(offset == buf.len());
     assert(out_num == num);
 
@@ -36,8 +35,7 @@ static void testcase_signed(Slice<u8> buf, i64 num) {
     SliceMut<u8> out = SliceMut<u8>::init_unsafe(out_buf, sizeof(out_buf));
 
     offset = 0;
-    assert(leb128::EncodeStatus::Ok ==
-               leb128::encode_i64(num, out, &offset));
+    assert(leb128::EncodeStatus::Ok == leb128::encode_i64(num, out, &offset));
     assert(offset == buf.len());
     assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
 }
@@ -45,31 +43,41 @@ static void testcase_signed(Slice<u8> buf, i64 num) {
 static void test_unsigned() {
     testcase_unsigned(Slice<u8>::init_unsafe((u8[]){2__wbu}, 1), 2);
     testcase_unsigned(Slice<u8>::init_unsafe((u8[]){127__wbu}, 1), 127);
-    testcase_unsigned(Slice<u8>::init_unsafe((u8[]){0x80__wbu, 1__wbu}, 2), 128);
-    testcase_unsigned(Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2), 129);
-    testcase_unsigned(Slice<u8>::init_unsafe((u8[]){57__wbu | 0x80__wbu, 100__wbu}, 2), 12857__wbu);
+    testcase_unsigned(Slice<u8>::init_unsafe((u8[]){0x80__wbu, 1__wbu}, 2),
+                      128);
+    testcase_unsigned(
+        Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2), 129);
+    testcase_unsigned(
+        Slice<u8>::init_unsafe((u8[]){57__wbu | 0x80__wbu, 100__wbu}, 2),
+        12857__wbu);
 }
 
 static void test_signed() {
     testcase_signed(Slice<u8>::init_unsafe((u8[]){2__wbu}, 1), 2);
     testcase_signed(Slice<u8>::init_unsafe((u8[]){0x7e__wbu}, 1), -2);
-    testcase_signed(Slice<u8>::init_unsafe((u8[]){127__wbu | 0x80__wbu, 0}, 2), 127);
-    testcase_signed(Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 0x7f__wbu}, 2), -127);
+    testcase_signed(Slice<u8>::init_unsafe((u8[]){127__wbu | 0x80__wbu, 0}, 2),
+                    127);
+    testcase_signed(
+        Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 0x7f__wbu}, 2), -127);
     testcase_signed(Slice<u8>::init_unsafe((u8[]){0x80__wbu, 1__wbu}, 2), 128);
-    testcase_signed(Slice<u8>::init_unsafe((u8[]){0x80__wbu, 0x7f__wbu}, 2), -128);
-    testcase_signed(Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2), 129);
-    testcase_signed(Slice<u8>::init_unsafe((u8[]){0x7f__wbu | 0x80__wbu, 0x7e__wbu}, 2), -129);
+    testcase_signed(Slice<u8>::init_unsafe((u8[]){0x80__wbu, 0x7f__wbu}, 2),
+                    -128);
+    testcase_signed(
+        Slice<u8>::init_unsafe((u8[]){1__wbu | 0x80__wbu, 1__wbu}, 2), 129);
+    testcase_signed(
+        Slice<u8>::init_unsafe((u8[]){0x7f__wbu | 0x80__wbu, 0x7e__wbu}, 2),
+        -129);
 }
 
 static void signed_roundtrip(SliceMut<u8> slice, i64 i) {
     u64 write_offset = 0;
     assert(leb128::EncodeStatus::Ok ==
-               leb128::encode_i64(i, slice, &write_offset));
+           leb128::encode_i64(i, slice, &write_offset));
 
     u64 read_offset = 0;
     i64 num = I64_MAX;
     assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_i64(slice.as_const(), &read_offset, &num));
+           leb128::decode_i64(slice.as_const(), &read_offset, &num));
 
     assert(num == i);
     assert(read_offset == write_offset);
@@ -78,12 +86,12 @@ static void signed_roundtrip(SliceMut<u8> slice, i64 i) {
 static void unsigned_roundtrip(SliceMut<u8> slice, u64 i) {
     u64 write_offset = 0;
     assert(leb128::EncodeStatus::Ok ==
-               leb128::encode_u64(i, slice, &write_offset));
+           leb128::encode_u64(i, slice, &write_offset));
 
     u64 read_offset = 0;
     u64 num = U64_MAX;
     assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_u64(slice.as_const(), &read_offset, &num));
+           leb128::decode_u64(slice.as_const(), &read_offset, &num));
 
     assert(num == i);
     assert(read_offset == write_offset);
@@ -130,12 +138,12 @@ static void test_read_with_overflow() {
     u64 offset = 0;
     u64 num = 0;
     assert(leb128::DecodeStatus::InvalidInput ==
-               leb128::decode_u64(buf.as_const(), &offset, &num));
+           leb128::decode_u64(buf.as_const(), &offset, &num));
 
     offset = 0;
     i64 inum = 0;
     assert(leb128::DecodeStatus::InvalidInput ==
-               leb128::decode_i64(buf.as_const(), &offset, &inum));
+           leb128::decode_i64(buf.as_const(), &offset, &inum));
 }
 
 int main(void) {

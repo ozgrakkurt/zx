@@ -55,9 +55,7 @@ void parse_string_table_panic_(Slice<u8> data, SliceMut<Slice<u8>> out) {
     assert(SliceStatus::Ok == data.read(0, &starting_byte));
     assert(starting_byte == 0);
 
-    bool overflow = false;
     u64 const n_expected_nulls = out.len();
-    assert(!overflow);
     assert(data.count(0) == n_expected_nulls);
 
     u64 offset = 0;
@@ -144,24 +142,37 @@ struct File {
         };
     }
 
-    // returns the named section, panics if unable
-    Slice<u8> get_section_panic(Slice<u8> name) const {
+    u64 get_section_index_panic(Slice<u8> name) const {
         Slice<Slice<u8>> section_names = this->m_section_names;
 
         for (u64 i = 0; i < section_names.len(); i++) {
             Slice<u8> nm = section_names.read_unsafe(i);
 
             if (nm.equals(name)) {
-                SectionHeader const *sh =
-                    this->m_section_headers.offset_unsafe(i);
-                Slice<u8> out;
-                assert(SliceStatus::Ok ==
-                       this->m_buf.slice(sh->offset, sh->size, &out));
-                return out;
+                return i;
             }
         }
 
         panic();
+    }
+
+    // section data of the section at given index, panics if unable
+    Slice<u8> get_section_data_panic(u64 idx) const {
+        u64 const i = idx;
+        SectionHeader const *sh = nullptr;
+        assert(SliceStatus::Ok == this->m_section_headers.offset(i, &sh));
+        Slice<u8> out;
+        assert(SliceStatus::Ok ==
+               this->m_buf.slice(sh->offset, sh->size, &out));
+        return out;
+    }
+
+    // section header of the section at given index, panics if unable
+    SectionHeader const *get_section_header_panic(u64 idx) const {
+        u64 const i = idx;
+        SectionHeader const *sh = nullptr;
+        assert(SliceStatus::Ok == this->m_section_headers.offset(i, &sh));
+        return sh;
     }
 };
 
@@ -183,56 +194,49 @@ constexpr u8 EH_APP_PCREL = 0x10;
 constexpr u8 EH_APP_DATAREL = 0x30;
 constexpr u8 EH_APP_OMIT = 0xff;
 
-struct EhFrame {
-    enum class InstructionKind: u8_c {
-        Wut = 0,  
-    };
-    
-    struct InstructionPtr {
-        u32 index;
-        InstructionKind kind;  
-    };
+// CIE.return_address_register in .eh_frame is defined to be 16
+// on linux x86_64.
+constexpr u8 RETURN_ADDRESS_REGISTER = 16;
 
-    struct Instructions {
-        Slice<InstructionPtr> kinds;
-        // slice per different kind
-    };
-    
+// Dwarf Call Frame Instruction Kinds
+enum class InstrKind : u8_c {
+
+};
+
+struct EhFrame {
     struct CIE {
         u64 code_alignment_factor;
-        u64 data_alignment_factor;
-        u8 return_address_register;
-        Slice<u8> initial_instructions;
+        i64 data_alignment_factor;
     };
 
     struct FDE {
-        CIE const* cie_pointer;
+        CIE const *cie;
         u64 pc_begin;
         u64 pc_range;
-        Slice<u8> call_frame_instructions;
     };
 
     Slice<FDE> fd_entries;
 
-    static CIE parse_cie_panic(Slice<u8> buf, u64* offset) {
+    static CIE parse_cie_panic(Slice<u8> buf, u64 *offset) {
         bool overflow = false;
 
         u64 offs = *offset;
 
-        u32 is_64bit = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &is_64bit));
-        assert(is_64bit == ~u32{0});
+        u32 length = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &length));
+        // This can't happen as that (0xff..) is a marker defined to indicate
+        // this section is in 64bit dwarf format. And we expect eh_frame to
+        // always be in the 32bit format.
+        assert(length != U32_MAX);
+        assert(length <= buf.len());
 
         offs = add_u64(offs, sizeof(u32), &overflow);
         assert(!overflow);
 
-        u64 length = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<u64>(offs, &length));
+        // check that reading this CIE won't overflow the buffer.
+        assert((buf.len() - length) >= offs);
 
-        offs = add_u64(offs, sizeof(u64), &overflow);
-        assert(!overflow);
-
-        u64 const cie_size = add_u64(length, 12, &overflow);
+        u64 const cie_size = add_u64(length, sizeof(u32), &overflow);
         assert(!overflow);
 
         u32 cie_id = 0xff;
@@ -249,56 +253,192 @@ struct EhFrame {
         offs = add_u64(offs, sizeof(u8), &overflow);
         assert(!overflow);
 
-        // augmentation string should be empty so it should consist of a single NULL byte.
-        u8 should_be_null = 0xff;
-        assert(SliceStatus::Ok == buf.read(offs, &should_be_null));
-        assert(should_be_null == 0);
-
-        offs = add_u64(offs, sizeof(u8), &overflow);
-        assert(!overflow);
+        // This block of code just asserts that the augmentation string is equal
+        // to "zR". this means each FDE will have a single byte in their
+        // augmentation data that will signify how pointers are encoded in that
+        // FDE.
+        //
+        // We assume that this will be the case for all CIE so we just assert it
+        // instead of conditionally parsing.
+        {
+            u64 const needed_len = add_u64(offs, 3, &overflow);
+            assert(!overflow);
+            assert(buf.len() >= needed_len);
+            assert(buf.read_unsafe(offs) == 'z');
+            assert(buf.read_unsafe(offs + 1) == 'R');
+            assert(buf.read_unsafe(offs + 2) == '\0');
+            offs += 3;
+        }
 
         u64 code_alignment_factor = 0;
-        assert(leb128::DecodeStatus::Ok == leb128::decode_u64(buf, &offs, &code_alignment_factor));
+        assert(leb128::DecodeStatus::Ok ==
+               leb128::decode_u64(buf, &offs, &code_alignment_factor));
         assert(code_alignment_factor != 0);
 
         i64 data_alignment_factor = 0;
-        assert(leb128::DecodeStatus::Ok == leb128::decode_i64(buf, &offs, &data_alignment_factor));
+        assert(leb128::DecodeStatus::Ok ==
+               leb128::decode_i64(buf, &offs, &data_alignment_factor));
         assert(data_alignment_factor != 0);
 
         u8 return_address_register = 0;
         assert(SliceStatus::Ok == buf.read(offs, &return_address_register));
+        assert(RETURN_ADDRESS_REGISTER == return_address_register);
+        offs = add_u64(offs, sizeof(u8), &overflow);
+        assert(!overflow);
 
-        u64 diff = sub_unsafe_u64(*offset, offs);
-        assert(length >= diff);
+        u64 aug_data_len = 0;
+        assert(leb128::DecodeStatus::Ok ==
+               leb128::decode_u64(buf, &offs, &aug_data_len));
+        assert(aug_data_len == 1);
 
-        // u64 num_bytes_left = sub_unsafe_u64(cie_size, diff);
-        // TODO: parse instructions
+        u8 fde_ptr_enc = 0;
+        assert(SliceStatus::Ok == buf.read(offs, &fde_ptr_enc));
+        offs = add_u64(offs, sizeof(u8), &overflow);
+        assert(!overflow);
+
+        assert((fde_ptr_enc & EH_VALUE_MASK) == EH_VALUE_SDATA4);
+        assert((fde_ptr_enc & EH_APP_MASK) == EH_APP_PCREL);
+
+        u64 const diff = sub_unsafe_u64(offs, *offset);
+        assert(cie_size >= diff);
+
+        u64 num_bytes_left = sub_unsafe_u64(cie_size, diff);
+        Slice<u8> instructions_raw;
+        assert(SliceStatus::Ok ==
+               buf.slice(offs, num_bytes_left, &instructions_raw));
 
         *offset = add_u64(*offset, cie_size, &overflow);
         assert(!overflow);
 
-        return CIE {};
+        return CIE{
+            .code_alignment_factor = code_alignment_factor,
+            .data_alignment_factor = data_alignment_factor,
+        };
+    }
+
+    static FDE parse_fde_panic(i64 decode_pcrel, CIE const *cie, Slice<u8> buf,
+                               u64 *offset) {
+        bool overflow = false;
+
+        u64 offs = *offset;
+
+        u32 length = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &length));
+        // This can't happen as that (0xff..) is a marker defined to indicate
+        // this section is in 64bit dwarf format. And we expect eh_frame to
+        // always be in the 32bit format.
+        assert(length != U32_MAX);
+        assert(length <= buf.len());
+
+        offs = add_u64(offs, sizeof(u32), &overflow);
+        assert(!overflow);
+
+        // check that reading this FDE won't overflow the buffer.
+        assert((buf.len() - length) >= offs);
+
+        u64 const fde_size = add_u64(length, sizeof(u32), &overflow);
+        assert(!overflow);
+
+        // We know this is a SDATA4 encoded and PCREL applied value because we
+        // assert this when parsing CIE.
+        i32 pc_begin_encoded = 0;
+        assert(SliceStatus::Ok ==
+               buf.read_unaligned<i32>(offs, &pc_begin_encoded));
+        u64 pc_begin = i64_to_u64(
+            add_i64(decode_pcrel, pc_begin_encoded, &overflow), &overflow);
+        assert(!overflow);
+
+        offs = add_u64(offs, sizeof(i32), &overflow);
+        assert(!overflow);
+
+        u32 pc_range = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &pc_range));
+
+        offs = add_u64(offs, sizeof(u32), &overflow);
+        assert(!overflow);
+
+        *offset = add_u64(*offset, fde_size, &overflow);
+        assert(!overflow);
+
+        return FDE{
+            .cie = cie,
+            .pc_begin = pc_begin,
+            .pc_range = pc_range,
+        };
     }
 
     // Parses .eh_frame section in `buf`. Panics if there is a problem.
-    // This resulting structure's lifetime is tied to the allocator that was passed in.
-    static EhFrame init_panic(Alloc *alloc, Slice<u8> buf) {
+    // This resulting structure's lifetime is tied to the allocator that was
+    // passed in.
+    static EhFrame init_panic(Alloc *alloc, SectionHeader const *header,
+                              Slice<u8> buf) {
+        bool cast_fail = false;
+
+        // Convert these to i64 so we can do signed arithmetic
+        //
+        i64 const sh_addr = u64_to_i64(header->addr, &cast_fail);
+        assert(!cast_fail);
+
+        i64 const sh_offset = u64_to_i64(header->offset, &cast_fail);
+        assert(!cast_fail);
+
+        // address_of_field = sh_addr + (field_file_offset - sh_offset)
+        // and address_of_field is used for decoding EH_APP_PCREL values.
+        // we can just add what we calculated here to the encoded value to
+        // decode it.
+        i64 const decode_pcrel = wrapping_sub_i64(sh_addr, sh_offset);
+
         if (buf.len() == 0) {
-            return EhFrame {
+            return EhFrame{
                 .fd_entries = Slice<FDE>::init_dangling(),
             };
         }
 
-        (void)alloc;
-
         u64 offset = 0;
 
-        while (offset <= buf.len()) {
-            CIE const cie = parse_cie_panic(buf, &offset);
-            (void)cie;
+        while (offset < buf.len()) {
+            // length == 0 means we have found the TERMINATOR
+            u32 length = 0;
+            assert(SliceStatus::Ok == buf.read_unaligned<u32>(offset, &length));
+            if (length == 0) {
+                break;
+            }
+
+            CIE *cie = nullptr;
+            assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
+            *cie = parse_cie_panic(buf, &offset);
+
+            // parse fdes
+            while (offset < buf.len()) {
+                // length == 0 means we have found the TERMINATOR
+                length = 0;
+                assert(SliceStatus::Ok ==
+                       buf.read_unaligned<u32>(offset, &length));
+                if (length == 0) {
+                    break;
+                }
+
+                bool overflow = false;
+                u64 cie_id_offset = add_u64(offset, sizeof(u32), &overflow);
+                assert(!overflow);
+                u32 cie_id = 0;
+                assert(SliceStatus::Ok ==
+                       buf.read_unaligned<u32>(cie_id_offset, &cie_id));
+                // This means this is not a fde but a cie, just go out to the
+                // outer loop so we can parse the cie. And then we will come
+                // back here to parse the FDEs of that CIE. This is just a
+                // scuffed state machine.
+                if (cie_id == 0) {
+                    break;
+                }
+
+                FDE const fde =
+                    parse_fde_panic(decode_pcrel, cie, buf, &offset);
+                (void)fde;
+            }
         }
-        
-        return EhFrame {
+
+        return EhFrame{
             .fd_entries = Slice<FDE>::init_dangling(),
         };
     }
