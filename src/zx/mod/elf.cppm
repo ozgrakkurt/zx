@@ -551,6 +551,12 @@ struct EhFrame {
         u64 const fde_size = add_u64(length, sizeof(u32), &overflow);
         assert(!overflow);
 
+        i32 cie_ptr = 0;
+        assert(SliceStatus::Ok == buf.read_unaligned<i32>(offs, &cie_ptr));
+        (void)cie_ptr;
+        offs = add_u64(offs, sizeof(i32), &overflow);
+        assert(!overflow);
+
         // We know this is a SDATA4 encoded and PCREL applied value because we
         // assert this when parsing CIE.
         i32 pc_begin_encoded = 0;
