@@ -200,24 +200,233 @@ constexpr u8 RETURN_ADDRESS_REGISTER = 16;
 
 // Dwarf Call Frame Instruction Kinds
 enum class InstrKind : u8_c {
+    AdvanceLoc,
+    Offset,
+    Restore,
+    // # Don't need to parse anything into Nop, just discard it when decoding.
+    // Nop,
+    SetLoc,
+    AdvanceLoc1,
+    AdvanceLoc2,
+    AdvanceLoc4,
+    OffsetExtended,
+    RestoreExtended,
+    Undefined,
+    SameValue,
+    Register,
+    RememberState,
+    RestoreState,
+    DefCfa,
+    DefCfaRegister,
+    DefCfaOffset,
+    DefCfaExpression,
+    Expression,
+    OffsetExtendedSf,
+    DefCfaSf,
+    DefCfaOffsetSf,
+    ValOffset,
+    ValOffsetSf,
+    ValExpression,
+    LoUser,
+    HiUser,
+};
 
+struct Instr {
+    // Index into the Instructions.values array.
+    //
+    // Some kinds of instructions might read multiple values past that index
+    // instead of just reading the value that is at that index.
+    //
+    // Some kinds of instructions don't need any separate value and use only the
+    // supplement field so the value of idx will be set to U32_MAX.
+    u32 idx;
+    InstrKind kind;
+    // used for instructions that keep meaningful values in low 6 bits.
+    // Namely advance_loc, offset, restore instructions.
+    u8 supplement;
+};
+
+struct Instructions {
+    Slice<Instr> instr;
+    Slice<u64> values;
+
+    static Instructions parse_panic(Alloc *alloc, Slice<u8> buf) {
+        u64 const max_num_instr = buf.len();
+
+        bool overflow = false;
+        u64 const max_num_values = mul_u64(buf.len(), 2, &overflow);
+        assert(!overflow);
+
+        SliceMut<Instr> instr;
+        assert(AllocStatus::Ok == alloc->alloc<Instr>(max_num_instr, &instr));
+
+        SliceMut<u64> values;
+        assert(AllocStatus::Ok == alloc->alloc<u64>(max_num_values, &values));
+
+        u64 num_instr = 0;
+        u64 num_vals = 0;
+        u64 offset = 0;
+        while (offset < buf.len()) {
+            u8 const byte = buf.read_unsafe(offset);
+            offset = add_unsafe_u64(offset, 1);
+            u8 const high2 = (byte & 0b11000000) >> 6;
+            u8 const low6 = byte & 0b00111111;
+
+            switch (high2) {
+            // advance_loc
+            case u8{0x1}: {
+                break;
+            }
+            // offset
+            case u8{0x2}: {
+                break;
+            }
+            // restore
+            case u8{0x3}: {
+                break;
+            }
+            // other
+            case u8{0}: {
+                switch (low6) {
+                // Nop:
+                case u8{0}: {
+                    // don't push it as it is meaningless.
+                    break;
+                }
+                // set_loc
+                case u8{0x01}: {
+                    break;
+                }
+                // advance_loc1
+                case u8{0x02}: {
+                    break;
+                }
+                // advance_loc2
+                case u8{0x03}: {
+                    break;
+                }
+                // advance_loc4
+                case u8{0x04}: {
+                    break;
+                }
+                // offset_extended
+                case u8{0x05}: {
+                    break;
+                }
+                // restore_extended
+                case u8{0x06}: {
+                    break;
+                }
+                // undefined
+                case u8{0x07}: {
+                    break;
+                }
+                // same_value
+                case u8{0x08}: {
+                    break;
+                }
+                // register
+                case u8{0x09}: {
+                    break;
+                }
+                // remember_state
+                case u8{0x0a}: {
+                    break;
+                }
+                // restore_state
+                case u8{0x0b}: {
+                    break;
+                }
+                // def_cfa
+                case u8{0x0c}: {
+                    break;
+                }
+                // def_cfa_register
+                case u8{0x0d}: {
+                    break;
+                }
+                // def_cfa_offset
+                case u8{0x0e}: {
+                    break;
+                }
+                // def_cfa_expression
+                case u8{0x0f}: {
+                    break;
+                }
+                // expression
+                case u8{0x10}: {
+                    break;
+                }
+                // offset_extended_sf
+                case u8{0x11}: {
+                    break;
+                }
+                // def_cfa_sf
+                case u8{0x12}: {
+                    break;
+                }
+                // def_cfa_offset_sf
+                case u8{0x13}: {
+                    break;
+                }
+                // val_offset
+                case u8{0x14}: {
+                    break;
+                }
+                // val_offset_sf
+                case u8{0x15}: {
+                    break;
+                }
+                // val_expression
+                case u8{0x16}: {
+                    break;
+                }
+                // lo_user
+                case u8{0x1c}: {
+                    break;
+                }
+                // hi_user
+                case u8{0x3f}: {
+                    break;
+                }
+                default: {
+                    panic();
+                    break;
+                }
+                }
+                break;
+            }
+            default: {
+                panic();
+                break;
+            }
+            }
+        }
+
+        return Instructions{
+            .instr = instr.as_const().slice_unsafe(0, num_instr),
+            .values = values.as_const().slice_unsafe(0, num_vals),
+        };
+    }
 };
 
 struct EhFrame {
     struct CIE {
         u64 code_alignment_factor;
         i64 data_alignment_factor;
+        Instructions instr;
     };
 
     struct FDE {
         CIE const *cie;
         u64 pc_begin;
         u64 pc_range;
+        Instructions instr;
     };
 
     Slice<FDE> fd_entries;
 
-    static CIE parse_cie_panic(Slice<u8> buf, u64 *offset) {
+    static CIE parse_cie_panic(Alloc *alloc, Slice<u8> buf, u64 *offset) {
         bool overflow = false;
 
         u64 offs = *offset;
@@ -307,17 +516,20 @@ struct EhFrame {
         assert(SliceStatus::Ok ==
                buf.slice(offs, num_bytes_left, &instructions_raw));
 
+        Instructions instr = Instructions::parse_panic(alloc, instructions_raw);
+
         *offset = add_u64(*offset, cie_size, &overflow);
         assert(!overflow);
 
         return CIE{
             .code_alignment_factor = code_alignment_factor,
             .data_alignment_factor = data_alignment_factor,
+            .instr = instr,
         };
     }
 
-    static FDE parse_fde_panic(i64 decode_pcrel, CIE const *cie, Slice<u8> buf,
-                               u64 *offset) {
+    static FDE parse_fde_panic(Alloc *alloc, i64 decode_pcrel, CIE const *cie,
+                               Slice<u8> buf, u64 *offset) {
         bool overflow = false;
 
         u64 offs = *offset;
@@ -353,9 +565,18 @@ struct EhFrame {
 
         u32 pc_range = 0;
         assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &pc_range));
-
         offs = add_u64(offs, sizeof(u32), &overflow);
         assert(!overflow);
+
+        u64 const diff = sub_unsafe_u64(offs, *offset);
+        assert(fde_size >= diff);
+
+        u64 num_bytes_left = sub_unsafe_u64(fde_size, diff);
+        Slice<u8> instructions_raw;
+        assert(SliceStatus::Ok ==
+               buf.slice(offs, num_bytes_left, &instructions_raw));
+
+        Instructions instr = Instructions::parse_panic(alloc, instructions_raw);
 
         *offset = add_u64(*offset, fde_size, &overflow);
         assert(!overflow);
@@ -364,6 +585,7 @@ struct EhFrame {
             .cie = cie,
             .pc_begin = pc_begin,
             .pc_range = pc_range,
+            .instr = instr,
         };
     }
 
@@ -406,7 +628,7 @@ struct EhFrame {
 
             CIE *cie = nullptr;
             assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
-            *cie = parse_cie_panic(buf, &offset);
+            *cie = parse_cie_panic(alloc, buf, &offset);
 
             // parse fdes
             while (offset < buf.len()) {
@@ -433,7 +655,7 @@ struct EhFrame {
                 }
 
                 FDE const fde =
-                    parse_fde_panic(decode_pcrel, cie, buf, &offset);
+                    parse_fde_panic(alloc, decode_pcrel, cie, buf, &offset);
                 (void)fde;
             }
         }
