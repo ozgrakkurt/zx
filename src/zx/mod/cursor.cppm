@@ -147,7 +147,6 @@ struct WriteCursor {
         __builtin_memcpy(this->m_buf.offset_unsafe(this->m_offset), &val,
                          sizeof(T));
         this->m_offset = end;
-        return out;
     }
 
     template <typename T> void write_panic(T val) {

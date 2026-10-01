@@ -61,6 +61,46 @@ static void do_test_nocap() {
     zx::assert(zx::AllocStatus::Ok == status);
 }
 
+static void do_test_resize(SliceMut<u8> mem) {
+    constexpr u64 CAP = 256;
+    constexpr u64 BUF_LEN = CAP / 2;
+
+    assert(mem.len() >= CAP);
+    zx::Alloc alloc = zx::Alloc::init(mem.slice_unsafe(0, CAP));
+
+    SliceMut<u8> nums;
+    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums));
+
+    for (u8 i = 0; i < BUF_LEN; i++) {
+        nums.write_unsafe(i, i);
+    }
+
+    u64 const resize_offset = alloc.offset();
+    assert(resize_offset == nums.len());
+
+    SliceMut<u8> nums2;
+    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums2));
+
+    for (u8 i = 0; i < BUF_LEN; i++) {
+        nums2.write_unsafe(i, ~i);
+    }
+
+    SliceMut<u8> nums3;
+    assert(AllocStatus::OutOfMemory == alloc.alloc<u8>(BUF_LEN, &nums3));
+
+    alloc.resize(resize_offset);
+
+    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums3));
+
+    for (u8 i = 0; i < BUF_LEN; i++) {
+        nums3.write_unsafe(i, 69);
+    }
+
+    for (u8 i = 0; i < BUF_LEN; i++) {
+        assert(nums.read_unsafe(i) == i);
+    }
+}
+
 int main() {
     zx::u8 *mem = nullptr;
     zx::assert(zx::page_alloc::AllocStatus::Ok ==
@@ -73,6 +113,8 @@ int main() {
 
     zx::Alloc alloc = zx::Alloc::init(slice);
     do_test(&alloc);
+
+    do_test_resize(slice);
 
     zx::assert(zx::page_alloc::FreeStatus::Ok ==
                zx::page_alloc::free(mem, MEMORY_SIZE));

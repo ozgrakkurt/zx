@@ -1,6 +1,7 @@
 export module zx:list;
 import :def;
 import :arith;
+import :slice;
 
 export namespace zx {
 
