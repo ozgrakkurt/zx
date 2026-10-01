@@ -6,6 +6,8 @@ import :slice;
 import :alloc;
 import :panic;
 import :leb128;
+import :cursor;
+import :list;
 
 export namespace zx {
 
@@ -198,6 +200,15 @@ constexpr u8 EH_APP_OMIT = 0xff;
 // on linux x86_64.
 constexpr u8 RETURN_ADDRESS_REGISTER = 16;
 
+// section_addr is the address of the elf section at runtime. can be found in
+// elf_section_header.addr field. field_offset is the offset of the field inside
+// the section. encoded_val is the pcrel encoded EH_FRAME value to be decoded.
+u64 decode_pcrel_panic_(u64 section_addr, u64 field_offset, i32 encoded_val) {
+    i64 const extended_encoded = encoded_val;
+    return wrapping_add_u64(wrapping_add_u64(section_addr, field_offset),
+                            (u64)extended_encoded);
+}
+
 // Dwarf Call Frame Instruction Kinds
 enum class InstrKind : u8_c {
     AdvanceLoc,
@@ -229,28 +240,23 @@ enum class InstrKind : u8_c {
     ValExpression,
     LoUser,
     HiUser,
-};
-
-struct Instr {
-    // Index into the Instructions.values array.
-    //
-    // Some kinds of instructions might read multiple values past that index
-    // instead of just reading the value that is at that index.
-    //
-    // Some kinds of instructions don't need any separate value and use only the
-    // supplement field so the value of idx will be set to U32_MAX.
-    u32 idx;
-    InstrKind kind;
-    // used for instructions that keep meaningful values in low 6 bits.
-    // Namely advance_loc, offset, restore instructions.
-    u8 supplement;
+    GnuArgsSize,
+    GnuNegativeOffsetExtended,
 };
 
 struct Instructions {
-    Slice<Instr> instr;
-    Slice<u64> values;
+    Slice<InstrKind> instr;
+    Slice<u8> data;
 
-    static Instructions parse_panic(Alloc *alloc, Slice<u8> buf) {
+    static Instructions parse_panic(Alloc *alloc, u64 base_addr,
+                                    Slice<u8> buf) {
+        if (buf.len() == 0) {
+            return Instructions{
+                .instr = Slice<Instr>::init_dangling(),
+                .values = Slice<u64>::init_dangling(),
+            };
+        }
+
         u64 const max_num_instr = buf.len();
 
         bool overflow = false;
@@ -265,24 +271,61 @@ struct Instructions {
 
         u64 num_instr = 0;
         u64 num_vals = 0;
-        u64 offset = 0;
-        while (offset < buf.len()) {
-            u8 const byte = buf.read_unsafe(offset);
-            offset = add_unsafe_u64(offset, 1);
+
+        Cursor cursor = Cursor::init(buf);
+
+        u64 const num_vals_bound = sub_u64(max_num_values)
+
+            while (offset < buf.len()) {
+            assert(num_instr < max_num_instr);
+            assert(num_vals < max_num_values);
+
+            u8 const byte = cursor.read_panic<u8>();
+
             u8 const high2 = (byte & 0b11000000) >> 6;
             u8 const low6 = byte & 0b00111111;
 
             switch (high2) {
             // advance_loc
             case u8{0x1}: {
+                Instr const instr = Instr{
+                    .idx = U32_MAX,
+                    .kind = InstrKind::AdvanceLoc,
+                    .supplement = low6,
+                };
+                instr.write_unsafe(num_instr, instr);
+                num_instr += 1;
                 break;
             }
             // offset
             case u8{0x2}: {
+                u64 off = 0;
+                assert(leb128::DecodeStatus::Ok == cursor.read_uleb128(&off));
+
+                Instr const instr = Instr{
+                    .idx = num_vals,
+                    .kind = InstrKind::Offset,
+                    .supplement = low6,
+                };
+
+                values.write_unsafe(num_vals, off);
+                num_vals += 1;
+                assert(num_vals <= max_num_values);
+
+                instr.write_unsafe(num_instr, instr);
+                num_instr += 1;
+
                 break;
             }
             // restore
             case u8{0x3}: {
+                Instr const instr = Instr{
+                    .idx = U32_MAX,
+                    .kind = InstrKind::Restore,
+                    .supplement = low6,
+                };
+                instr.write_unsafe(num_instr, instr);
+                num_instr += 1;
                 break;
             }
             // other
@@ -295,18 +338,76 @@ struct Instructions {
                 }
                 // set_loc
                 case u8{0x01}: {
+                    u64 const field_offset = cursor.offset();
+                    i32 const addr_encoded = cursor.read_panic<i32>();
+                    u64 const addr = decode_pcrel_panic_(
+                        base_addr, field_offset, addr_encoded);
+
+                    values.write_unsafe(num_vals, addr);
+                    num_vals += 1;
+                    assert(num_vals <= max_num_values);
+
+                    Instr const instr = Instr{
+                        .idx = num_vals,
+                        .kind = InstrKind::SetLoc,
+                        .supplement = 0,
+                    };
+
+                    instr.write_unsafe(num_instr, instr);
+                    num_instr += 1;
                     break;
                 }
                 // advance_loc1
                 case u8{0x02}: {
+                    u8 const delta = cursor.read_panic<u8>();
+
+                    Instr const instr = Instr{
+                        .idx = U32_MAX,
+                        .kind = InstrKind::AdvanceLoc1,
+                        .supplement = delta,
+                    };
+
+                    instr.write_unsafe(num_instr, instr);
+                    num_instr += 1;
+
                     break;
                 }
                 // advance_loc2
                 case u8{0x03}: {
+                    u16 const delta = cursor.read_panic<u16>();
+
+                    values.write_unsafe(num_vals, delta);
+                    num_vals += 1;
+                    assert(num_vals <= max_num_values);
+
+                    Instr const instr = Instr{
+                        .idx = U32_MAX,
+                        .kind = InstrKind::AdvanceLoc2,
+                        .supplement = 0,
+                    };
+
+                    instr.write_unsafe(num_instr, instr);
+                    num_instr += 1;
+
                     break;
                 }
                 // advance_loc4
                 case u8{0x04}: {
+                    u32 const delta = cursor.read_panic<u32>();
+
+                    values.write_unsafe(num_vals, delta);
+                    num_vals += 1;
+                    assert(num_vals <= max_num_values);
+
+                    Instr const instr = Instr{
+                        .idx = U32_MAX,
+                        .kind = InstrKind::AdvanceLoc4,
+                        .supplement = 0,
+                    };
+
+                    instr.write_unsafe(num_instr, instr);
+                    num_instr += 1;
+
                     break;
                 }
                 // offset_extended
@@ -389,6 +490,14 @@ struct Instructions {
                 case u8{0x3f}: {
                     break;
                 }
+                // GNU_args_size
+                case u8{0x2e}: {
+                    break;
+                }
+                // GNU_negative_offset_extended
+                case u8{0x2f}: {
+                    break;
+                }
                 default: {
                     panic();
                     break;
@@ -426,7 +535,8 @@ struct EhFrame {
 
     Slice<FDE> fd_entries;
 
-    static CIE parse_cie_panic(Alloc *alloc, Slice<u8> buf, u64 *offset) {
+    static CIE parse_cie_panic(Alloc *alloc, u64 section_addr, Slice<u8> buf,
+                               u64 *offset) {
         bool overflow = false;
 
         u64 offs = *offset;
@@ -463,12 +573,12 @@ struct EhFrame {
         assert(!overflow);
 
         // This block of code just asserts that the augmentation string is equal
-        // to "zR". this means each FDE will have a single byte in their
-        // augmentation data that will signify how pointers are encoded in that
-        // FDE.
+        // to "zR". this means the CIE will have a single byte in it's
+        // augmentation data that will signify how pointers are encoded in
+        // associated FDEs.
         //
         // We assume that this will be the case for all CIE so we just assert it
-        // instead of conditionally parsing.
+        // instead of conditionally parsing the augmentation string.
         {
             u64 const needed_len = add_u64(offs, 3, &overflow);
             assert(!overflow);
@@ -516,7 +626,12 @@ struct EhFrame {
         assert(SliceStatus::Ok ==
                buf.slice(offs, num_bytes_left, &instructions_raw));
 
-        Instructions instr = Instructions::parse_panic(alloc, instructions_raw);
+        u64 const instructions_base_addr =
+            add_u64(section_addr, offs, &overflow);
+        assert(!overflow);
+
+        Instructions instr = Instructions::parse_panic(
+            alloc, instructions_base_addr, nstructions_raw);
 
         *offset = add_u64(*offset, cie_size, &overflow);
         assert(!overflow);
@@ -528,7 +643,7 @@ struct EhFrame {
         };
     }
 
-    static FDE parse_fde_panic(Alloc *alloc, i64 decode_pcrel, CIE const *cie,
+    static FDE parse_fde_panic(Alloc *alloc, u64 section_addr, CIE const *cie,
                                Slice<u8> buf, u64 *offset) {
         bool overflow = false;
 
@@ -562,9 +677,8 @@ struct EhFrame {
         i32 pc_begin_encoded = 0;
         assert(SliceStatus::Ok ==
                buf.read_unaligned<i32>(offs, &pc_begin_encoded));
-        u64 pc_begin = i64_to_u64(
-            add_i64(decode_pcrel, pc_begin_encoded, &overflow), &overflow);
-        assert(!overflow);
+        u64 pc_begin =
+            decode_pcrel_panic_(section_addr, offs, pc_begin_encoded);
 
         offs = add_u64(offs, sizeof(i32), &overflow);
         assert(!overflow);
@@ -582,7 +696,12 @@ struct EhFrame {
         assert(SliceStatus::Ok ==
                buf.slice(offs, num_bytes_left, &instructions_raw));
 
-        Instructions instr = Instructions::parse_panic(alloc, instructions_raw);
+        u64 const instructions_base_addr =
+            add_u64(section_addr, offs, &overflow);
+        assert(!overflow);
+
+        Instructions instr = Instructions::parse_panic(
+            alloc, instructions_base_addr, instructions_raw);
 
         *offset = add_u64(*offset, fde_size, &overflow);
         assert(!overflow);
@@ -600,22 +719,6 @@ struct EhFrame {
     // passed in.
     static EhFrame init_panic(Alloc *alloc, SectionHeader const *header,
                               Slice<u8> buf) {
-        bool cast_fail = false;
-
-        // Convert these to i64 so we can do signed arithmetic
-        //
-        i64 const sh_addr = u64_to_i64(header->addr, &cast_fail);
-        assert(!cast_fail);
-
-        i64 const sh_offset = u64_to_i64(header->offset, &cast_fail);
-        assert(!cast_fail);
-
-        // address_of_field = sh_addr + (field_file_offset - sh_offset)
-        // and address_of_field is used for decoding EH_APP_PCREL values.
-        // we can just add what we calculated here to the encoded value to
-        // decode it.
-        i64 const decode_pcrel = wrapping_sub_i64(sh_addr, sh_offset);
-
         if (buf.len() == 0) {
             return EhFrame{
                 .fd_entries = Slice<FDE>::init_dangling(),
@@ -634,7 +737,7 @@ struct EhFrame {
 
             CIE *cie = nullptr;
             assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
-            *cie = parse_cie_panic(alloc, buf, &offset);
+            *cie = parse_cie_panic(alloc, header->addr, buf, &offset);
 
             // parse fdes
             while (offset < buf.len()) {
@@ -661,7 +764,7 @@ struct EhFrame {
                 }
 
                 FDE const fde =
-                    parse_fde_panic(alloc, decode_pcrel, cie, buf, &offset);
+                    parse_fde_panic(alloc, header->addr, cie, buf, &offset);
                 (void)fde;
             }
         }
