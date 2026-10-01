@@ -38,6 +38,35 @@ struct Alloc {
         this->m_offset = 0;
     }
 
+    enum class [[nodiscard]] ResizeStatus : u8_c {
+        Ok = 0,
+        OutOfBounds,
+    };
+
+    ResizeStatus resize(u64 offset) {
+        if (offset > this->m_mem.len()) {
+            return ResizeStatus::OutOfBounds;
+        }
+
+#ifdef ZX_DEV
+        if (this->m_offset > offset) {
+            // shrinking backwards
+            u64 const len = this->m_offset - offset;
+            this->m_mem.slice_unsafe(offset, len).memset(0xaa);
+        } else if (this->m_offset < offset) {
+            // extending forwards
+            u64 const len = offset - this->m_offset;
+            this->m_mem.slice_unsafe(this->m_offset, len).memset(0xaa);
+        }
+#endif
+
+        this->m_offset = offset;
+
+        return ResizeStatus::Ok;
+    }
+
+    u64 offset() const { return this->m_offset; }
+
     template <u16 ALIGN, typename T>
     AllocStatus aligned_alloc(u64 len, SliceMut<T> *out) {
         static_assert(ALIGN >= alignof(T));
