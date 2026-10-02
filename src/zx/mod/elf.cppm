@@ -338,90 +338,193 @@ struct Instructions {
             }
             // offset_extended
             case u8{0x05}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 const off = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>(off);
+
+                instr_list->push_panic(Instr::OffsetExtended);
+
                 break;
             }
             // restore_extended
             case u8{0x06}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+
+                instr_list->push_panic(Instr::RestoreExtended);
+
                 break;
             }
             // undefined
             case u8{0x07}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+
+                instr_list->push_panic(Instr::Undefined);
+
                 break;
             }
             // same_value
             case u8{0x08}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+
+                instr_list->push_panic(Instr::SameValue);
+
                 break;
             }
             // register
             case u8{0x09}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 const off = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>(off);
+
+                instr_list->push_panic(Instr::Register);
+
                 break;
             }
             // remember_state
             case u8{0x0a}: {
+                instr_list->push_panic(Instr::RememberState);
+
                 break;
             }
             // restore_state
             case u8{0x0b}: {
+                instr_list->push_panic(Instr::RestoreState);
+
                 break;
             }
             // def_cfa
             case u8{0x0c}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 const off = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>(off);
+
+                instr_list->push_panic(Instr::DefCfa);
+
                 break;
             }
             // def_cfa_register
             case u8{0x0d}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+
+                instr_list->push_panic(Instr::DefCfaRegister);
+
                 break;
             }
             // def_cfa_offset
             case u8{0x0e}: {
+                u64 const off = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(off);
+
+                instr_list->push_panic(Instr::DefCfaOffset);
+
                 break;
             }
             // def_cfa_expression
             case u8{0x0f}: {
+                // unimplemented
+                panic();
                 break;
             }
             // expression
             case u8{0x10}: {
+                // unimplemented
+                panic();
                 break;
             }
             // offset_extended_sf
             case u8{0x11}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                i64 const off = input_cursor->read_sleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>((u64)off);
+
+                instr_list->push_panic(Instr::OffsetExtendedSf);
+
                 break;
             }
             // def_cfa_sf
             case u8{0x12}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                i64 const off = input_cursor->read_sleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>((u64)off);
+
+                instr_list->push_panic(Instr::DefCfaSf);
+
                 break;
             }
             // def_cfa_offset_sf
             case u8{0x13}: {
+                i64 const off = input_cursor->read_sleb128_panic();
+                data_writer->write_panic<u64>((u64)off);
+
+                instr_list->push_panic(Instr::DefCfaOffsetSf);
+
                 break;
             }
             // val_offset
             case u8{0x14}: {
+                u64 const arg0 = input_cursor->read_uleb128_panic();
+                u64 const arg1 = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(arg0);
+                data_writer->write_panic<u64>(arg1);
+
+                instr_list->push_panic(Instr::ValOffset);
+
                 break;
             }
             // val_offset_sf
             case u8{0x15}: {
+                u64 const arg0 = input_cursor->read_uleb128_panic();
+                i64 const arg1 = input_cursor->read_sleb128_panic();
+                data_writer->write_panic<u64>(arg0);
+                data_writer->write_panic<u64>((u64)arg1);
+
+                instr_list->push_panic(Instr::ValOffsetSf);
+
                 break;
             }
             // val_expression
             case u8{0x16}: {
+                // unimplemented
+                panic();
                 break;
             }
             // lo_user
             case u8{0x1c}: {
+                instr_list->push_panic(Instr::LoUser);
                 break;
             }
             // hi_user
             case u8{0x3f}: {
+                instr_list->push_panic(Instr::HiUser);
                 break;
             }
             // GNU_args_size
             case u8{0x2e}: {
+                u64 const arg0 = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(arg0);
+
+                instr_list->push_panic(Instr::GnuArgsSize);
+
                 break;
             }
             // GNU_negative_offset_extended
             case u8{0x2f}: {
+                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 const off = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u64>(reg);
+                data_writer->write_panic<u64>(off);
+
+                instr_list->push_panic(Instr::GnuNegativeOffsetExtended);
+
                 break;
             }
             default: {
