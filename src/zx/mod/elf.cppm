@@ -50,14 +50,14 @@ extern "C" struct ElfHeader {
 
 void parse_section_name_table_panic_(Slice<SectionHeader> headers,
                                      Slice<u8> data, SliceMut<Slice<u8>> out) {
-    u8 starting_byte = 0xaa;
-    assert(SliceStatus::Ok == data.read(0, &starting_byte));
-    assert(starting_byte == 0);
-
     assert(headers.len() == out.len());
     if (out.len() == 0) {
         return;
     }
+
+    u8 starting_byte = 0xaa;
+    assert(SliceStatus::Ok == data.read(0, &starting_byte));
+    assert(starting_byte == 0);
 
     u64 last_null_pos = 0;
     for (u64 i = 0; i < data.len(); i++) {
@@ -100,6 +100,7 @@ struct File {
         assert(SliceStatus::Ok == header_list.offset(0, &header));
         assert(header != nullptr);
 
+        assert(header->ehsize == sizeof(ElfHeader));
         assert(header->shentsize == sizeof(SectionHeader));
 
         bool overflow = false;
@@ -253,7 +254,7 @@ struct Instructions {
     Slice<Instr> instr;
     Slice<u8> data;
 
-    static void parse_one_panic_(u64 base_addr, List<Instr> *instr_list,
+    static void parse_one_panic_(u64 section_addr, List<Instr> *instr_list,
                                  WriteCursor *data_writer,
                                  Cursor *input_cursor) {
         u8 const byte = input_cursor->read_panic<u8>();
@@ -299,8 +300,8 @@ struct Instructions {
             case u8{0x01}: {
                 u64 const field_offset = input_cursor->offset();
                 i32 const addr_encoded = input_cursor->read_panic<i32>();
-                u64 const addr =
-                    decode_pcrel_panic_(base_addr, field_offset, addr_encoded);
+                u64 const addr = decode_pcrel_panic_(section_addr, field_offset,
+                                                     addr_encoded);
 
                 data_writer->write_panic<u64>(addr);
 
@@ -438,7 +439,8 @@ struct Instructions {
     }
 
     static Instructions parse_panic(Alloc *alloc, Alloc *tmp_alloc,
-                                    u64 base_addr, u64 instructions_end_offset,
+                                    u64 section_addr,
+                                    u64 instructions_end_offset,
                                     Cursor *input_cursor) {
         if (input_cursor->offset() == instructions_end_offset) {
             return Instructions{
@@ -462,7 +464,7 @@ struct Instructions {
         WriteCursor data_writer = WriteCursor::init(data);
 
         while (input_cursor->offset() < instructions_end_offset) {
-            parse_one_panic_(base_addr, &instr_list, &data_writer,
+            parse_one_panic_(section_addr, &instr_list, &data_writer,
                              input_cursor);
         }
         assert(input_cursor->offset() == instructions_end_offset);
@@ -545,13 +547,8 @@ struct EhFrame {
             assert((fde_ptr_enc & EH_APP_MASK) == EH_APP_PCREL);
         }
 
-        bool overflow = false;
-        u64 const instructions_base_addr =
-            add_u64(section_addr, input_cursor->offset(), &overflow);
-        assert(!overflow);
-
         Instructions instr = Instructions::parse_panic(
-            alloc, tmp_alloc, instructions_base_addr, end_offset, input_cursor);
+            alloc, tmp_alloc, section_addr, end_offset, input_cursor);
 
         assert(input_cursor->offset() == end_offset);
         return CIE{
@@ -576,14 +573,8 @@ struct EhFrame {
         u64 const aug_data_len = input_cursor->read_uleb128_panic();
         assert(aug_data_len == 0);
 
-        bool overflow = false;
-
-        u64 const instructions_base_addr =
-            add_u64(section_addr, input_cursor->offset(), &overflow);
-        assert(!overflow);
-
         Instructions instr = Instructions::parse_panic(
-            alloc, tmp_alloc, instructions_base_addr, end_offset, input_cursor);
+            alloc, tmp_alloc, section_addr, end_offset, input_cursor);
 
         assert(input_cursor->offset() == end_offset);
         return FDE{
