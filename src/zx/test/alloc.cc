@@ -86,7 +86,8 @@ static void do_test_resize(zx::SliceMut<zx::u8> mem) {
     }
 
     zx::SliceMut<zx::u8> nums3;
-    zx::assert(zx::AllocStatus::OutOfMemory == alloc.alloc<zx::u8>(BUF_LEN, &nums3));
+    zx::assert(zx::AllocStatus::OutOfMemory ==
+               alloc.alloc<zx::u8>(BUF_LEN, &nums3));
 
     zx::assert(zx::Alloc::ResizeStatus::Ok == alloc.resize(resize_offset));
 

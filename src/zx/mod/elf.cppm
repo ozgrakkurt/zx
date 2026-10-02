@@ -48,27 +48,32 @@ extern "C" struct ElfHeader {
     u16 shstrndx;
 };
 
-void parse_string_table_panic_(Slice<u8> data, SliceMut<Slice<u8>> out) {
-    if (out.len() == 0) {
-        return;
-    }
-
+void parse_section_name_table_panic_(Slice<SectionHeader> headers,
+                                     Slice<u8> data, SliceMut<Slice<u8>> out) {
     u8 starting_byte = 0xaa;
     assert(SliceStatus::Ok == data.read(0, &starting_byte));
     assert(starting_byte == 0);
 
-    u64 const n_expected_nulls = out.len();
-    assert(data.count(0) == n_expected_nulls);
-
-    u64 offset = 0;
-    for (u64 i = 0; i < out.len(); i++) {
-        u64 const len =
-            __builtin_strlen((char const *)data.slice_at_unsafe(offset).ptr());
-        out.write_unsafe(i, data.slice_unsafe(offset, len));
-        offset = add_unsafe_u64(offset, add_unsafe_u64(len, 1));
+    assert(headers.len() == out.len());
+    if (out.len() == 0) {
+        return;
     }
 
-    return;
+    u64 last_null_pos = 0;
+    for (u64 i = 0; i < data.len(); i++) {
+        if (data.read_unsafe(i) == 0) {
+            last_null_pos = i;
+        }
+    }
+
+    for (u64 i = 0; i < headers.len(); i++) {
+        u64 const pos = headers.offset_unsafe(i)->name;
+        assert(pos <= last_null_pos);
+        out.write_unsafe(
+            i,
+            data.slice_unsafe(
+                pos, __builtin_strlen((char const *)data.offset_unsafe(pos))));
+    }
 }
 
 struct File {
@@ -87,7 +92,6 @@ struct File {
                buf.slice(0, sizeof(ElfHeader), &header_bytes));
 
         Slice<ElfHeader> header_list;
-        assert(__builtin_is_aligned(header_bytes.ptr(), alignof(ElfHeader)));
         assert(SliceCastStatus::Ok ==
                header_bytes.cast<ElfHeader>(&header_list));
         assert(header_list.len() == 1);
@@ -133,7 +137,8 @@ struct File {
                                             names_header->size,
                                             &section_names_data));
 
-        parse_string_table_panic_(section_names_data, section_names);
+        parse_section_name_table_panic_(section_headers, section_names_data,
+                                        section_names);
         assert(section_names.len() == section_headers.len());
 
         return File{
@@ -568,6 +573,9 @@ struct EhFrame {
 
         u32 const pc_range = input_cursor->read_panic<u32>();
 
+        u64 const aug_data_len = input_cursor->read_uleb128_panic();
+        assert(aug_data_len == 0);
+
         bool overflow = false;
 
         u64 const instructions_base_addr =
@@ -610,7 +618,9 @@ struct EhFrame {
         List<FDE> fde_list = List<FDE>::init(fdes);
 
         CIE *cie = nullptr;
+        u64 cie_offset = 0;
         for (;;) {
+            u64 const offset = input_cursor.offset();
             // length is common between CIE and FDE so we parse it regardless
             u32 const length = input_cursor.read_panic<u32>();
 
@@ -632,6 +642,7 @@ struct EhFrame {
             // this is called cie_id for a cie and cie_ptr for a fde.
             // it is defined to be 0 for cie and non-zero for fde so we use it
             // to differentiate between them.
+            u64 const cie_id_offset = input_cursor.offset();
             u32 const cie_id = input_cursor.read_panic<u32>();
 
             if (cie_id == 0) {
@@ -639,9 +650,13 @@ struct EhFrame {
                 assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
                 *cie = parse_cie_panic(alloc, tmp_alloc, end_offset,
                                        header->addr, &input_cursor);
+                cie_offset = offset;
             } else {
                 // parse fde
                 assert(cie != nullptr);
+                assert(cie_offset == (cie_id_offset - cie_id));
+
+                // TODO: assert cie_id points to cie_offset
                 FDE const fde =
                     parse_fde_panic(alloc, tmp_alloc, end_offset, header->addr,
                                     cie, &input_cursor);
