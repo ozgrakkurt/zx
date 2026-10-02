@@ -210,7 +210,7 @@ u64 decode_pcrel_panic_(u64 section_addr, u64 field_offset, i32 encoded_val) {
 }
 
 // Dwarf Call Frame Instruction Kinds
-enum class InstrKind : u8_c {
+enum class Instr : u8_c {
     AdvanceLoc,
     Offset,
     Restore,
@@ -245,264 +245,177 @@ enum class InstrKind : u8_c {
 };
 
 struct Instructions {
-    Slice<InstrKind> instr;
+    Slice<Instr> instr;
     Slice<u8> data;
 
-    static Instructions parse_panic(Alloc *alloc, u64 base_addr,
-                                    Slice<u8> buf) {
-        if (buf.len() == 0) {
-            return Instructions{
-                .instr = Slice<Instr>::init_dangling(),
-                .values = Slice<u64>::init_dangling(),
-            };
+    static void parse_one_panic_(u64 base_addr, List<Instr> *instr_list,
+                                 WriteCursor *data_writer,
+                                 Cursor *input_cursor) {
+        u8 const byte = input_cursor->read_panic<u8>();
+
+        u8 const high2 = (byte & 0b11000000) >> 6;
+        u8 const low6 = byte & 0b00111111;
+
+        switch (high2) {
+        // advance_loc
+        case u8{0x1}: {
+            instr_list->push_panic(Instr::AdvanceLoc);
+            data_writer->write_panic<u8>(low6);
+            break;
         }
+        // offset
+        case u8{0x2}: {
+            u64 off = 0;
+            assert(leb128::DecodeStatus::Ok ==
+                   input_cursor->read_uleb128(&off));
 
-        u64 const max_num_instr = buf.len();
+            instr_list->push_panic(Instr::Offset);
+            data_writer->write_panic<u8>(low6);
+            data_writer->write_panic<u64>(off);
 
-        bool overflow = false;
-        u64 const max_num_values = mul_u64(buf.len(), 2, &overflow);
-        assert(!overflow);
+            break;
+        }
+        // restore
+        case u8{0x3}: {
+            data_writer->write_panic<u8>(low6);
+            instr_list->push_panic(Instr::Restore);
 
-        SliceMut<Instr> instr;
-        assert(AllocStatus::Ok == alloc->alloc<Instr>(max_num_instr, &instr));
-
-        SliceMut<u64> values;
-        assert(AllocStatus::Ok == alloc->alloc<u64>(max_num_values, &values));
-
-        u64 num_instr = 0;
-        u64 num_vals = 0;
-
-        Cursor cursor = Cursor::init(buf);
-
-        u64 const num_vals_bound = sub_u64(max_num_values)
-
-            while (offset < buf.len()) {
-            assert(num_instr < max_num_instr);
-            assert(num_vals < max_num_values);
-
-            u8 const byte = cursor.read_panic<u8>();
-
-            u8 const high2 = (byte & 0b11000000) >> 6;
-            u8 const low6 = byte & 0b00111111;
-
-            switch (high2) {
-            // advance_loc
-            case u8{0x1}: {
-                Instr const instr = Instr{
-                    .idx = U32_MAX,
-                    .kind = InstrKind::AdvanceLoc,
-                    .supplement = low6,
-                };
-                instr.write_unsafe(num_instr, instr);
-                num_instr += 1;
-                break;
-            }
-            // offset
-            case u8{0x2}: {
-                u64 off = 0;
-                assert(leb128::DecodeStatus::Ok == cursor.read_uleb128(&off));
-
-                Instr const instr = Instr{
-                    .idx = num_vals,
-                    .kind = InstrKind::Offset,
-                    .supplement = low6,
-                };
-
-                values.write_unsafe(num_vals, off);
-                num_vals += 1;
-                assert(num_vals <= max_num_values);
-
-                instr.write_unsafe(num_instr, instr);
-                num_instr += 1;
-
-                break;
-            }
-            // restore
-            case u8{0x3}: {
-                Instr const instr = Instr{
-                    .idx = U32_MAX,
-                    .kind = InstrKind::Restore,
-                    .supplement = low6,
-                };
-                instr.write_unsafe(num_instr, instr);
-                num_instr += 1;
-                break;
-            }
-            // other
+            break;
+        }
+        // other
+        case u8{0}: {
+            switch (low6) {
+            // Nop:
             case u8{0}: {
-                switch (low6) {
-                // Nop:
-                case u8{0}: {
-                    // don't push it as it is meaningless.
-                    break;
-                }
-                // set_loc
-                case u8{0x01}: {
-                    u64 const field_offset = cursor.offset();
-                    i32 const addr_encoded = cursor.read_panic<i32>();
-                    u64 const addr = decode_pcrel_panic_(
-                        base_addr, field_offset, addr_encoded);
+                // don't push it as it is meaningless.
+                break;
+            }
+            // set_loc
+            case u8{0x01}: {
+                u64 const field_offset = input_cursor->offset();
+                i32 const addr_encoded = input_cursor->read_panic<i32>();
+                u64 const addr =
+                    decode_pcrel_panic_(base_addr, field_offset, addr_encoded);
 
-                    values.write_unsafe(num_vals, addr);
-                    num_vals += 1;
-                    assert(num_vals <= max_num_values);
+                data_writer->write_panic<u64>(addr);
 
-                    Instr const instr = Instr{
-                        .idx = num_vals,
-                        .kind = InstrKind::SetLoc,
-                        .supplement = 0,
-                    };
+                instr_list->push_panic(Instr::SetLoc);
 
-                    instr.write_unsafe(num_instr, instr);
-                    num_instr += 1;
-                    break;
-                }
-                // advance_loc1
-                case u8{0x02}: {
-                    u8 const delta = cursor.read_panic<u8>();
+                break;
+            }
+            // advance_loc1
+            case u8{0x02}: {
+                u8 const delta = input_cursor->read_panic<u8>();
 
-                    Instr const instr = Instr{
-                        .idx = U32_MAX,
-                        .kind = InstrKind::AdvanceLoc1,
-                        .supplement = delta,
-                    };
+                data_writer->write_panic<u8>(delta);
+                instr_list->push_panic(Instr::AdvanceLoc1);
 
-                    instr.write_unsafe(num_instr, instr);
-                    num_instr += 1;
+                break;
+            }
+            // advance_loc2
+            case u8{0x03}: {
+                u16 const delta = input_cursor->read_panic<u16>();
 
-                    break;
-                }
-                // advance_loc2
-                case u8{0x03}: {
-                    u16 const delta = cursor.read_panic<u16>();
+                data_writer->write_panic<u16>(delta);
+                instr_list->push_panic(Instr::AdvanceLoc2);
 
-                    values.write_unsafe(num_vals, delta);
-                    num_vals += 1;
-                    assert(num_vals <= max_num_values);
+                break;
+            }
+            // advance_loc4
+            case u8{0x04}: {
+                u32 const delta = input_cursor->read_panic<u32>();
+                data_writer->write_panic<u32>(delta);
 
-                    Instr const instr = Instr{
-                        .idx = U32_MAX,
-                        .kind = InstrKind::AdvanceLoc2,
-                        .supplement = 0,
-                    };
+                instr_list->push_panic(Instr::AdvanceLoc4);
 
-                    instr.write_unsafe(num_instr, instr);
-                    num_instr += 1;
-
-                    break;
-                }
-                // advance_loc4
-                case u8{0x04}: {
-                    u32 const delta = cursor.read_panic<u32>();
-
-                    values.write_unsafe(num_vals, delta);
-                    num_vals += 1;
-                    assert(num_vals <= max_num_values);
-
-                    Instr const instr = Instr{
-                        .idx = U32_MAX,
-                        .kind = InstrKind::AdvanceLoc4,
-                        .supplement = 0,
-                    };
-
-                    instr.write_unsafe(num_instr, instr);
-                    num_instr += 1;
-
-                    break;
-                }
-                // offset_extended
-                case u8{0x05}: {
-                    break;
-                }
-                // restore_extended
-                case u8{0x06}: {
-                    break;
-                }
-                // undefined
-                case u8{0x07}: {
-                    break;
-                }
-                // same_value
-                case u8{0x08}: {
-                    break;
-                }
-                // register
-                case u8{0x09}: {
-                    break;
-                }
-                // remember_state
-                case u8{0x0a}: {
-                    break;
-                }
-                // restore_state
-                case u8{0x0b}: {
-                    break;
-                }
-                // def_cfa
-                case u8{0x0c}: {
-                    break;
-                }
-                // def_cfa_register
-                case u8{0x0d}: {
-                    break;
-                }
-                // def_cfa_offset
-                case u8{0x0e}: {
-                    break;
-                }
-                // def_cfa_expression
-                case u8{0x0f}: {
-                    break;
-                }
-                // expression
-                case u8{0x10}: {
-                    break;
-                }
-                // offset_extended_sf
-                case u8{0x11}: {
-                    break;
-                }
-                // def_cfa_sf
-                case u8{0x12}: {
-                    break;
-                }
-                // def_cfa_offset_sf
-                case u8{0x13}: {
-                    break;
-                }
-                // val_offset
-                case u8{0x14}: {
-                    break;
-                }
-                // val_offset_sf
-                case u8{0x15}: {
-                    break;
-                }
-                // val_expression
-                case u8{0x16}: {
-                    break;
-                }
-                // lo_user
-                case u8{0x1c}: {
-                    break;
-                }
-                // hi_user
-                case u8{0x3f}: {
-                    break;
-                }
-                // GNU_args_size
-                case u8{0x2e}: {
-                    break;
-                }
-                // GNU_negative_offset_extended
-                case u8{0x2f}: {
-                    break;
-                }
-                default: {
-                    panic();
-                    break;
-                }
-                }
+                break;
+            }
+            // offset_extended
+            case u8{0x05}: {
+                break;
+            }
+            // restore_extended
+            case u8{0x06}: {
+                break;
+            }
+            // undefined
+            case u8{0x07}: {
+                break;
+            }
+            // same_value
+            case u8{0x08}: {
+                break;
+            }
+            // register
+            case u8{0x09}: {
+                break;
+            }
+            // remember_state
+            case u8{0x0a}: {
+                break;
+            }
+            // restore_state
+            case u8{0x0b}: {
+                break;
+            }
+            // def_cfa
+            case u8{0x0c}: {
+                break;
+            }
+            // def_cfa_register
+            case u8{0x0d}: {
+                break;
+            }
+            // def_cfa_offset
+            case u8{0x0e}: {
+                break;
+            }
+            // def_cfa_expression
+            case u8{0x0f}: {
+                break;
+            }
+            // expression
+            case u8{0x10}: {
+                break;
+            }
+            // offset_extended_sf
+            case u8{0x11}: {
+                break;
+            }
+            // def_cfa_sf
+            case u8{0x12}: {
+                break;
+            }
+            // def_cfa_offset_sf
+            case u8{0x13}: {
+                break;
+            }
+            // val_offset
+            case u8{0x14}: {
+                break;
+            }
+            // val_offset_sf
+            case u8{0x15}: {
+                break;
+            }
+            // val_expression
+            case u8{0x16}: {
+                break;
+            }
+            // lo_user
+            case u8{0x1c}: {
+                break;
+            }
+            // hi_user
+            case u8{0x3f}: {
+                break;
+            }
+            // GNU_args_size
+            case u8{0x2e}: {
+                break;
+            }
+            // GNU_negative_offset_extended
+            case u8{0x2f}: {
                 break;
             }
             default: {
@@ -510,11 +423,66 @@ struct Instructions {
                 break;
             }
             }
+            break;
+        }
+        default: {
+            panic();
+            break;
+        }
+        }
+    }
+
+    static Instructions parse_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                    u64 base_addr, u64 instructions_end_offset,
+                                    Cursor *input_cursor) {
+        if (input_cursor->offset() == instructions_end_offset) {
+            return Instructions{
+                .instr = Slice<Instr>::init_dangling(),
+                .data = Slice<u8>::init_dangling(),
+            };
         }
 
+        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+
+        constexpr u64 max_num_instructions = u64{1} << 12;
+        SliceMut<Instr> instr;
+        assert(AllocStatus::Ok ==
+               tmp_alloc->alloc<Instr>(max_num_instructions, &instr));
+
+        constexpr u64 max_data_size = u64{1} << 16;
+        SliceMut<u8> data;
+        assert(AllocStatus::Ok == tmp_alloc->alloc<u8>(max_data_size, &data));
+
+        List<Instr> instr_list = List<Instr>::init(instr);
+        WriteCursor data_writer = WriteCursor::init(data);
+
+        while (input_cursor->offset() < instructions_end_offset) {
+            parse_one_panic_(base_addr, &instr_list, &data_writer,
+                             input_cursor);
+        }
+        assert(input_cursor->offset() == instructions_end_offset);
+
+        // move instr to real alloc
+        SliceMut<Instr> instr_out;
+        assert(AllocStatus::Ok ==
+               alloc->alloc<Instr>(instr_list.n_written(), &instr_out));
+        assert(SliceMemcpyStatus::Ok ==
+               instr_out.memcpy_from(instr_list.written()));
+
+        // move data to real alloc
+        SliceMut<u8> data_out;
+        assert(AllocStatus::Ok ==
+               alloc->alloc<u8>(data_writer.offset(), &data_out));
+        assert(SliceMemcpyStatus::Ok ==
+               data_out.memcpy_from(data_writer.written()));
+
+        // dealloc temporary memory we used
+        assert(Alloc::ResizeStatus::Ok ==
+               tmp_alloc->resize(tmp_alloc_initial_offset));
+
         return Instructions{
-            .instr = instr.as_const().slice_unsafe(0, num_instr),
-            .values = values.as_const().slice_unsafe(0, num_vals),
+            .instr = instr_out.as_const(),
+            .data = data_out.as_const(),
         };
     }
 };
@@ -535,42 +503,10 @@ struct EhFrame {
 
     Slice<FDE> fd_entries;
 
-    static CIE parse_cie_panic(Alloc *alloc, u64 section_addr, Slice<u8> buf,
-                               u64 *offset) {
-        bool overflow = false;
-
-        u64 offs = *offset;
-
-        u32 length = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &length));
-        // This can't happen as that (0xff..) is a marker defined to indicate
-        // this section is in 64bit dwarf format. And we expect eh_frame to
-        // always be in the 32bit format.
-        assert(length != U32_MAX);
-        assert(length <= buf.len());
-
-        offs = add_u64(offs, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        // check that reading this CIE won't overflow the buffer.
-        assert((buf.len() - length) >= offs);
-
-        u64 const cie_size = add_u64(length, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        u32 cie_id = 0xff;
-        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &cie_id));
-        assert(cie_id == 0);
-
-        offs = add_u64(offs, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        u8 version = 0;
-        assert(SliceStatus::Ok == buf.read(offs, &version));
+    static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
+                               u64 section_addr, Cursor *input_cursor) {
+        u8 const version = input_cursor->read_panic<u8>();
         assert(version == 1);
-
-        offs = add_u64(offs, sizeof(u8), &overflow);
-        assert(!overflow);
 
         // This block of code just asserts that the augmentation string is equal
         // to "zR". this means the CIE will have a single byte in it's
@@ -580,62 +516,39 @@ struct EhFrame {
         // We assume that this will be the case for all CIE so we just assert it
         // instead of conditionally parsing the augmentation string.
         {
-            u64 const needed_len = add_u64(offs, 3, &overflow);
-            assert(!overflow);
-            assert(buf.len() >= needed_len);
-            assert(buf.read_unsafe(offs) == 'z');
-            assert(buf.read_unsafe(offs + 1) == 'R');
-            assert(buf.read_unsafe(offs + 2) == '\0');
-            offs += 3;
+            assert(input_cursor->read_panic<u8>() == 'z');
+            assert(input_cursor->read_panic<u8>() == 'R');
+            assert(input_cursor->read_panic<u8>() == '\0');
         }
 
-        u64 code_alignment_factor = 0;
-        assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_u64(buf, &offs, &code_alignment_factor));
+        u64 const code_alignment_factor = input_cursor->read_uleb128_panic();
         assert(code_alignment_factor != 0);
 
-        i64 data_alignment_factor = 0;
-        assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_i64(buf, &offs, &data_alignment_factor));
+        i64 const data_alignment_factor = input_cursor->read_sleb128_panic();
         assert(data_alignment_factor != 0);
 
-        u8 return_address_register = 0;
-        assert(SliceStatus::Ok == buf.read(offs, &return_address_register));
+        u8 const return_address_register = input_cursor->read_panic<u8>();
         assert(RETURN_ADDRESS_REGISTER == return_address_register);
-        offs = add_u64(offs, sizeof(u8), &overflow);
-        assert(!overflow);
 
-        u64 aug_data_len = 0;
-        assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_u64(buf, &offs, &aug_data_len));
+        u64 const aug_data_len = input_cursor->read_uleb128_panic();
         assert(aug_data_len == 1);
 
-        u8 fde_ptr_enc = 0;
-        assert(SliceStatus::Ok == buf.read(offs, &fde_ptr_enc));
-        offs = add_u64(offs, sizeof(u8), &overflow);
-        assert(!overflow);
+        u8 const fde_ptr_enc = input_cursor->read_panic<u8>();
+        // Assert that we have the expected encoding.
+        {
+            assert((fde_ptr_enc & EH_VALUE_MASK) == EH_VALUE_SDATA4);
+            assert((fde_ptr_enc & EH_APP_MASK) == EH_APP_PCREL);
+        }
 
-        assert((fde_ptr_enc & EH_VALUE_MASK) == EH_VALUE_SDATA4);
-        assert((fde_ptr_enc & EH_APP_MASK) == EH_APP_PCREL);
-
-        u64 const diff = sub_unsafe_u64(offs, *offset);
-        assert(cie_size >= diff);
-
-        u64 num_bytes_left = sub_unsafe_u64(cie_size, diff);
-        Slice<u8> instructions_raw;
-        assert(SliceStatus::Ok ==
-               buf.slice(offs, num_bytes_left, &instructions_raw));
-
+        bool overflow = false;
         u64 const instructions_base_addr =
-            add_u64(section_addr, offs, &overflow);
+            add_u64(section_addr, input_cursor->offset(), &overflow);
         assert(!overflow);
 
         Instructions instr = Instructions::parse_panic(
-            alloc, instructions_base_addr, nstructions_raw);
+            alloc, tmp_alloc, instructions_base_addr, end_offset, input_cursor);
 
-        *offset = add_u64(*offset, cie_size, &overflow);
-        assert(!overflow);
-
+        assert(input_cursor->offset() == end_offset);
         return CIE{
             .code_alignment_factor = code_alignment_factor,
             .data_alignment_factor = data_alignment_factor,
@@ -643,69 +556,28 @@ struct EhFrame {
         };
     }
 
-    static FDE parse_fde_panic(Alloc *alloc, u64 section_addr, CIE const *cie,
-                               Slice<u8> buf, u64 *offset) {
-        bool overflow = false;
-
-        u64 offs = *offset;
-
-        u32 length = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &length));
-        // This can't happen as that (0xff..) is a marker defined to indicate
-        // this section is in 64bit dwarf format. And we expect eh_frame to
-        // always be in the 32bit format.
-        assert(length != U32_MAX);
-        assert(length <= buf.len());
-
-        offs = add_u64(offs, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        // check that reading this FDE won't overflow the buffer.
-        assert((buf.len() - length) >= offs);
-
-        u64 const fde_size = add_u64(length, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        i32 cie_ptr = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<i32>(offs, &cie_ptr));
-        (void)cie_ptr;
-        offs = add_u64(offs, sizeof(i32), &overflow);
-        assert(!overflow);
-
+    static FDE parse_fde_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
+                               u64 section_addr, CIE const *cie,
+                               Cursor *input_cursor) {
         // We know this is a SDATA4 encoded and PCREL applied value because we
         // assert this when parsing CIE.
-        i32 pc_begin_encoded = 0;
-        assert(SliceStatus::Ok ==
-               buf.read_unaligned<i32>(offs, &pc_begin_encoded));
-        u64 pc_begin =
-            decode_pcrel_panic_(section_addr, offs, pc_begin_encoded);
+        u64 const pc_begin_field_offset = input_cursor->offset();
+        i32 const pc_begin_encoded = input_cursor->read_panic<i32>();
+        u64 const pc_begin = decode_pcrel_panic_(
+            section_addr, pc_begin_field_offset, pc_begin_encoded);
 
-        offs = add_u64(offs, sizeof(i32), &overflow);
-        assert(!overflow);
+        u32 const pc_range = input_cursor->read_panic<u32>();
 
-        u32 pc_range = 0;
-        assert(SliceStatus::Ok == buf.read_unaligned<u32>(offs, &pc_range));
-        offs = add_u64(offs, sizeof(u32), &overflow);
-        assert(!overflow);
-
-        u64 const diff = sub_unsafe_u64(offs, *offset);
-        assert(fde_size >= diff);
-
-        u64 num_bytes_left = sub_unsafe_u64(fde_size, diff);
-        Slice<u8> instructions_raw;
-        assert(SliceStatus::Ok ==
-               buf.slice(offs, num_bytes_left, &instructions_raw));
+        bool overflow = false;
 
         u64 const instructions_base_addr =
-            add_u64(section_addr, offs, &overflow);
+            add_u64(section_addr, input_cursor->offset(), &overflow);
         assert(!overflow);
 
         Instructions instr = Instructions::parse_panic(
-            alloc, instructions_base_addr, instructions_raw);
+            alloc, tmp_alloc, instructions_base_addr, end_offset, input_cursor);
 
-        *offset = add_u64(*offset, fde_size, &overflow);
-        assert(!overflow);
-
+        assert(input_cursor->offset() == end_offset);
         return FDE{
             .cie = cie,
             .pc_begin = pc_begin,
@@ -717,60 +589,80 @@ struct EhFrame {
     // Parses .eh_frame section in `buf`. Panics if there is a problem.
     // This resulting structure's lifetime is tied to the allocator that was
     // passed in.
-    static EhFrame init_panic(Alloc *alloc, SectionHeader const *header,
-                              Slice<u8> buf) {
-        if (buf.len() == 0) {
+    static EhFrame init_panic(Alloc *alloc, Alloc *tmp_alloc,
+                              SectionHeader const *header,
+                              Slice<u8> input_bytes) {
+        if (input_bytes.len() == 0) {
             return EhFrame{
                 .fd_entries = Slice<FDE>::init_dangling(),
             };
         }
 
-        u64 offset = 0;
+        Cursor input_cursor = Cursor::init(input_bytes);
 
-        while (offset < buf.len()) {
+        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+
+        constexpr u64 max_num_fdes = u64{1} << 14;
+
+        SliceMut<FDE> fdes;
+        assert(AllocStatus::Ok == tmp_alloc->alloc<FDE>(max_num_fdes, &fdes));
+
+        List<FDE> fde_list = List<FDE>::init(fdes);
+
+        CIE *cie = nullptr;
+        for (;;) {
+            // length is common between CIE and FDE so we parse it regardless
+            u32 const length = input_cursor.read_panic<u32>();
+
+            // This can't happen as that (0xff..) is a marker defined to
+            // indicate this section is in 64bit dwarf format. And we expect
+            // eh_frame to always be in the 32bit format.
+            assert(length != U32_MAX);
             // length == 0 means we have found the TERMINATOR
-            u32 length = 0;
-            assert(SliceStatus::Ok == buf.read_unaligned<u32>(offset, &length));
             if (length == 0) {
                 break;
             }
 
-            CIE *cie = nullptr;
-            assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
-            *cie = parse_cie_panic(alloc, header->addr, buf, &offset);
+            // calculate the offset that this item is supposed to end at.
+            bool overflow = false;
+            u64 const end_offset =
+                add_u64(input_cursor.offset(), length, &overflow);
+            assert(!overflow);
 
-            // parse fdes
-            while (offset < buf.len()) {
-                // length == 0 means we have found the TERMINATOR
-                length = 0;
-                assert(SliceStatus::Ok ==
-                       buf.read_unaligned<u32>(offset, &length));
-                if (length == 0) {
-                    break;
-                }
+            // this is called cie_id for a cie and cie_ptr for a fde.
+            // it is defined to be 0 for cie and non-zero for fde so we use it
+            // to differentiate between them.
+            u32 const cie_id = input_cursor.read_panic<u32>();
 
-                bool overflow = false;
-                u64 cie_id_offset = add_u64(offset, sizeof(u32), &overflow);
-                assert(!overflow);
-                u32 cie_id = 0;
-                assert(SliceStatus::Ok ==
-                       buf.read_unaligned<u32>(cie_id_offset, &cie_id));
-                // This means this is not a fde but a cie, just go out to the
-                // outer loop so we can parse the cie. And then we will come
-                // back here to parse the FDEs of that CIE. This is just a
-                // scuffed state machine.
-                if (cie_id == 0) {
-                    break;
-                }
-
+            if (cie_id == 0) {
+                // parse cie
+                assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
+                *cie = parse_cie_panic(alloc, tmp_alloc, end_offset,
+                                       header->addr, &input_cursor);
+            } else {
+                // parse fde
+                assert(cie != nullptr);
                 FDE const fde =
-                    parse_fde_panic(alloc, header->addr, cie, buf, &offset);
-                (void)fde;
+                    parse_fde_panic(alloc, tmp_alloc, end_offset, header->addr,
+                                    cie, &input_cursor);
+                fde_list.push_panic(fde);
             }
         }
+        assert(input_cursor.is_finished());
+
+        // move fdes to long term alloc (non-tmp)
+        SliceMut<FDE> out_fdes;
+        assert(AllocStatus::Ok ==
+               alloc->alloc<FDE>(fde_list.n_written(), &out_fdes));
+        assert(SliceMemcpyStatus::Ok ==
+               out_fdes.memcpy_from(fde_list.written()));
+
+        // dealloc temporary memory that we used for this function
+        assert(Alloc::ResizeStatus::Ok ==
+               tmp_alloc->resize(tmp_alloc_initial_offset));
 
         return EhFrame{
-            .fd_entries = Slice<FDE>::init_dangling(),
+            .fd_entries = out_fdes.as_const(),
         };
     }
 };

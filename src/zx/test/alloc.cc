@@ -61,43 +61,43 @@ static void do_test_nocap() {
     zx::assert(zx::AllocStatus::Ok == status);
 }
 
-static void do_test_resize(SliceMut<u8> mem) {
-    constexpr u64 CAP = 256;
-    constexpr u64 BUF_LEN = CAP / 2;
+static void do_test_resize(zx::SliceMut<zx::u8> mem) {
+    constexpr zx::u64 CAP = 256;
+    constexpr zx::u64 BUF_LEN = CAP / 2;
 
-    assert(mem.len() >= CAP);
+    zx::assert(mem.len() >= CAP);
     zx::Alloc alloc = zx::Alloc::init(mem.slice_unsafe(0, CAP));
 
-    SliceMut<u8> nums;
-    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums));
+    zx::SliceMut<zx::u8> nums;
+    zx::assert(zx::AllocStatus::Ok == alloc.alloc<zx::u8>(BUF_LEN, &nums));
 
-    for (u8 i = 0; i < BUF_LEN; i++) {
+    for (zx::u8 i = 0; i < BUF_LEN; i++) {
         nums.write_unsafe(i, i);
     }
 
-    u64 const resize_offset = alloc.offset();
-    assert(resize_offset == nums.len());
+    zx::u64 const resize_offset = alloc.offset();
+    zx::assert(resize_offset == nums.len());
 
-    SliceMut<u8> nums2;
-    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums2));
+    zx::SliceMut<zx::u8> nums2;
+    zx::assert(zx::AllocStatus::Ok == alloc.alloc<zx::u8>(BUF_LEN, &nums2));
 
-    for (u8 i = 0; i < BUF_LEN; i++) {
+    for (zx::u8 i = 0; i < BUF_LEN; i++) {
         nums2.write_unsafe(i, ~i);
     }
 
-    SliceMut<u8> nums3;
-    assert(AllocStatus::OutOfMemory == alloc.alloc<u8>(BUF_LEN, &nums3));
+    zx::SliceMut<zx::u8> nums3;
+    zx::assert(zx::AllocStatus::OutOfMemory == alloc.alloc<zx::u8>(BUF_LEN, &nums3));
 
-    alloc.resize(resize_offset);
+    zx::assert(zx::Alloc::ResizeStatus::Ok == alloc.resize(resize_offset));
 
-    assert(AllocStatus::Ok == alloc.alloc<u8>(BUF_LEN, &nums3));
+    zx::assert(zx::AllocStatus::Ok == alloc.alloc<zx::u8>(BUF_LEN, &nums3));
 
-    for (u8 i = 0; i < BUF_LEN; i++) {
+    for (zx::u8 i = 0; i < BUF_LEN; i++) {
         nums3.write_unsafe(i, 69);
     }
 
-    for (u8 i = 0; i < BUF_LEN; i++) {
-        assert(nums.read_unsafe(i) == i);
+    for (zx::u8 i = 0; i < BUF_LEN; i++) {
+        zx::assert(nums.read_unsafe(i) == i);
     }
 }
 

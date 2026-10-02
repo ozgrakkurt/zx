@@ -36,7 +36,8 @@ int main() {
            page_alloc::alloc_4kb(mem_size, &mem));
     assert(mem != nullptr);
 
-    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size));
+    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size/2));
+    Alloc tmp_alloc = Alloc::init(SliceMut<u8>::init_unsafe(&mem[mem_size/2], mem_size/2));
 
     Slice<u8> buf = read_self_bin(&alloc);
     elf::File const file = elf::File::init_panic(&alloc, buf);
@@ -49,7 +50,7 @@ int main() {
         file.get_section_header_panic(section_idx);
 
     elf::EhFrame eh_frame =
-        elf::EhFrame::init_panic(&alloc, eh_frame_header, eh_frame_raw);
+        elf::EhFrame::init_panic(&alloc, &tmp_alloc, eh_frame_header, eh_frame_raw);
     (void)eh_frame;
 
     assert(page_alloc::FreeStatus::Ok == page_alloc::free(mem, mem_size));

@@ -30,6 +30,8 @@ struct Cursor {
 
     Slice<u8> buf() const { return this->m_buf; }
 
+    bool is_finished() const { return this->m_offset == this->m_buf.len(); }
+
     template <typename T> Status read(T *out) {
         if (out == nullptr) {
             return Status::Nullptr;
@@ -74,8 +76,22 @@ struct Cursor {
         return leb128::decode_u64(this->m_buf, &this->m_offset, out);
     }
 
+    u64 read_uleb128_panic() {
+        u64 out = 0;
+        assert(leb128::DecodeStatus::Ok ==
+               leb128::decode_u64(this->m_buf, &this->m_offset, &out));
+        return out;
+    }
+
     leb128::DecodeStatus read_sleb128(i64 *out) {
         return leb128::decode_i64(this->m_buf, &this->m_offset, out);
+    }
+
+    i64 read_sleb128_panic() {
+        i64 out = 0;
+        assert(leb128::DecodeStatus::Ok ==
+               leb128::decode_i64(this->m_buf, &this->m_offset, &out));
+        return out;
     }
 
     Status skip(u64 len) {
@@ -123,6 +139,12 @@ struct WriteCursor {
 
     SliceMut<u8> buf() const { return this->m_buf; }
 
+    bool is_finished() const { return this->m_offset == this->m_buf.len(); }
+
+    Slice<u8> written() const {
+        return this->m_buf.slice_unsafe(0, this->m_offset).as_const();
+    }
+
     template <typename T> Status write(T val) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
@@ -134,7 +156,7 @@ struct WriteCursor {
             return Status::OutOfBounds;
         }
 
-        __builtin_memcpy(this->m_buf.offset_unsafe(this->m_offset), &val,
+        __builtin_memcpy(this->m_buf.offset_mut_unsafe(this->m_offset), &val,
                          sizeof(T));
         this->m_offset = end;
         return Status::Ok;
@@ -144,7 +166,7 @@ struct WriteCursor {
         u64 const end = add_unsafe_u64(this->m_offset, sizeof(T));
         assert_dev(end <= this->m_buf.len());
 
-        __builtin_memcpy(this->m_buf.offset_unsafe(this->m_offset), &val,
+        __builtin_memcpy(this->m_buf.offset_mut_unsafe(this->m_offset), &val,
                          sizeof(T));
         this->m_offset = end;
     }

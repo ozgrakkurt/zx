@@ -25,6 +25,14 @@ template <typename T> struct List {
 
     SliceMut<T> slice() const { return this->m_slice; }
 
+    bool is_full() const { return this->m_offset == this->m_slice; }
+
+    Slice<T> written() const {
+        return this->m_slice.slice_unsafe(0, this->m_offset).as_const();
+    }
+
+    u64 n_written() const { return this->m_offset; }
+
     ListPushStatus push(T val) {
         assert_dev(this->m_offset <= this->m_slice.len());
         if (this->m_offset == this->m_slice.len()) {
@@ -34,6 +42,12 @@ template <typename T> struct List {
         this->m_slice.write_unsafe(this->m_offset, val);
         this->m_offset += 1;
         return ListPushStatus::Ok;
+    }
+
+    void push_panic(T val) {
+        assert(this->m_offset < this->m_slice.len());
+        this->m_slice.write_unsafe(this->m_offset, val);
+        this->m_offset += 1;
     }
 };
 
