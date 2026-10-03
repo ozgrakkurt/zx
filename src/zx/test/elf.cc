@@ -30,7 +30,7 @@ Slice<u8> read_self_bin(Alloc *alloc) {
 }
 
 void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
-    elf::CPUContext ctx = elf::get_cpucontext();
+    elf::UnwindContext ctx = elf::UnwindContext::init();
 
     u8 fmt_buf[1024];
     SliceMut<u8> fmt_slice =
@@ -42,22 +42,19 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
     fmt.push_str(CString::init_unsafe("cmmb:\n").as_slice(), &fmt_overflow);
 
     do {
-        if (ctx.rip != 0) {
-            fmt.push_u64_hex(ctx.rip - 1, &fmt_overflow);
+        if (ctx.rip() != 0) {
+            fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
             fmt.push_char('\n', &fmt_overflow);
-        } else {
-            break;
         }
     } while (dbg_info->step_panic(tmp_alloc, &ctx));
 
     assert(!fmt_overflow);
 
-    // u64 n_written = 0;
-    // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-    // fmt.written().ptr(),
-    //                                           fmt.n_written(), &n_written));
-    // assert(n_written == fmt.n_written());
-    // panic();
+    u64 n_written = 0;
+    assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
+                                              fmt.n_written(), &n_written));
+    assert(n_written == fmt.n_written());
+    panic();
 }
 
 void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
@@ -69,28 +66,27 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 
         bool fmt_overflow = false;
 
-        elf::CPUContext ctx = elf::get_cpucontext();
+        elf::UnwindContext ctx = elf::UnwindContext::init();
 
         fmt.push_str(CString::init_unsafe("callme_maybe:\n").as_slice(),
                      &fmt_overflow);
 
         do {
-            if (ctx.rip != 0) {
-                fmt.push_u64_hex(ctx.rip - 1, &fmt_overflow);
+            if (ctx.rip() != 0) {
+                fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
-            } else {
-                break;
             }
         } while (dbg_info->step_panic(tmp_alloc, &ctx));
 
         assert(!fmt_overflow);
 
-        u64 n_written = 0;
-        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-                                                  fmt.written().ptr(),
-                                                  fmt.n_written(), &n_written));
-        assert(n_written == fmt.n_written());
-        panic();
+        // u64 n_written = 0;
+        // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+        //                                           fmt.written().ptr(),
+        //                                           fmt.n_written(),
+        //                                           &n_written));
+        // assert(n_written == fmt.n_written());
+        // panic();
 
         return;
     } else {

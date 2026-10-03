@@ -220,7 +220,6 @@ enum class Instr : u8_c {
     AdvanceLoc,
     Offset,
     Restore,
-    // # Don't need to parse anything into Nop, just discard it when decoding.
     // Nop,
     SetLoc,
     AdvanceLoc1,
@@ -236,19 +235,18 @@ enum class Instr : u8_c {
     DefCfa,
     DefCfaRegister,
     DefCfaOffset,
-    DefCfaExpression,
-    Expression,
+    // DefCfaExpression,
+    // Expression,
     OffsetExtendedSf,
     DefCfaSf,
     DefCfaOffsetSf,
     ValOffset,
     ValOffsetSf,
-    ValExpression,
-    // # Don't process these as they look useless?
+    // ValExpression,
     // LoUser,
     // HiUser,
-    GnuArgsSize,
-    GnuNegativeOffsetExtended,
+    // GnuArgsSize,
+    // GnuNegativeOffsetExtended,
 };
 
 constexpr u8 REG_MAP_RAX = 0;
@@ -278,24 +276,34 @@ struct RegisterRule {
         ValOffset,
         Register,
     };
-    i64 offset;
+    i32 offset;
+    u8 reg;
+    Type type;
+};
+
+struct CFARule {
+    enum class Type : u8_c {
+        Undefined = 0,
+        Register,
+    };
+    i32 offset;
     u8 reg;
     Type type;
 };
 
 struct RegisterState {
+    CFARule cfa;
     RegisterRule registers[NUM_REGS];
-    RegisterRule cfa;
 };
 
 struct Instructions {
     Slice<Instr> m_instr;
     Slice<u8> m_data;
 
-    static u64 advance_loc_panic_(u64 code_alignment_factor, u64 loc,
-                                  u64 delta) {
+    static u64 advance_loc_panic_(u32 code_alignment_factor, u64 loc,
+                                  u32 delta) {
         bool overflow = false;
-        u64 const scaled = mul_u64(code_alignment_factor, delta, &overflow);
+        u32 const scaled = mul_u32(code_alignment_factor, delta, &overflow);
         u64 out = add_u64(loc, scaled, &overflow);
 
         assert(!overflow);
@@ -303,301 +311,302 @@ struct Instructions {
         return out;
     }
 
-    u64 run_panic(u64 const pc_begin, u64 const code_alignment_factor,
-                  i64 const data_alignment_factor, u64 up_to_loc,
-                  RegisterState *initial_state, List<RegisterState> *stack,
-                  RegisterState *current_state) const {
-        assert(current_state != nullptr);
-        assert(stack != nullptr);
+    struct RunArgs {
+        u64 pc_begin;
+        u64 pc_target;
+        u32 code_alignment_factor;
+        i32 data_alignment_factor;
+        RegisterState const *cie_state;
+        List<RegisterState> *stack;
+        RegisterState *current_state;
+    };
 
-        stack->reset();
+    void run_panic(RunArgs args) const {
+        assert(args.current_state != nullptr);
+        assert(args.stack != nullptr);
 
         Cursor cursor = Cursor::init(this->m_data);
 
-        u64 loc = pc_begin;
+        u64 pc = args.pc_begin;
 
         for (u64 i = 0; i < this->m_instr.len(); i++) {
             switch (this->m_instr.read_unsafe(i)) {
             case Instr::AdvanceLoc: {
                 u8 const delta = cursor.read_panic<u8>();
-                loc = advance_loc_panic_(code_alignment_factor, loc, delta);
-                if (loc > up_to_loc) {
-                    return loc;
-                }
+                pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
 
                 break;
             }
             case Instr::Offset: {
                 u8 const regno = cursor.read_panic<u8>();
-                u64 const off = cursor.read_panic<u64>();
+                u32 const off = cursor.read_panic<u32>();
+
+                bool overflow = false;
+                i32 const soff = u32_to_i32(off, &overflow);
+                assert(!overflow);
 
                 assert(regno < NUM_REGS);
 
-                bool overflow = false;
-                RegisterRule *r = &current_state->registers[regno];
-                r->type = RegisterRule::Type::Offset;
-                r->offset = mul_i64((i64)off, data_alignment_factor, &overflow);
-
+                args.current_state->registers[regno] = RegisterRule{
+                    .offset =
+                        mul_i32(soff, args.data_alignment_factor, &overflow),
+                    .reg = U8_MAX,
+                    .type = RegisterRule::Type::Offset,
+                };
                 assert(!overflow);
 
                 break;
             }
             case Instr::Restore: {
-                assert(initial_state != nullptr);
+                assert(args.cie_state != nullptr);
 
                 u8 const regno = cursor.read_panic<u8>();
 
                 assert(regno < NUM_REGS);
 
-                current_state->registers[regno] =
-                    initial_state->registers[regno];
+                args.current_state->registers[regno] =
+                    args.cie_state->registers[regno];
 
                 break;
             }
             case Instr::SetLoc: {
                 u64 const addr = cursor.read_panic<u64>();
-                loc = addr;
-                if (loc > up_to_loc) {
-                    return loc;
-                }
+                assert(addr > pc);
+                pc = addr;
+
                 break;
             }
             case Instr::AdvanceLoc1: {
                 u8 const delta = cursor.read_panic<u8>();
-                loc = advance_loc_panic_(code_alignment_factor, loc, delta);
-                if (loc > up_to_loc) {
-                    return loc;
-                }
+                pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
+
                 break;
             }
             case Instr::AdvanceLoc2: {
                 u16 const delta = cursor.read_panic<u16>();
-                loc = advance_loc_panic_(code_alignment_factor, loc, delta);
-                if (loc > up_to_loc) {
-                    return loc;
-                }
+                pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
+
                 break;
             }
             case Instr::AdvanceLoc4: {
                 u32 const delta = cursor.read_panic<u32>();
-                loc = advance_loc_panic_(code_alignment_factor, loc, delta);
-                if (loc > up_to_loc) {
-                    return loc;
-                }
+                pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
+
                 break;
             }
             case Instr::OffsetExtended: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                u32 const off = cursor.read_panic<u32>();
+
+                bool overflow = false;
+
+                i32 const soff = u32_to_i32(off, &overflow);
+                assert(!overflow);
 
                 assert(reg < NUM_REGS);
 
-                bool overflow = false;
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::Offset;
-                r->offset = mul_i64((i64)off, data_alignment_factor, &overflow);
-
+                args.current_state->registers[reg] = RegisterRule{
+                    .type = RegisterRule::Type::Offset,
+                    .offset =
+                        mul_i32(soff, args.data_alignment_factor, &overflow),
+                    .reg = U8_MAX,
+                };
                 assert(!overflow);
+
                 break;
             }
             case Instr::RestoreExtended: {
-                u64 const reg = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
 
                 assert(reg < NUM_REGS);
 
-                assert(initial_state != nullptr);
-                current_state->registers[reg] = initial_state->registers[reg];
+                assert(args.cie_state != nullptr);
+                args.current_state->registers[reg] =
+                    args.cie_state->registers[reg];
+
                 break;
             }
             case Instr::Undefined: {
-                u64 const reg = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
 
                 assert(reg < NUM_REGS);
 
-                current_state->registers[reg].type =
-                    RegisterRule::Type::Undefined;
+                __builtin_memset(&args.current_state->registers[reg], 0,
+                                 sizeof(RegisterRule));
+
                 break;
             }
             case Instr::SameValue: {
-                u64 const reg = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
 
                 assert(reg < NUM_REGS);
 
-                current_state->registers[reg].type =
-                    RegisterRule::Type::SameValue;
+                args.current_state->registers[reg] = RegisterRule{
+                    .type = RegisterRule::Type::SameValue,
+                    .reg = U8_MAX,
+                    .offset = 0,
+                };
+
                 break;
             }
             case Instr::Register: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const reg2 = cursor.read_panic<u64>();
+                u8 const reg_tgt = cursor.read_panic<u8>();
+                u8 const reg_src = cursor.read_panic<u8>();
 
-                assert(reg < NUM_REGS);
-                assert(reg2 < NUM_REGS);
+                assert(reg_tgt < NUM_REGS);
+                assert(reg_src < NUM_REGS);
 
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::Register;
-                r->reg = (u8)reg2;
+                args.current_state->registers[reg_tgt] = RegisterRule{
+                    .type = RegisterRule::Type::Register,
+                    .reg = reg_src,
+                    .offset = 0,
+                };
+
                 break;
             }
             case Instr::RememberState: {
-                stack->push_panic(*current_state);
+                args.stack->push_panic(*args.current_state);
+
                 break;
             }
             case Instr::RestoreState: {
-                *current_state = stack->pop_panic();
+                *args.current_state = args.stack->pop_panic();
+
                 break;
             }
             case Instr::DefCfa: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                u32 const off = cursor.read_panic<u32>();
 
                 assert(reg < NUM_REGS);
 
-                current_state->cfa.type = RegisterRule::Type::Register;
-                current_state->cfa.reg = (u8)reg;
-                current_state->cfa.offset = (i64)off;
+                bool overflow = false;
+                args.current_state->cfa = CFARule{
+                    .type = CFARule::Type::Register,
+                    .reg = reg,
+                    .offset = u32_to_i32(off, &overflow),
+                };
+                assert(!overflow);
+
                 break;
             }
             case Instr::DefCfaRegister: {
-                u64 const reg = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
 
                 assert(reg < NUM_REGS);
 
-                current_state->cfa.type = RegisterRule::Type::Register;
-                current_state->cfa.reg = (u8)reg;
+                args.current_state->cfa = CFARule{
+                    .type = CFARule::Type::Register,
+                    .reg = reg,
+                    .offset = args.current_state->cfa.offset,
+                };
+
                 break;
             }
             case Instr::DefCfaOffset: {
-                u64 const off = cursor.read_panic<u64>();
+                u32 const off = cursor.read_panic<u32>();
 
-                current_state->cfa.type = RegisterRule::Type::Register;
-                current_state->cfa.offset = (i64)off;
-                break;
-            }
-            case Instr::DefCfaExpression: {
-                // unimplemented
-                panic();
-                break;
-            }
-            case Instr::Expression: {
-                // unimplemented
-                panic();
+                bool overflow = false;
+                args.current_state->cfa = CFARule{
+                    .type = CFARule::Type::Register,
+                    .reg = args.current_state->cfa.reg,
+                    .offset = u32_to_i32(off, &overflow),
+                };
+                assert(!overflow);
+
                 break;
             }
             case Instr::OffsetExtendedSf: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                i32 const off = cursor.read_panic<i32>();
 
                 assert(reg < NUM_REGS);
 
                 bool overflow = false;
-                i64 const soff = (i64)off;
-                i64 const scaled =
-                    mul_i64(soff, data_alignment_factor, &overflow);
+                i32 const scaled =
+                    mul_i32(off, args.data_alignment_factor, &overflow);
                 assert(!overflow);
 
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::Offset;
-                r->offset = scaled;
+                args.current_state->registers[reg] = RegisterRule{
+                    .type = RegisterRule::Type::Offset,
+                    .reg = U8_MAX,
+                    .offset = scaled,
+                };
+
                 break;
             }
             case Instr::DefCfaSf: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                i32 const off = cursor.read_panic<i32>();
 
                 assert(reg < NUM_REGS);
 
                 bool overflow = false;
-                i64 const soff = (i64)off;
-                i64 const scaled =
-                    mul_i64(soff, data_alignment_factor, &overflow);
+                i32 const scaled =
+                    mul_i32(off, args.data_alignment_factor, &overflow);
                 assert(!overflow);
 
-                current_state->cfa.type = RegisterRule::Type::Register;
-                current_state->cfa.reg = (u8)reg;
-                current_state->cfa.offset = scaled;
+                args.current_state->cfa = CFARule{
+                    .type = CFARule::Type::Register,
+                    .reg = reg,
+                    .offset = scaled,
+                };
+
                 break;
             }
             case Instr::DefCfaOffsetSf: {
-                u64 const off = cursor.read_panic<u64>();
+                i32 const off = cursor.read_panic<i32>();
 
                 bool overflow = false;
-                i64 const soff = (i64)off;
-                i64 const scaled =
-                    mul_i64(soff, data_alignment_factor, &overflow);
+                i32 const scaled =
+                    mul_i32(off, args.data_alignment_factor, &overflow);
                 assert(!overflow);
 
-                current_state->cfa.type = RegisterRule::Type::Register;
-                current_state->cfa.offset = scaled;
+                args.current_state->cfa = CFARule{
+                    .type = CFARule::Type::Register,
+                    .offset = scaled,
+                    .reg = args.current_state->cfa.reg,
+                };
+
                 break;
             }
             case Instr::ValOffset: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                u32 const off = cursor.read_panic<u32>();
 
                 assert(reg < NUM_REGS);
 
                 bool overflow = false;
-                i64 const scaled =
-                    mul_i64((i64)off, data_alignment_factor, &overflow);
+                i32 const scaled =
+                    mul_i32(u32_to_i32(off, &overflow),
+                            args.data_alignment_factor, &overflow);
                 assert(!overflow);
 
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::ValOffset;
-                r->offset = scaled;
+                args.current_state->registers[reg] = RegisterRule{
+                    .type = RegisterRule::Type::ValOffset,
+                    .offset = scaled,
+                    .reg = U8_MAX,
+                };
+
                 break;
             }
             case Instr::ValOffsetSf: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                u8 const reg = cursor.read_panic<u8>();
+                i32 const off = cursor.read_panic<i32>();
 
                 assert(reg < NUM_REGS);
 
                 bool overflow = false;
-                i64 const soff = (i64)off;
-                i64 const scaled =
-                    mul_i64(soff, data_alignment_factor, &overflow);
+                i32 const scaled =
+                    mul_i32(off, args.data_alignment_factor, &overflow);
                 assert(!overflow);
 
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::ValOffset;
-                r->offset = scaled;
-                break;
-            }
-            case Instr::ValExpression: {
-                // unimplemented
-                panic();
-                break;
-            }
-            case Instr::LoUser: {
-                // no-op marker
-                break;
-            }
-            case Instr::HiUser: {
-                // no-op marker
-                break;
-            }
-            case Instr::GnuArgsSize: {
-                u64 const arg = cursor.read_panic<u64>();
-                // GNU args size is used for stack alignment; not stored in
-                // state.
-                (void)arg;
-                break;
-            }
-            case Instr::GnuNegativeOffsetExtended: {
-                u64 const reg = cursor.read_panic<u64>();
-                u64 const off = cursor.read_panic<u64>();
+                args.current_state->registers[reg] = RegisterRule{
+                    .type = RegisterRule::Type::ValOffset,
+                    .offset = scaled,
+                    .reg = U8_MAX,
+                };
 
-                assert(reg < NUM_REGS);
-
-                bool overflow = false;
-                i64 const prod =
-                    mul_i64((i64)off, data_alignment_factor, &overflow);
-                assert(!overflow);
-
-                RegisterRule *r = &current_state->registers[reg];
-                r->type = RegisterRule::Type::Offset;
-                r->offset = -prod;
                 break;
             }
             default: {
@@ -605,9 +614,11 @@ struct Instructions {
                 break;
             }
             }
-        }
 
-        return loc;
+            if (pc > args.pc_target) {
+                return;
+            }
+        }
     }
 
     static u32 offset_to_u32_panic_(u64 offset) {
@@ -717,7 +728,7 @@ struct Instructions {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 u64 const off = input_cursor->read_uleb128_panic();
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg);
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
                 data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::OffsetExtended);
@@ -756,11 +767,11 @@ struct Instructions {
             }
             // register
             case u8{0x09}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                u64 const off = input_cursor->read_uleb128_panic();
+                u64 const reg0 = input_cursor->read_uleb128_panic();
+                u64 const reg1 = input_cursor->read_uleb128_panic();
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg0));
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg1));
 
                 instr_list->push_panic(Instr::Register);
 
@@ -894,22 +905,16 @@ struct Instructions {
             }
             // GNU_args_size
             case u8{0x2e}: {
+                // skip this by consuming the argument, we don't need
+                // to record it as it has no effect on the state.
                 u64 const arg_size = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u32>(offset_to_u32_panic_(arg_size));
-
-                instr_list->push_panic(Instr::GnuArgsSize);
-
+                (void)arg_size;
                 break;
             }
             // GNU_negative_offset_extended
             case u8{0x2f}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
-
-                instr_list->push_panic(Instr::GnuNegativeOffsetExtended);
-
+                // unimplemented
+                panic();
                 break;
             }
             default: {
@@ -995,89 +1000,35 @@ extern "C" struct CPUContext {
 
 extern "C" void zx_elf_getcpucontext_(CPUContext *out);
 
-CPUContext get_cpucontext() {
-    CPUContext out;
-    zx_elf_getcpucontext_(&out);
-    return out;
-}
+struct UnwindContext {
+    u64 registers[NUM_REGS];
 
-u64 read_cpucontext_register_panic_(CPUContext const *ctx, u8 regno) {
-    switch (regno) {
-    case REG_MAP_R12: {
-        return ctx->r12;
-    }
-    case REG_MAP_R13: {
-        return ctx->r13;
-    }
-    case REG_MAP_R14: {
-        return ctx->r14;
-    }
-    case REG_MAP_R15: {
-        return ctx->r15;
-    }
-    case REG_MAP_RBP: {
-        return ctx->rbp;
-    }
-    case REG_MAP_RBX: {
-        return ctx->rbx;
-    }
-    case REG_MAP_RSP: {
-        return ctx->rsp;
-    }
-    case REG_MAP_RETURN_ADDRESS: {
-        return ctx->rip;
-    }
-    default: {
-        panic();
-    }
-    }
-}
+    __attribute__((always_inline)) static UnwindContext init() {
+        CPUContext ctx;
+        zx_elf_getcpucontext_(&ctx);
 
-void write_cpucontext_register_panic_(CPUContext *ctx, u8 regno, u64 val) {
+        UnwindContext out;
+        __builtin_memset(out.registers, 0, sizeof(out.registers));
 
-    switch (regno) {
-    case REG_MAP_R12: {
-        ctx->r12 = val;
-        return;
+        out.registers[REG_MAP_R12] = ctx.r12;
+        out.registers[REG_MAP_R13] = ctx.r13;
+        out.registers[REG_MAP_R14] = ctx.r14;
+        out.registers[REG_MAP_R15] = ctx.r15;
+        out.registers[REG_MAP_RBP] = ctx.rbp;
+        out.registers[REG_MAP_RBX] = ctx.rbx;
+        out.registers[REG_MAP_RSP] = ctx.rsp;
+        out.registers[REG_MAP_RETURN_ADDRESS] = ctx.rip;
+
+        return out;
     }
-    case REG_MAP_R13: {
-        ctx->r13 = val;
-        return;
-    }
-    case REG_MAP_R14: {
-        ctx->r14 = val;
-        return;
-    }
-    case REG_MAP_R15: {
-        ctx->r15 = val;
-        return;
-    }
-    case REG_MAP_RBP: {
-        ctx->rbp = val;
-        return;
-    }
-    case REG_MAP_RBX: {
-        ctx->rbx = val;
-        return;
-    }
-    case REG_MAP_RSP: {
-        ctx->rsp = val;
-        return;
-    }
-    case REG_MAP_RETURN_ADDRESS: {
-        ctx->rip = val;
-        return;
-    }
-    default: {
-        panic();
-    }
-    }
-}
+
+    u64 rip() const { return this->registers[REG_MAP_RETURN_ADDRESS]; }
+};
 
 struct EhFrame {
     struct CIE {
-        u64 code_alignment_factor;
-        i64 data_alignment_factor;
+        u32 code_alignment_factor;
+        i32 data_alignment_factor;
         Instructions instr;
     };
 
@@ -1090,7 +1041,13 @@ struct EhFrame {
 
     Slice<FDE> m_fd_entries;
 
-    bool step_panic(Alloc *tmp_alloc, CPUContext *ctx) const {
+    bool step_panic(Alloc *tmp_alloc, UnwindContext *ctx) const {
+        u64 const rip = ctx->registers[REG_MAP_RETURN_ADDRESS];
+
+        if (rip == 0) {
+            return false;
+        }
+
         u64 const tmp_alloc_offset = tmp_alloc->offset();
 
         constexpr u64 state_stack_size = 16;
@@ -1105,86 +1062,82 @@ struct EhFrame {
 
             u64 const pc_end = candi->pc_begin + candi->pc_range;
 
-            if (candi->pc_begin <= ctx->rip && ctx->rip < pc_end) {
+            if (candi->pc_begin <= rip && rip < pc_end) {
                 fde = candi;
                 break;
             }
         }
-        if (fde == nullptr) {
-            return false;
-        }
+        assert(fde != nullptr);
 
-        RegisterState initial_state;
-        __builtin_memset(&initial_state, 0, sizeof(initial_state));
+        RegisterState cie_state;
+        __builtin_memset(&cie_state, 0, sizeof(cie_state));
 
-        u64 loc = fde->cie->instr.run_panic(
-            fde->pc_begin, fde->cie->code_alignment_factor,
-            fde->cie->data_alignment_factor, ctx->rip, nullptr, &stack,
-            &initial_state);
+        fde->cie->instr.run_panic(Instructions::RunArgs{
+            .pc_begin = 0,
+            .pc_target = U64_MAX,
+            .code_alignment_factor = fde->cie->code_alignment_factor,
+            .data_alignment_factor = fde->cie->data_alignment_factor,
+            .cie_state = nullptr,
+            .current_state = &cie_state,
+            .stack = &stack,
+        });
 
-        RegisterState state = initial_state;
+        RegisterState state = cie_state;
 
-        if (loc <= ctx->rip) {
-            loc =
-                fde->instr.run_panic(loc, fde->cie->code_alignment_factor,
-                                     fde->cie->data_alignment_factor, ctx->rip,
-                                     &initial_state, &stack, &state);
-        }
+        fde->instr.run_panic(Instructions::RunArgs{
+            .pc_begin = fde->pc_begin,
+            .pc_target = rip,
+            .code_alignment_factor = fde->cie->code_alignment_factor,
+            .data_alignment_factor = fde->cie->data_alignment_factor,
+            .cie_state = &cie_state,
+            .current_state = &state,
+            .stack = &stack,
+        });
 
         assert(Alloc::ResizeStatus::Ok == tmp_alloc->resize(tmp_alloc_offset));
 
-        // apply found rules to CPU Context
-        assert(state.cfa.type == RegisterRule::Type::Register);
-        u64 const cfa = read_cpucontext_register_panic_(ctx, state.cfa.reg) +
-                        (u64)state.cfa.offset;
+        // APPLY THE RULES
 
-        CPUContext new_ctx;
-        __builtin_memset(&new_ctx, 0, sizeof(new_ctx));
+        UnwindContext src_ctx = *ctx;
 
+        // get cfa
+        assert(state.cfa.type == CFARule::Type::Register);
+        u64 const cfa =
+            src_ctx.registers[state.cfa.reg] + (u64)(i64)state.cfa.offset;
+
+        // apply the rest
         for (u8 reg = 0; reg < NUM_REGS; reg++) {
-            // We only care about registers present in CPUContext.
-            bool tracked = reg == REG_MAP_RBP || reg == REG_MAP_RSP ||
-                           reg == REG_MAP_RBX || reg == REG_MAP_R12 ||
-                           reg == REG_MAP_R13 || reg == REG_MAP_R14 ||
-                           reg == REG_MAP_R15 || reg == REG_MAP_RETURN_ADDRESS;
-
-            if (!tracked) {
-                continue;
-            }
-
             RegisterRule const rule = state.registers[reg];
 
             switch (rule.type) {
             case RegisterRule::Type::Undefined: {
+                ctx->registers[reg] = 0;
                 break;
             }
             case RegisterRule::Type::SameValue: {
-                write_cpucontext_register_panic_(
-                    &new_ctx, reg, read_cpucontext_register_panic_(ctx, reg));
+                ctx->registers[reg] = src_ctx.registers[reg];
                 break;
             }
             case RegisterRule::Type::Offset: {
-                u64 const addr = cfa + (u64)rule.offset;
+                u64 const addr = cfa + (u64)(i64)rule.offset;
 
                 u64 val;
                 __builtin_memcpy(&val, (u8 const *)addr, sizeof(u64));
 
-                write_cpucontext_register_panic_(&new_ctx, reg, val);
+                ctx->registers[reg] = val;
 
                 break;
             }
             case RegisterRule::Type::ValOffset: {
-                u64 const val = cfa + (u64)rule.offset;
+                u64 const val = cfa + (u64)(i64)rule.offset;
 
-                write_cpucontext_register_panic_(&new_ctx, reg, val);
+                ctx->registers[reg] = val;
+
                 break;
             }
             case RegisterRule::Type::Register: {
                 assert(rule.reg < NUM_REGS);
-
-                u64 const val = read_cpucontext_register_panic_(ctx, rule.reg);
-
-                write_cpucontext_register_panic_(&new_ctx, reg, val);
+                ctx->registers[reg] = src_ctx.registers[rule.reg];
 
                 break;
             }
@@ -1194,9 +1147,7 @@ struct EhFrame {
             }
         }
 
-        new_ctx.rsp = cfa;
-
-        *ctx = new_ctx;
+        ctx->registers[REG_MAP_RSP] = cfa;
 
         return true;
     }
@@ -1219,11 +1170,19 @@ struct EhFrame {
             assert(input_cursor->read_panic<u8>() == '\0');
         }
 
-        u64 const code_alignment_factor = input_cursor->read_uleb128_panic();
-        assert(code_alignment_factor != 0);
+        bool overflow = false;
 
-        i64 const data_alignment_factor = input_cursor->read_sleb128_panic();
-        assert(data_alignment_factor != 0);
+        u64 const code_alignment_factor_64 = input_cursor->read_uleb128_panic();
+        assert(code_alignment_factor_64 != 0);
+        u32 const code_alignment_factor =
+            u64_to_u32(code_alignment_factor_64, &overflow);
+        assert(!overflow);
+
+        i64 const data_alignment_factor_64 = input_cursor->read_sleb128_panic();
+        assert(data_alignment_factor_64 != 0);
+        i32 const data_alignment_factor =
+            i64_to_i32(data_alignment_factor_64, &overflow);
+        assert(!overflow);
 
         u8 const return_address_register = input_cursor->read_panic<u8>();
         assert(RETURN_ADDRESS_REGISTER == return_address_register);
