@@ -31,7 +31,7 @@ template <typename T> struct List {
 
     SliceMut<T> slice() const { return this->m_slice; }
 
-    bool is_full() const { return this->m_offset == this->m_slice; }
+    bool is_full() const { return this->m_offset == this->m_slice.len(); }
 
     Slice<T> written() const {
         return this->m_slice.slice_unsafe(0, this->m_offset).as_const();
