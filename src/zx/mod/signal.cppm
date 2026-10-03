@@ -62,8 +62,69 @@ enum class SIG : u32_c {
     SYS = 31,
 };
 
-// echo "#include <signal.h>" | gcc -xc - -E | grep -i "__sighandler_t"
-typedef void (*SigHandler)(i32_c sig);
+extern "C" struct SigInfo {
+    u32 signo;
+    i32 code;
+    i32 errno;
+    union {
+        // Padding to bring the total to 128 bytes, given the surrounding
+        // fields: 2 × int (signo + code) + 1 × long.
+        u8 pad[128 - 2 * sizeof(int) - sizeof(long)];
+
+        struct {
+            union {
+                struct {
+                    i32 pid;
+                    u32 uid;
+                } piduid;
+
+                struct {
+                    i32 timerid;
+                    i32 overrun;
+                } timer;
+            } first;
+
+            union {
+                union {
+                    i32 int_;
+                    void *ptr;
+                } value;
+
+                struct {
+                    i32 status;
+                    i64 utime;
+                    i64 stime;
+                } sigchld;
+            } second;
+        } common;
+
+        struct {
+            void *addr; // faulting address
+            i16 addr_lsb;
+            union {
+                struct {
+                    void *lower;
+                    void *upper;
+                } addr_bnd;
+                u32 pkey;
+            } first;
+        } sigfault;
+
+        struct {
+            i64 band;
+            i32 fd;
+        } sigpoll;
+
+        struct {
+            void *call_addr;
+            i32 syscall;
+            u32 native_arch;
+        } sigsys;
+    } fields;
+};
+
+// echo "#include <signal.h>" | gcc -xc - -E | grep -i "sa_sigaction"
+typedef void (*SigHandler)(i32_c sig, SigInfo *info, void *ucontext);
 
 // echo "#include <signal.h>" | gcc -xc - -E | grep -B 5 -i "__sigset_t"
 // This is essentially a bitmap and the SIG.. constants are indices into the
@@ -110,14 +171,14 @@ struct SigSet {
 };
 
 struct SigAction_ {
-    SigHandler sa_handler;
+    SigHandler sa_sigaction;
     i32 sa_flags;
     void (*sa_restorer)(void);
     SigSet sa_mask;
 };
 
 struct SigAction {
-    SigHandler handler;
+    SigHandler sigaction;
     i32 flags;
     SigSet mask;
 };

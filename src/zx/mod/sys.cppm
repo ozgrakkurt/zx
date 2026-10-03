@@ -1471,14 +1471,8 @@ SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
                           SigAction *__restrict oldact) {
     SigAction_ k_act;
     if (act != nullptr) {
-        if ((act->flags & SA_SIGINFO) != 0) {
-            // we don't allow this since we use the basic sa_handler signature
-            // and not the sa_sigaction signature.
-            return SigActionStatus::SigInfoFlagNotAllowed;
-        }
-
         k_act = SigAction_{
-            .sa_handler = act->handler,
+            .sa_sigaction = act->sigaction,
             .sa_mask = act->mask,
             .sa_flags = act->flags | SA_RESTORER | SA_SIGINFO,
             .sa_restorer = sigreturn_,
@@ -1506,7 +1500,7 @@ SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
 
     if (oldact != nullptr) {
         *oldact = SigAction{
-            .handler = k_oldact.sa_handler,
+            .sigaction = k_oldact.sa_sigaction,
             .mask = k_oldact.sa_mask,
             .flags = k_oldact.sa_flags,
         };

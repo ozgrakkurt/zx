@@ -2,14 +2,17 @@ import zx;
 
 using namespace zx;
 
-static void handler(i32_c signum) {
+static void handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
+    (void)info;
+    (void)ucontext;
+
     assert((u32)signum == (u32)sys::SIG::ILL);
     sys::exit_group(0);
 }
 
 int main() {
     sys::SigAction act = sys::SigAction{
-        .handler = handler,
+        .sigaction = handler,
         .flags = 0,
         .mask = sys::SigSet::init(),
     };
