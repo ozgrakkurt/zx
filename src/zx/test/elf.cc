@@ -53,7 +53,8 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
     assert(!fmt_overflow);
 
     // u64 n_written = 0;
-    // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
+    // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+    // fmt.written().ptr(),
     //                                           fmt.n_written(), &n_written));
     // assert(n_written == fmt.n_written());
     // panic();
@@ -71,7 +72,7 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
         elf::CPUContext ctx = elf::get_cpucontext();
 
         fmt.push_str(CString::init_unsafe("callme_maybe:\n").as_slice(),
-                      &fmt_overflow);
+                     &fmt_overflow);
 
         do {
             if (ctx.rip != 0) {
@@ -87,8 +88,7 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
         u64 n_written = 0;
         assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
                                                   fmt.written().ptr(),
-                                                  fmt.n_written(),
-                                                  &n_written));
+                                                  fmt.n_written(), &n_written));
         assert(n_written == fmt.n_written());
         panic();
 

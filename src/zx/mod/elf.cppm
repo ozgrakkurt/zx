@@ -244,8 +244,9 @@ enum class Instr : u8_c {
     ValOffset,
     ValOffsetSf,
     ValExpression,
-    LoUser,
-    HiUser,
+    // # Don't process these as they look useless?
+    // LoUser,
+    // HiUser,
     GnuArgsSize,
     GnuNegativeOffsetExtended,
 };
@@ -609,6 +610,26 @@ struct Instructions {
         return loc;
     }
 
+    static u32 offset_to_u32_panic_(u64 offset) {
+        bool overflow = false;
+        u32 const out = u64_to_u32(offset, &overflow);
+        assert(!overflow);
+        return out;
+    }
+
+    static i32 offset_to_i32_panic_(i64 offset) {
+        bool overflow = false;
+        i32 const out = i64_to_i32(offset, &overflow);
+        assert(!overflow);
+        return out;
+    }
+
+    static u8 register_to_u8_panic_(u64 reg) {
+        static_assert(NUM_REGS < U8_MAX);
+        assert(reg < NUM_REGS);
+        return (u8)reg;
+    }
+
     static void parse_one_panic_(u64 section_addr, List<Instr> *instr_list,
                                  WriteCursor *data_writer,
                                  Cursor *input_cursor) {
@@ -632,7 +653,7 @@ struct Instructions {
 
             instr_list->push_panic(Instr::Offset);
             data_writer->write_panic<u8>(low6);
-            data_writer->write_panic<u64>(off);
+            data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
             break;
         }
@@ -695,8 +716,9 @@ struct Instructions {
             case u8{0x05}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>(off);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg);
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::OffsetExtended);
 
@@ -705,7 +727,8 @@ struct Instructions {
             // restore_extended
             case u8{0x06}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
 
                 instr_list->push_panic(Instr::RestoreExtended);
 
@@ -714,7 +737,8 @@ struct Instructions {
             // undefined
             case u8{0x07}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
 
                 instr_list->push_panic(Instr::Undefined);
 
@@ -723,7 +747,8 @@ struct Instructions {
             // same_value
             case u8{0x08}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
 
                 instr_list->push_panic(Instr::SameValue);
 
@@ -733,8 +758,9 @@ struct Instructions {
             case u8{0x09}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>(off);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::Register);
 
@@ -756,8 +782,9 @@ struct Instructions {
             case u8{0x0c}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>(off);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::DefCfa);
 
@@ -766,7 +793,8 @@ struct Instructions {
             // def_cfa_register
             case u8{0x0d}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
 
                 instr_list->push_panic(Instr::DefCfaRegister);
 
@@ -775,7 +803,7 @@ struct Instructions {
             // def_cfa_offset
             case u8{0x0e}: {
                 u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(off);
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::DefCfaOffset);
 
@@ -797,8 +825,8 @@ struct Instructions {
             case u8{0x11}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>((u64)off);
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
 
                 instr_list->push_panic(Instr::OffsetExtendedSf);
 
@@ -808,8 +836,8 @@ struct Instructions {
             case u8{0x12}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>((u64)off);
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
 
                 instr_list->push_panic(Instr::DefCfaSf);
 
@@ -818,7 +846,7 @@ struct Instructions {
             // def_cfa_offset_sf
             case u8{0x13}: {
                 i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u64>((u64)off);
+                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
 
                 instr_list->push_panic(Instr::DefCfaOffsetSf);
 
@@ -826,10 +854,11 @@ struct Instructions {
             }
             // val_offset
             case u8{0x14}: {
-                u64 const arg0 = input_cursor->read_uleb128_panic();
-                u64 const arg1 = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(arg0);
-                data_writer->write_panic<u64>(arg1);
+                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 const off = input_cursor->read_uleb128_panic();
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::ValOffset);
 
@@ -837,10 +866,11 @@ struct Instructions {
             }
             // val_offset_sf
             case u8{0x15}: {
-                u64 const arg0 = input_cursor->read_uleb128_panic();
-                i64 const arg1 = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u64>(arg0);
-                data_writer->write_panic<u64>((u64)arg1);
+                u64 const reg = input_cursor->read_uleb128_panic();
+                i64 const off = input_cursor->read_sleb128_panic();
+
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
 
                 instr_list->push_panic(Instr::ValOffsetSf);
 
@@ -854,18 +884,18 @@ struct Instructions {
             }
             // lo_user
             case u8{0x1c}: {
-                instr_list->push_panic(Instr::LoUser);
+                // skip this as it has no effect?
                 break;
             }
             // hi_user
             case u8{0x3f}: {
-                instr_list->push_panic(Instr::HiUser);
+                // skip this as it has no effect?
                 break;
             }
             // GNU_args_size
             case u8{0x2e}: {
-                u64 const arg0 = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(arg0);
+                u64 const arg_size = input_cursor->read_uleb128_panic();
+                data_writer->write_panic<u32>(offset_to_u32_panic_(arg_size));
 
                 instr_list->push_panic(Instr::GnuArgsSize);
 
@@ -875,8 +905,8 @@ struct Instructions {
             case u8{0x2f}: {
                 u64 const reg = input_cursor->read_uleb128_panic();
                 u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u64>(reg);
-                data_writer->write_panic<u64>(off);
+                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
 
                 instr_list->push_panic(Instr::GnuNegativeOffsetExtended);
 
@@ -1095,10 +1125,10 @@ struct EhFrame {
         RegisterState state = initial_state;
 
         if (loc <= ctx->rip) {
-            loc = fde->instr.run_panic(loc, fde->cie->code_alignment_factor,
-                                       fde->cie->data_alignment_factor, ctx->rip,
-                                       &initial_state, &stack, &state);
-            
+            loc =
+                fde->instr.run_panic(loc, fde->cie->code_alignment_factor,
+                                     fde->cie->data_alignment_factor, ctx->rip,
+                                     &initial_state, &stack, &state);
         }
 
         assert(Alloc::ResizeStatus::Ok == tmp_alloc->resize(tmp_alloc_offset));
