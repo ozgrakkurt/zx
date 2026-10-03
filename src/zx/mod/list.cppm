@@ -10,6 +10,12 @@ enum class [[nodiscard]] ListPushStatus : u8_c {
     OutOfCapacity,
 };
 
+enum class [[nodiscard]] ListPopStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    Empty,
+};
+
 template <typename T> struct List {
     SliceMut<T> m_slice;
     u64 m_offset;
@@ -33,6 +39,13 @@ template <typename T> struct List {
 
     u64 n_written() const { return this->m_offset; }
 
+    void reset() {
+#ifdef ZX_DEV
+        this->m_slice.memset(0xaa);
+#endif
+        this->m_offset = 0;
+    }
+
     ListPushStatus push(T val) {
         assert_dev(this->m_offset <= this->m_slice.len());
         if (this->m_offset == this->m_slice.len()) {
@@ -48,6 +61,28 @@ template <typename T> struct List {
         assert(this->m_offset < this->m_slice.len());
         this->m_slice.write_unsafe(this->m_offset, val);
         this->m_offset += 1;
+    }
+
+    ListPopStatus pop(T *out) {
+        assert_dev(this->m_offset <= this->m_slice.len());
+
+        if (out == nullptr) {
+            return ListPopStatus::Nullptr;
+        }
+
+        if (this->m_offset == 0) {
+            return ListPopStatus::Empty;
+        }
+
+        this->m_offset -= 1;
+        *out = this->m_slice.read_unsafe(this->m_offset);
+        return ListPopStatus::Ok;
+    }
+
+    T pop_panic() {
+        assert(this->m_offset > 0);
+        this->m_offset -= 1;
+        return this->m_slice.read_unsafe(this->m_offset);
     }
 };
 
