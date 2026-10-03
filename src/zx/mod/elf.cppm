@@ -1062,7 +1062,7 @@ struct EhFrame {
 
             u64 const pc_end = candi->pc_begin + candi->pc_range;
 
-            if (candi->pc_begin <= rip && rip < pc_end) {
+            if (candi->pc_begin <= rip && rip <= pc_end) {
                 fde = candi;
                 break;
             }

@@ -60,6 +60,10 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
 
 void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
     if (iter > 5) {
+        TimeInfo info;
+        TimeInfo::InitStatus const status = TimeInfo::init(&info);
+        assert(status == TimeInfo::InitStatus::Ok);
+
         u8 fmt_buf[1024];
         SliceMut<u8> fmt_slice =
             SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf));
@@ -72,12 +76,22 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
         fmt.push_str(CString::init_unsafe("callme_maybe:\n").as_slice(),
                      &fmt_overflow);
 
+        Timer timer = Timer::init(info);
         do {
             if (ctx.rip() != 0) {
                 fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
             }
         } while (dbg_info->step_panic(tmp_alloc, &ctx));
+        u64 const n_nanos = timer.lap();
+
+        fmt.push_str(CString::init_unsafe("collecting trace took ").as_slice(),
+                     &fmt_overflow);
+
+        fmt.push_u64(n_nanos, &fmt_overflow);
+
+        fmt.push_str(CString::init_unsafe(" nanos.\n").as_slice(),
+                     &fmt_overflow);
 
         assert(!fmt_overflow);
 
