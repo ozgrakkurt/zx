@@ -356,6 +356,9 @@ struct Instructions {
             case Instr::SetLoc: {
                 u64 const addr = cursor.read_panic<u64>();
                 loc = addr;
+                if (loc > up_to_loc) {
+                    return loc;
+                }
                 break;
             }
             case Instr::AdvanceLoc1: {
