@@ -1089,15 +1089,17 @@ struct EhFrame {
 
         u64 loc = fde->cie->instr.run_panic(
             fde->pc_begin, fde->cie->code_alignment_factor,
-            fde->cie->data_alignment_factor, U64_MAX, nullptr, &stack,
+            fde->cie->data_alignment_factor, ctx->rip, nullptr, &stack,
             &initial_state);
 
         RegisterState state = initial_state;
 
-        loc = fde->instr.run_panic(loc, fde->cie->code_alignment_factor,
-                                   fde->cie->data_alignment_factor, ctx->rip,
-                                   &initial_state, &stack, &state);
-        (void)loc;
+        if (loc <= ctx->rip) {
+            loc = fde->instr.run_panic(loc, fde->cie->code_alignment_factor,
+                                       fde->cie->data_alignment_factor, ctx->rip,
+                                       &initial_state, &stack, &state);
+            
+        }
 
         assert(Alloc::ResizeStatus::Ok == tmp_alloc->resize(tmp_alloc_offset));
 

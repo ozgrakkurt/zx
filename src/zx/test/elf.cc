@@ -29,6 +29,36 @@ Slice<u8> read_self_bin(Alloc *alloc) {
     return buf.as_const();
 }
 
+void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
+    elf::CPUContext ctx = elf::get_cpucontext();
+
+    u8 fmt_buf[1024];
+    SliceMut<u8> fmt_slice =
+        SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf));
+    Fmt fmt = Fmt::init(fmt_slice);
+
+    bool fmt_overflow = false;
+
+    fmt.push_str(CString::init_unsafe("cmmb:\n").as_slice(), &fmt_overflow);
+
+    do {
+        if (ctx.rip != 0) {
+            fmt.push_u64_hex(ctx.rip - 1, &fmt_overflow);
+            fmt.push_char('\n', &fmt_overflow);
+        } else {
+            break;
+        }
+    } while (dbg_info->step_panic(tmp_alloc, &ctx));
+
+    assert(!fmt_overflow);
+
+    // u64 n_written = 0;
+    // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
+    //                                           fmt.n_written(), &n_written));
+    // assert(n_written == fmt.n_written());
+    // panic();
+}
+
 void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
     if (iter > 5) {
         u8 fmt_buf[1024];
@@ -40,10 +70,15 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 
         elf::CPUContext ctx = elf::get_cpucontext();
 
+        fmt.push_str(CString::init_unsafe("callme_maybe:\n").as_slice(),
+                      &fmt_overflow);
+
         do {
             if (ctx.rip != 0) {
                 fmt.push_u64_hex(ctx.rip - 1, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
+            } else {
+                break;
             }
         } while (dbg_info->step_panic(tmp_alloc, &ctx));
 
@@ -89,6 +124,7 @@ int main() {
         &alloc, &tmp_alloc, eh_frame_header, eh_frame_raw);
 
     callme_maybe(&tmp_alloc, &eh_frame, 0);
+    cmmb(&tmp_alloc, &eh_frame);
 
     assert(page_alloc::FreeStatus::Ok == page_alloc::free(mem, mem_size));
 
