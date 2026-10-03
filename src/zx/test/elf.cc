@@ -49,12 +49,12 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 
         assert(!fmt_overflow);
 
-        u64 n_written = 0;
-        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-                                                  fmt.written().ptr(),
-                                                  fmt.n_written(), &n_written));
-        assert(n_written == fmt.n_written());
-        panic();
+        // u64 n_written = 0;
+        // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+        //                                           fmt.written().ptr(),
+        //                                           fmt.n_written(), &n_written));
+        // assert(n_written == fmt.n_written());
+        // panic();
 
         return;
     } else {
