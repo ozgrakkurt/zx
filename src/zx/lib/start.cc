@@ -5,6 +5,7 @@ using namespace zx;
 #ifdef ZX_DEBUG_INFO
 
 static elf::EhFrame ZX_EH_FRAME_;
+static elf::DebugLine ZX_DEBUG_LINE_;
 
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
@@ -15,8 +16,8 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
            page_alloc::alloc_4kb(tmp_mem_size, &tmp_mem));
     assert(tmp_mem != nullptr);
 
-    Alloc tmp_alloc = Alloc::init(
-        SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
+    Alloc tmp_alloc =
+        Alloc::init(SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
 
     sys::UContext const *uctx = (sys::UContext const *)ucontext;
     elf::UnwindContext ctx = elf::UnwindContext::init_from_ucontext(uctx);
@@ -27,7 +28,7 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
 
     bool fmt_overflow = false;
 
-    char const* msg = nullptr;
+    char const *msg = nullptr;
     if (signum == (i32)sys::SIG::SEGV) {
         msg = "SIGSEGV at:\n";
     } else if (signum == (i32)sys::SIG::ILL) {
@@ -37,8 +38,7 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     }
     assert(msg != nullptr);
 
-    fmt.push_str(CString::init_unsafe(msg).as_slice(),
-                 &fmt_overflow);
+    fmt.push_str(CString::init_unsafe(msg).as_slice(), &fmt_overflow);
 
     while (ZX_EH_FRAME_.step_panic(&tmp_alloc, &ctx)) {
         if (ctx.rip() != 0) {
@@ -54,7 +54,8 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
                                               fmt.n_written(), &n_written));
     assert(n_written == fmt.n_written());
 
-    assert(page_alloc::FreeStatus::Ok == page_alloc::free(tmp_mem, tmp_mem_size));
+    assert(page_alloc::FreeStatus::Ok ==
+           page_alloc::free(tmp_mem, tmp_mem_size));
 }
 
 static Slice<u8> read_self_bin(Alloc *alloc) {
@@ -97,21 +98,30 @@ extern "C" void zx_setup_() {
     assert(tmp_mem != nullptr);
 
     Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size));
-    Alloc tmp_alloc = Alloc::init(
-        SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
+    Alloc tmp_alloc =
+        Alloc::init(SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
 
     Slice<u8> buf = read_self_bin(&alloc);
     elf::File const file = elf::File::init_panic(&alloc, buf);
 
-    u64 const section_idx = file.get_section_index_panic(
+    u64 const eh_frame_section_idx = file.get_section_index_panic(
         CString::init_unsafe(".eh_frame").as_slice());
 
-    Slice<u8> eh_frame_raw = file.get_section_data_panic(section_idx);
+    Slice<u8> eh_frame_raw = file.get_section_data_panic(eh_frame_section_idx);
     elf::SectionHeader const *eh_frame_header =
-        file.get_section_header_panic(section_idx);
+        file.get_section_header_panic(eh_frame_section_idx);
 
     ZX_EH_FRAME_ = elf::EhFrame::init_panic(&alloc, &tmp_alloc, eh_frame_header,
                                             eh_frame_raw);
+
+    u64 const debug_line_section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".debug_line").as_slice());
+
+    Slice<u8> debug_line_raw =
+        file.get_section_data_panic(debug_line_section_idx);
+
+    ZX_DEBUG_LINE_ =
+        elf::DebugLine::init_panic(&alloc, &tmp_alloc, debug_line_raw);
 
     sys::SigAction act = sys::SigAction{
         .sigaction = signal_handler,
@@ -124,7 +134,8 @@ extern "C" void zx_setup_() {
     assert(sys::SigActionStatus::Ok ==
            sys::sigaction(sys::SIG::SEGV, &act, nullptr));
 
-    assert(page_alloc::FreeStatus::Ok == page_alloc::free(tmp_mem, tmp_mem_size));
+    assert(page_alloc::FreeStatus::Ok ==
+           page_alloc::free(tmp_mem, tmp_mem_size));
 }
 
 #else // ifdef ZX_DEBUG_INFO

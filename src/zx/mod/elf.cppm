@@ -1348,6 +1348,189 @@ struct EhFrame {
     }
 };
 
+struct DebugLine {
+    struct Info {
+        u16 file_no;
+        u16 line_no;
+        u16 column_no;
+    };
+    static_assert(sizeof(Info) == 6);
+    static_assert(alignof(Info) == alignof(u16));
+
+    Slice<CString> file_paths;
+    u64 minimum_pc;
+    Slice<Info> infos;
+
+    struct LineInfo {
+        CString file_path;
+        u16 line_no;
+        u16 column_no;
+    };
+
+    enum class [[nodiscard]] GetLineInfoStatus : u8_c {
+        Ok = 0,
+        NotFound,
+        Invalid,
+        Nullptr,
+    };
+
+    struct InfoRow {
+        u64 pc;
+        u16 file_no;
+        u16 line_no;
+        u16 column_no;
+    };
+
+    static void parse_compilation_unit_panic_(Cursor *input,
+                                              List<InfoRow> *infos,
+                                              List<CString> *file_paths,
+                                              u64 *min_pc, u64 *max_pc) {
+        u32 const unit_length = input->read_panic<u32>();
+        // this means DWARF 64bit version, we only support parsing the 32bit
+        // version.
+        assert(unit_length != U32_MAX);
+
+        u16 const version = input->read_panic<u16>();
+        assert(version == 5);
+
+        u8 const address_size = input->read_panic<u8>();
+        assert(address_size == 8);
+
+        u8 const segment_selector_size = input->read_panic<u8>();
+        assert(segment_selector_size == 0);
+
+        u32 const header_length = input->read_panic<u32>();
+        // We don't support 64bit dwarf format. Only 32bit is supported.
+        assert(header_length != U32_MAX);
+
+        u8 const minimum_instruction_length = input->read_panic<u8>();
+        u8 const maximum_operations_per_instruction = input->read_panic<u8>();
+        (void)minimum_instruction_length;
+        (void)maximum_operations_per_instruction;
+
+        // unused, we don't care about breakpoints since we are not implementing
+        // a debugger.
+        {
+            u8 const default_is_stmt = input->read_panic<u8>();
+            (void)default_is_stmt;
+        }
+
+        i8 const line_base = input->read_panic<i8>();
+        u8 const line_range = input->read_panic<u8>();
+        (void)line_base;
+        (void)line_range;
+
+        u8 const opcode_base = input->read_panic<u8>();
+        (void)opcode_base;
+        // TODO: remove these (void) stuff
+        (void)infos;
+        (void)file_paths;
+        (void)min_pc;
+        (void)max_pc;
+
+        // unused, we will error if we encounter an unknown opcode
+        bool overflow = false;
+        u8 const num_standard_opcodes = sub_u8(opcode_base, 1, &overflow);
+        assert(!overflow);
+
+        assert(Cursor::Status::Ok ==
+               input->skip(num_standard_opcodes * sizeof(u8)));
+
+        u8 const directory_entry_format_count = input->read_panic<u8>();
+        assert(directory_entry_format_count == 1);
+    }
+
+    static DebugLine init_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                Slice<u8> input_bytes) {
+        assert(alloc != nullptr);
+        assert(tmp_alloc != nullptr);
+        assert(alloc != tmp_alloc);
+
+        if (input_bytes.len() == 0) {
+            return DebugLine{
+                .file_paths = Slice<CString>::init_dangling(),
+                .minimum_pc = 0,
+                .infos = Slice<Info>::init_dangling(),
+            };
+        }
+
+        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+
+        SliceMut<InfoRow> info_mem;
+        assert(AllocStatus::Ok ==
+               tmp_alloc->alloc<InfoRow>(input_bytes.len(), &info_mem));
+        List<InfoRow> infos = List<InfoRow>::init(info_mem);
+
+        constexpr u64 max_num_files = 1024;
+        SliceMut<CString> file_paths_mem;
+        assert(AllocStatus::Ok ==
+               tmp_alloc->alloc<CString>(max_num_files, &file_paths_mem));
+        List<CString> file_paths = List<CString>::init(file_paths_mem);
+
+        Cursor input = Cursor::init(input_bytes);
+
+        u64 min_pc = 0;
+        u64 max_pc = 0;
+
+        // iterate over compilation units
+        while (!input.is_finished()) {
+            parse_compilation_unit_panic_(&input, &infos, &file_paths, &min_pc,
+                                          &max_pc);
+            // TODO: remove this!!
+            break;
+        }
+
+        bool overflow = false;
+        u64 const n_pcs = sub_u64(max_pc, min_pc, &overflow);
+        assert(!overflow);
+
+        // ## move the found infos to the orderly output array
+        SliceMut<Info> infos_out;
+        assert(AllocStatus::Ok == alloc->alloc<Info>(n_pcs, &infos_out));
+        infos_out.memset(0);
+
+        Slice<InfoRow> collected_infos = infos.written();
+
+        for (u64 i = 0; i < collected_infos.len(); i++) {
+            InfoRow const inf = collected_infos.read_unsafe(i);
+
+            overflow = false;
+            u64 const pc_idx = sub_u64(inf.pc, min_pc, &overflow);
+            assert(!overflow);
+
+            // write to output
+            infos_out.write_unsafe(pc_idx, Info{
+                                               .file_no = inf.file_no,
+                                               .line_no = inf.line_no,
+                                               .column_no = inf.column_no,
+                                           });
+        }
+
+        // ## move file path info to regular alloc since we will discard the tmp
+        // alloc.
+        SliceMut<CString> file_paths_out;
+        assert(AllocStatus::Ok ==
+               alloc->alloc<CString>(file_paths.n_written(), &file_paths_out));
+        assert(SliceMemcpyStatus::Ok ==
+               file_paths_out.memcpy_from(file_paths.written()));
+
+        // discard tmp memory
+        assert(Alloc::ResizeStatus::Ok ==
+               tmp_alloc->resize(tmp_alloc_initial_offset));
+
+        return DebugLine{
+            .infos = infos_out.as_const(),
+            .file_paths = file_paths_out.as_const(),
+            .minimum_pc = min_pc,
+        };
+    }
+    //
+    // GetLineInfoStatus get_line_info(u64 pc, LineInfo* out) const {
+    //    index into this->infos to get the info, don't forget to subtract
+    //    this->minimum_pc from the query pc.
+    // }
+};
+
 } // namespace elf
 
 } // namespace zx
