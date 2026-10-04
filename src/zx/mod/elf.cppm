@@ -8,6 +8,7 @@ import :panic;
 import :leb128;
 import :cursor;
 import :list;
+import :ucontext;
 
 export namespace zx {
 
@@ -1019,6 +1020,22 @@ struct UnwindContext {
         out.registers[REG_MAP_RBX] = ctx.rbx;
         out.registers[REG_MAP_RSP] = ctx.rsp;
         out.registers[REG_MAP_RETURN_ADDRESS] = ctx.rip;
+
+        return out;
+    }
+
+    static UnwindContext init_from_ucontext(sys::UContext const *ctx) {
+        UnwindContext out;
+        __builtin_memset(out.registers, 0, sizeof(out.registers));
+
+        out.registers[REG_MAP_R12] = ctx->uc_mcontext.r12;
+        out.registers[REG_MAP_R13] = ctx->uc_mcontext.r13;
+        out.registers[REG_MAP_R14] = ctx->uc_mcontext.r14;
+        out.registers[REG_MAP_R15] = ctx->uc_mcontext.r15;
+        out.registers[REG_MAP_RBP] = ctx->uc_mcontext.rbp;
+        out.registers[REG_MAP_RBX] = ctx->uc_mcontext.rbx;
+        out.registers[REG_MAP_RSP] = ctx->uc_mcontext.rsp;
+        out.registers[REG_MAP_RETURN_ADDRESS] = ctx->uc_mcontext.rip;
 
         return out;
     }
