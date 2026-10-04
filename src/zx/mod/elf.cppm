@@ -935,6 +935,7 @@ struct Instructions {
                                     u64 section_addr,
                                     u64 instructions_end_offset,
                                     Cursor *input_cursor) {
+        assert(alloc != tmp_alloc);
         if (input_cursor->offset() == instructions_end_offset) {
             return Instructions{
                 .m_instr = Slice<Instr>::init_dangling(),
@@ -1154,6 +1155,7 @@ struct EhFrame {
 
     static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
                                u64 section_addr, Cursor *input_cursor) {
+        assert(alloc != tmp_alloc);
         u8 const version = input_cursor->read_panic<u8>();
         assert(version == 1);
 
@@ -1211,6 +1213,7 @@ struct EhFrame {
     static FDE parse_fde_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
                                u64 section_addr, CIE const *cie,
                                Cursor *input_cursor) {
+        assert(alloc != tmp_alloc);
         // We know this is a SDATA4 encoded and PCREL applied value because we
         // assert this when parsing CIE.
         u64 const pc_begin_field_offset = input_cursor->offset();
@@ -1241,6 +1244,11 @@ struct EhFrame {
     static EhFrame init_panic(Alloc *alloc, Alloc *tmp_alloc,
                               SectionHeader const *header,
                               Slice<u8> input_bytes) {
+        assert(alloc != nullptr);
+        assert(tmp_alloc != nullptr);
+        assert(header != nullptr);
+        assert(alloc != tmp_alloc);
+
         if (input_bytes.len() == 0) {
             return EhFrame{
                 .m_fd_entries = Slice<FDE>::init_dangling(),

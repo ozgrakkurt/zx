@@ -64,12 +64,11 @@ enum class SIG : u32_c {
 
 extern "C" struct SigInfo {
     u32 signo;
-    i32 code;
     i32 errno;
+    i32 code;
     union {
-        // Padding to bring the total to 128 bytes, given the surrounding
-        // fields: 2 × int (signo + code) + 1 × long.
-        u8 pad[128 - 2 * sizeof(int) - sizeof(long)];
+        // Padding to bring the total to 128 bytes
+        u8 pad[128 - 4 * sizeof(u32)];
 
         struct {
             union {
@@ -122,6 +121,8 @@ extern "C" struct SigInfo {
         } sigsys;
     } fields;
 };
+
+static_assert(sizeof(SigInfo) == 128);
 
 // echo "#include <signal.h>" | gcc -xc - -E | grep -i "sa_sigaction"
 typedef void (*SigHandler)(i32_c sig, SigInfo *info, void *ucontext);
