@@ -5,25 +5,42 @@ using namespace zx;
 #ifdef ZX_DEBUG_INFO
 
 static elf::EhFrame ZX_EH_FRAME_;
-static Alloc ZX_TMP_ALLOC_;
 
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
-    (void)signum;
+
+    constexpr u64 tmp_mem_size = 1 << 18;
+    u8 *tmp_mem = nullptr;
+    assert(page_alloc::AllocStatus::Ok ==
+           page_alloc::alloc_4kb(tmp_mem_size, &tmp_mem));
+    assert(tmp_mem != nullptr);
+
+    Alloc tmp_alloc = Alloc::init(
+        SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
+
     sys::UContext const *uctx = (sys::UContext const *)ucontext;
     elf::UnwindContext ctx = elf::UnwindContext::init_from_ucontext(uctx);
 
-    u8 fmt_buf[1024];
-    SliceMut<u8> fmt_slice =
-        SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf));
+    SliceMut<u8> fmt_slice;
+    assert(AllocStatus::Ok == tmp_alloc.alloc<u8>(u64{1} << 11, &fmt_slice));
     Fmt fmt = Fmt::init(fmt_slice);
 
     bool fmt_overflow = false;
 
-    fmt.push_str(CString::init_unsafe("Crashed with signal:\n").as_slice(),
+    char const* msg = nullptr;
+    if (signum == (i32)sys::SIG::SEGV) {
+        msg = "SIGSEGV at:\n";
+    } else if (signum == (i32)sys::SIG::ILL) {
+        msg = "SIGILL at:\n";
+    } else {
+        panic();
+    }
+    assert(msg != nullptr);
+
+    fmt.push_str(CString::init_unsafe(msg).as_slice(),
                  &fmt_overflow);
 
-    while (ZX_EH_FRAME_.step_panic(&ZX_TMP_ALLOC_, &ctx)) {
+    while (ZX_EH_FRAME_.step_panic(&tmp_alloc, &ctx)) {
         if (ctx.rip() != 0) {
             fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
             fmt.push_char('\n', &fmt_overflow);
@@ -36,6 +53,8 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
                                               fmt.n_written(), &n_written));
     assert(n_written == fmt.n_written());
+
+    assert(page_alloc::FreeStatus::Ok == page_alloc::free(tmp_mem, tmp_mem_size));
 }
 
 static Slice<u8> read_self_bin(Alloc *alloc) {
@@ -64,15 +83,22 @@ static Slice<u8> read_self_bin(Alloc *alloc) {
 }
 
 extern "C" void zx_setup_() {
-    constexpr u64 mem_size = 1 << 21;
+    constexpr u64 tmp_mem_size = 1 << 20;
+    constexpr u64 mem_size = 1 << 20;
+
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
            page_alloc::alloc_4kb(mem_size, &mem));
     assert(mem != nullptr);
 
-    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size / 2));
+    u8 *tmp_mem = nullptr;
+    assert(page_alloc::AllocStatus::Ok ==
+           page_alloc::alloc_4kb(tmp_mem_size, &tmp_mem));
+    assert(tmp_mem != nullptr);
+
+    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size));
     Alloc tmp_alloc = Alloc::init(
-        SliceMut<u8>::init_unsafe(&mem[mem_size / 2], mem_size / 2));
+        SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
 
     Slice<u8> buf = read_self_bin(&alloc);
     elf::File const file = elf::File::init_panic(&alloc, buf);
@@ -86,11 +112,10 @@ extern "C" void zx_setup_() {
 
     ZX_EH_FRAME_ = elf::EhFrame::init_panic(&alloc, &tmp_alloc, eh_frame_header,
                                             eh_frame_raw);
-    ZX_TMP_ALLOC_ = tmp_alloc;
 
     sys::SigAction act = sys::SigAction{
         .sigaction = signal_handler,
-        .flags = 0,
+        .flags = sys::SA_SIGINFO,
         .mask = sys::SigSet::init(),
     };
 
@@ -98,6 +123,8 @@ extern "C" void zx_setup_() {
            sys::sigaction(sys::SIG::ILL, &act, nullptr));
     assert(sys::SigActionStatus::Ok ==
            sys::sigaction(sys::SIG::SEGV, &act, nullptr));
+
+    assert(page_alloc::FreeStatus::Ok == page_alloc::free(tmp_mem, tmp_mem_size));
 }
 
 #else // ifdef ZX_DEBUG_INFO
@@ -113,12 +140,16 @@ __asm__(".text\n"
         ".cfi_startproc\n\t"
         // stop eh_frame based unwinder from going past this function frame
         // since there is nothing above.
-        ".cfi_undefined rip\n\t"
+        ".cfi_undefined %rip\n\t"
         "xorq %rbp, %rbp\n\t"
         "popq %rdi\n\t"
         "movq %rsp, %rsi\n\t"
         "andq $-16, %rsp\n\t"
+        "pushq %rdi\n\t"
+        "pushq %rsi\n\t"
         "callq zx_setup_\n\t"
+        "popq %rsi\n\t"
+        "popq %rdi\n\t"
         "callq main\n\t"
         "movq %rax, %rdi\n\t"
         "movq $60, %rax\n\t"
