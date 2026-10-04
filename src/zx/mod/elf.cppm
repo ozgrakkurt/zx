@@ -9,6 +9,7 @@ import :leb128;
 import :cursor;
 import :list;
 import :ucontext;
+import :sys;
 
 export namespace zx {
 
@@ -1359,19 +1360,13 @@ constexpr u8 DW_FORM_line_strp = 0x1f;
 constexpr u8 DW_FORM_data16 = 0x1e;
 
 u64 strnlen_panic_(u8 const *str, u64 max_len) {
-    assert(max_len != U64_MAX);
-    u64 idx = U64_MAX;
-
     for (u64 i = 0; i < max_len; i++) {
-        // we don't early exit so hopefully this will let the compiler to
-        // vectorize this.
         if (str[i] == 0) {
-            idx = i;
+            return i;
         }
     }
 
-    assert(idx != U64_MAX);
-    return idx;
+    panic();
 }
 
 struct DebugLine {
@@ -1490,8 +1485,16 @@ struct DebugLine {
                 u64 const len = strnlen_panic_(
                     start, sub_unsafe_u64(debug_line_str.len(), offset));
 
+                Slice<u8> dir_path = Slice<u8>::init_unsafe(start, len);
+                assert(dir_path.len() > 0);
+                {
+                    u64 n_w = 0;
+                    (void)sys::write(sys::STDERR, dir_path.ptr(), dir_path.len(), &n_w);
+                }
+                assert(dir_path.read_unsafe(0) == '/');
+
                 directory_paths.write_unsafe(
-                    i, Slice<u8>::init_unsafe(start, len));
+                    i, dir_path);
             }
         }
 
@@ -1578,6 +1581,10 @@ struct DebugLine {
                 // can't be empty
                 assert(path.len() > 0);
                 // should be absolute.
+                {
+                    u64 n_w = 0;
+                    (void)sys::write(sys::STDERR, path.ptr(), path.len(), &n_w);
+                }
                 assert(path.read_unsafe(0) == '/');
 
                 bool found = false;
