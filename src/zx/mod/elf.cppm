@@ -1348,6 +1348,32 @@ struct EhFrame {
     }
 };
 
+// These are defined in the DWARF5 spec. Can search by name in there and should
+// find the tables that define them.
+constexpr u8 DW_LNCT_path = 0x1;
+constexpr u8 DW_LNCT_directory_index = 0x2;
+constexpr u8 DW_FORM_string = 0x08;
+constexpr u8 DW_FORM_udata = 0x0f;
+constexpr u8 DW_FORM_strp = 0x0e;
+constexpr u8 DW_FORM_line_strp = 0x1f;
+constexpr u8 DW_FORM_data16 = 0x1e;
+
+u64 strnlen_panic_(u8 const *str, u64 max_len) {
+    assert(max_len != U64_MAX);
+    u64 idx = U64_MAX;
+
+    for (u64 i = 0; i < max_len; i++) {
+        // we don't early exit so hopefully this will let the compiler to
+        // vectorize this.
+        if (str[i] == 0) {
+            idx = i;
+        }
+    }
+
+    assert(idx != U64_MAX);
+    return idx;
+}
+
 struct DebugLine {
     struct Info {
         u16 file_no;
@@ -1381,10 +1407,14 @@ struct DebugLine {
         u16 column_no;
     };
 
-    static void parse_compilation_unit_panic_(Cursor *input,
+    static void parse_compilation_unit_panic_(Alloc *tmp_alloc,
+                                              Slice<u8> debug_line_str,
+                                              Cursor *input,
                                               List<InfoRow> *infos,
                                               List<CString> *file_paths,
                                               u64 *min_pc, u64 *max_pc) {
+        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+
         u32 const unit_length = input->read_panic<u32>();
         // this means DWARF 64bit version, we only support parsing the 32bit
         // version.
@@ -1436,12 +1466,153 @@ struct DebugLine {
         assert(Cursor::Status::Ok ==
                input->skip(num_standard_opcodes * sizeof(u8)));
 
-        u8 const directory_entry_format_count = input->read_panic<u8>();
-        assert(directory_entry_format_count == 1);
+        SliceMut<Slice<u8>> directory_paths;
+        {
+            u8 const directory_entry_format_count = input->read_panic<u8>();
+            assert(directory_entry_format_count == 1);
+
+            u64 const def_content_type = input->read_uleb128_panic();
+            u64 const def_form_code = input->read_uleb128_panic();
+
+            assert(def_content_type == DW_LNCT_path);
+            // means that the value is an u32 offset into the .debug_line_str
+            // section
+            assert(def_form_code == DW_FORM_line_strp);
+
+            u64 const directories_count = input->read_uleb128_panic();
+            assert(AllocStatus::Ok == tmp_alloc->alloc<Slice<u8>>(
+                                          directories_count, &directory_paths));
+
+            for (u64 i = 0; i < directories_count; i++) {
+                u32 const offset = input->read_panic<u32>();
+                u8 const *start = debug_line_str.offset_unsafe(offset);
+                assert(offset < debug_line_str.len());
+                u64 const len = strnlen_panic_(
+                    start, sub_unsafe_u64(debug_line_str.len(), offset));
+
+                directory_paths.write_unsafe(
+                    i, Slice<u8>::init_unsafe(start, len));
+            }
+        }
+
+        // maps local file_path index to global file path index
+        // so if line number program state's `file` register is set to 69
+        // then we can do file_paths[file_path_map[69]] to access the actual
+        // path string.
+        //
+        // Practically we will use file_path_map[69] to record it as
+        // InfoRow.file_no into the global InfoRow list.
+        SliceMut<u32> file_path_map;
+        {
+            u8 const file_name_entry_format_count = input->read_panic<u8>();
+            assert(file_name_entry_format_count >= 2);
+
+            // file path
+            {
+                u64 const def_content_type = input->read_uleb128_panic();
+                u64 const def_form_code = input->read_uleb128_panic();
+                assert(def_content_type == DW_LNCT_path);
+                assert(def_form_code == DW_FORM_line_strp);
+            }
+
+            // directory index
+            {
+                u64 const def_content_type = input->read_uleb128_panic();
+                u64 const def_form_code = input->read_uleb128_panic();
+                assert(def_content_type == DW_LNCT_directory_index);
+                assert(def_form_code == DW_FORM_udata);
+            }
+
+            u8 const num_unknown_formats =
+                sub_unsafe_u8(file_name_entry_format_count, 2);
+
+            u8 unk_formats[16];
+
+            assert(num_unknown_formats < sizeof(unk_formats));
+
+            for (u8 i = 0; i < num_unknown_formats; i++) {
+                u64 const def_content_type = input->read_uleb128_panic();
+                u64 const def_form_code = input->read_uleb128_panic();
+                // don't care about this as we will just skip this one.
+                (void)def_content_type;
+                overflow = false;
+                unk_formats[i] = u64_to_u8(def_form_code, &overflow);
+                assert(!overflow);
+            }
+
+            u64 const file_names_count = input->read_uleb128_panic();
+
+            assert(AllocStatus::Ok ==
+                   tmp_alloc->alloc<u32>(file_names_count, &file_path_map));
+
+            for (u64 i = 0; i < file_names_count; i++) {
+                u32 const offset = input->read_panic<u32>();
+                // skip directory index
+                (void)input->read_uleb128_panic();
+                // skip the unknown stuff
+                for (u64 j = 0; j < num_unknown_formats; j++) {
+                    switch (unk_formats[j]) {
+                    case DW_FORM_line_strp: {
+                        input->read_panic<u32>();
+                        break;
+                    }
+                    case DW_FORM_data16: {
+                        assert(Cursor::Status::Ok == input->skip(16));
+                        break;
+                    }
+                    default: {
+                        panic();
+                    }
+                    }
+                }
+
+                u8 const *start = debug_line_str.offset_unsafe(offset);
+                assert(offset < debug_line_str.len());
+                u64 const len = strnlen_panic_(
+                    start, sub_unsafe_u64(debug_line_str.len(), offset));
+
+                CString path_cstr = CString::init_unsafe((char const *)start);
+                assert(path_cstr.as_slice().len() == len);
+
+                Slice<u8> path = path_cstr.as_slice();
+                // can't be empty
+                assert(path.len() > 0);
+                // should be absolute.
+                assert(path.read_unsafe(0) == '/');
+
+                bool found = false;
+                u32 idx = U32_MAX;
+                for (u64 j = 0; j < file_paths->n_written(); j++) {
+                    Slice<u8> other =
+                        file_paths->written().read_unsafe(j).as_slice();
+
+                    if (other.equals(path)) {
+                        idx = u64_to_u32(j, &overflow);
+                        assert(!overflow);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    assert(idx != U32_MAX);
+                    file_path_map.write_unsafe(i, idx);
+                } else {
+                    file_paths->push_panic(path_cstr);
+                    file_path_map.write_unsafe(
+                        i, u64_to_u32(file_paths->n_written(), &overflow));
+                    assert(!overflow);
+                }
+            }
+        }
+
+        assert(Alloc::ResizeStatus::Ok ==
+               tmp_alloc->resize(tmp_alloc_initial_offset));
     }
 
     static DebugLine init_panic(Alloc *alloc, Alloc *tmp_alloc,
-                                Slice<u8> input_bytes) {
+                                Slice<u8> input_bytes,
+                                Slice<u8> debug_line_str) {
         assert(alloc != nullptr);
         assert(tmp_alloc != nullptr);
         assert(alloc != tmp_alloc);
@@ -1474,7 +1645,8 @@ struct DebugLine {
 
         // iterate over compilation units
         while (!input.is_finished()) {
-            parse_compilation_unit_panic_(&input, &infos, &file_paths, &min_pc,
+            parse_compilation_unit_panic_(tmp_alloc, debug_line_str, &input,
+                                          &infos, &file_paths, &min_pc,
                                           &max_pc);
             // TODO: remove this!!
             break;
@@ -1524,10 +1696,11 @@ struct DebugLine {
             .minimum_pc = min_pc,
         };
     }
-    //
+
     // GetLineInfoStatus get_line_info(u64 pc, LineInfo* out) const {
     //    index into this->infos to get the info, don't forget to subtract
     //    this->minimum_pc from the query pc.
+    //    file_path.len() == 0 means NOT FOUND
     // }
 };
 

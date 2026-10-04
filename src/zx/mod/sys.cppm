@@ -1454,10 +1454,10 @@ FTruncateStatus ftruncate(i32 fildes, u64 length) {
 // https://www.man7.org/linux/man-pages/man2/sigreturn.2.html
 //
 // It essentially just returns control back to the kernel.
-//
-// Implementation is taken from zig implementation for the same thing on x86_64
-// linux.
-void sigreturn_() { syscall0(NR_RT_SIGRETURN); }
+__attribute__((naked, noreturn)) void sigreturn_() {
+    __asm__ volatile("movq $15, %rax\n\t" // __NR_rt_sigreturn
+                     "syscall\n\t");
+}
 
 enum class [[nodiscard]] SigActionStatus : u8_c {
     Ok = 0,

@@ -5,7 +5,7 @@ using namespace zx;
 #ifdef ZX_DEBUG_INFO
 
 static elf::EhFrame ZX_EH_FRAME_;
-static elf::DebugLine ZX_DEBUG_LINE_;
+// static elf::DebugLine ZX_DEBUG_LINE_;
 
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
@@ -19,14 +19,31 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     Alloc tmp_alloc =
         Alloc::init(SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
 
-    sys::UContext const *uctx = (sys::UContext const *)ucontext;
-    elf::UnwindContext ctx = elf::UnwindContext::init_from_ucontext(uctx);
-
     SliceMut<u8> fmt_slice;
     assert(AllocStatus::Ok == tmp_alloc.alloc<u8>(u64{1} << 11, &fmt_slice));
     Fmt fmt = Fmt::init(fmt_slice);
 
     bool fmt_overflow = false;
+
+    {
+        fmt.push_str(CString::init_unsafe("Received Signal: ").as_slice(),
+                     &fmt_overflow);
+        fmt.push_i64(signum, &fmt_overflow);
+        fmt.push_char('\n', &fmt_overflow);
+
+        assert(!fmt_overflow);
+
+        u64 n_written = 0;
+        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+                                                  fmt.written().ptr(),
+                                                  fmt.n_written(), &n_written));
+        assert(n_written == fmt.n_written());
+
+        fmt.reset();
+    }
+
+    sys::UContext const *uctx = (sys::UContext const *)ucontext;
+    elf::UnwindContext ctx = elf::UnwindContext::init_from_ucontext(uctx);
 
     char const *msg = nullptr;
     if (signum == (i32)sys::SIG::SEGV) {
@@ -114,18 +131,25 @@ extern "C" void zx_setup_() {
     ZX_EH_FRAME_ = elf::EhFrame::init_panic(&alloc, &tmp_alloc, eh_frame_header,
                                             eh_frame_raw);
 
-    u64 const debug_line_section_idx = file.get_section_index_panic(
-        CString::init_unsafe(".debug_line").as_slice());
+    // u64 const debug_line_section_idx = file.get_section_index_panic(
+    //     CString::init_unsafe(".debug_line").as_slice());
 
-    Slice<u8> debug_line_raw =
-        file.get_section_data_panic(debug_line_section_idx);
+    // Slice<u8> debug_line_raw =
+    //     file.get_section_data_panic(debug_line_section_idx);
 
-    ZX_DEBUG_LINE_ =
-        elf::DebugLine::init_panic(&alloc, &tmp_alloc, debug_line_raw);
+    // u64 const debug_line_str_section_idx = file.get_section_index_panic(
+    //     CString::init_unsafe(".debug_line_str").as_slice());
+
+    // Slice<u8> debug_line_str_raw =
+    //     file.get_section_data_panic(debug_line_str_section_idx);
+
+    // ZX_DEBUG_LINE_ =
+    //     elf::DebugLine::init_panic(&alloc, &tmp_alloc, debug_line_raw,
+    //     debug_line_str_raw);
 
     sys::SigAction act = sys::SigAction{
         .sigaction = signal_handler,
-        .flags = sys::SA_SIGINFO,
+        .flags = sys::SA_SIGINFO | sys::SA_RESETHAND | sys::SA_NODEFER,
         .mask = sys::SigSet::init(),
     };
 

@@ -124,15 +124,29 @@ int main() {
     Slice<u8> buf = read_self_bin(&alloc);
     elf::File const file = elf::File::init_panic(&alloc, buf);
 
-    u64 const section_idx = file.get_section_index_panic(
+    u64 const eh_frame_section_idx = file.get_section_index_panic(
         CString::init_unsafe(".eh_frame").as_slice());
 
-    Slice<u8> eh_frame_raw = file.get_section_data_panic(section_idx);
+    Slice<u8> eh_frame_raw = file.get_section_data_panic(eh_frame_section_idx);
     elf::SectionHeader const *eh_frame_header =
-        file.get_section_header_panic(section_idx);
+        file.get_section_header_panic(eh_frame_section_idx);
 
     elf::EhFrame eh_frame = elf::EhFrame::init_panic(
         &alloc, &tmp_alloc, eh_frame_header, eh_frame_raw);
+
+    u64 const debug_line_section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".debug_line").as_slice());
+    Slice<u8> debug_line_raw =
+        file.get_section_data_panic(debug_line_section_idx);
+
+    u64 const debug_line_str_section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".debug_line_str").as_slice());
+    Slice<u8> debug_line_str_raw =
+        file.get_section_data_panic(debug_line_str_section_idx);
+
+    elf::DebugLine debug_line = elf::DebugLine::init_panic(
+        &alloc, &tmp_alloc, debug_line_raw, debug_line_str_raw);
+    (void)debug_line;
 
     callme_maybe(&tmp_alloc, &eh_frame, 0);
     cmmb(&tmp_alloc, &eh_frame);
