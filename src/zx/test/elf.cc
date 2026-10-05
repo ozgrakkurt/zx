@@ -111,7 +111,7 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 }
 
 int main() {
-    constexpr u64 mem_size = 1 << 21;
+    constexpr u64 mem_size = 1 << 25;
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
            page_alloc::alloc_4kb(mem_size, &mem));

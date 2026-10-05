@@ -10,8 +10,6 @@ import :cursor;
 import :list;
 import :ucontext;
 import :fmt;
-// TODO: remove this!!
-import :sys;
 
 export namespace zx {
 
@@ -1325,7 +1323,6 @@ struct EhFrame {
                 assert(cie != nullptr);
                 assert(cie_offset == (cie_id_offset - cie_id));
 
-                // TODO: assert cie_id points to cie_offset
                 FDE const fde =
                     parse_fde_panic(alloc, tmp_alloc, end_offset, header->addr,
                                     cie, &input_cursor);
@@ -1360,6 +1357,52 @@ constexpr u8 DW_FORM_udata = 0x0f;
 constexpr u8 DW_FORM_strp = 0x0e;
 constexpr u8 DW_FORM_line_strp = 0x1f;
 constexpr u8 DW_FORM_data16 = 0x1e;
+
+// Line number standard op codes
+constexpr u8 DW_LNS_copy = 0x01;
+constexpr u8 DW_LNS_advance_pc = 0x02;
+constexpr u8 DW_LNS_advance_line = 0x03;
+constexpr u8 DW_LNS_set_file = 0x04;
+constexpr u8 DW_LNS_set_column = 0x05;
+constexpr u8 DW_LNS_negate_stmt = 0x06;
+constexpr u8 DW_LNS_set_basic_block = 0x07;
+constexpr u8 DW_LNS_const_add_pc = 0x08;
+constexpr u8 DW_LNS_fixed_advance_pc = 0x09;
+constexpr u8 DW_LNS_set_prologue_end = 0x0a;
+constexpr u8 DW_LNS_set_epilogue_begin = 0x0b;
+constexpr u8 DW_LNS_set_isa = 0x0c;
+
+// Line number extended op codes
+constexpr u8 DW_LNE_end_sequence = 0x01;
+constexpr u8 DW_LNE_set_address = 0x02;
+constexpr u8 DW_LNE_reserved_ = 0x03;
+constexpr u8 DW_LNE_set_discriminator = 0x04;
+constexpr u8 DW_LNE_lo_user = 0x80;
+constexpr u8 DW_LNE_hi_user = 0xff;
+
+// Macro information entry type encodings (DWARF5, Section 8.23, Table 8.28)
+constexpr u8 DW_MACRO_padding = 0x00;
+constexpr u8 DW_MACRO_define = 0x01;
+constexpr u8 DW_MACRO_undef = 0x02;
+constexpr u8 DW_MACRO_start_file = 0x03;
+constexpr u8 DW_MACRO_end_file = 0x04;
+constexpr u8 DW_MACRO_define_strp = 0x05;
+constexpr u8 DW_MACRO_undef_strp = 0x06;
+constexpr u8 DW_MACRO_import = 0x07;
+
+// 0x08, 0x09, 0x0a are reserved in DWARF5.
+
+constexpr u8 DW_MACRO_define_strx = 0x0b;
+constexpr u8 DW_MACRO_undef_strx = 0x0c;
+constexpr u8 DW_MACRO_define_sup4 = 0x0d;
+constexpr u8 DW_MACRO_define_sup8 = 0x0e;
+constexpr u8 DW_MACRO_undef_sup4 = 0x0f;
+constexpr u8 DW_MACRO_undef_sup8 = 0x10;
+constexpr u8 DW_MACRO_import_sup4 = 0x11;
+constexpr u8 DW_MACRO_import_sup8 = 0x12;
+
+constexpr u8 DW_MACRO_lo_user = 0xe0;
+constexpr u8 DW_MACRO_hi_user = 0xff;
 
 u64 strnlen_panic_(u8 const *str, u64 max_len) {
     for (u64 i = 0; i < max_len; i++) {
@@ -1565,8 +1608,18 @@ struct DebugLine {
 
                 CString abs_file_path;
                 if (is_absolute) {
+                    // should be 0 for absolute paths
+                    assert(directory_index == 0);
+
                     abs_file_path = path_cstr;
                 } else {
+                    // need to create an absolute path manually using
+                    // the three parts BASE_COMPILATION_DIR + DIRECTORY + FILE
+
+                    // this can't be 0 as 0 is the base compilation directory
+                    // path.
+                    assert(directory_index != 0);
+
                     assert(directory_paths.len() > 0);
                     Slice<u8> base = directory_paths.read_unsafe(0);
                     Slice<u8> dir;
@@ -1643,6 +1696,192 @@ struct DebugLine {
         return file_path_map.as_const();
     }
 
+    struct RunArgs {
+        Cursor *input;
+        List<InfoRow> *infos;
+        Slice<u32> file_path_map;
+        u64 expected_unit_end_offset;
+        u64 *min_pc;
+        u64 *max_pc;
+        i8 line_base;
+        u8 line_range;
+        u8 opcode_base;
+        u8 minimum_instruction_length;
+    };
+
+    static void run_instructions_panic_(RunArgs args) {
+        u64 address = 0;
+        u16 column = 0;
+        u16 line = 1;
+        u16 file = 1;
+
+        bool overflow = false;
+
+        while (args.input->offset() < args.expected_unit_end_offset) {
+            u8 const opcode = args.input->read_panic<u8>();
+
+            switch (opcode) {
+            case DW_LNS_copy: {
+                // append row
+                args.infos->push_panic(InfoRow{
+                    .pc = address,
+                    .line_no = line,
+                    .column_no = column,
+                    .file_no = file,
+                });
+                *args.min_pc = min_u64(*args.min_pc, address);
+                *args.max_pc = max_u64(*args.max_pc, address);
+                break;
+            }
+            case DW_LNS_advance_pc: {
+                u64 const operand = args.input->read_uleb128_panic();
+                address = add_u64(address,
+                                  mul_u64(args.minimum_instruction_length,
+                                          operand, &overflow),
+                                  &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_advance_line: {
+                i64 const operand = args.input->read_sleb128_panic();
+                i64 const l = add_i64(operand, line, &overflow);
+                assert(!overflow);
+                line = i64_to_u16(l, &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_set_file: {
+                u64 const operand = args.input->read_uleb128_panic();
+                file = u64_to_u16(operand, &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_set_column: {
+                u64 const operand = args.input->read_uleb128_panic();
+                column = u64_to_u16(operand, &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_negate_stmt: {
+                // no-op for us since we don't trace the is_stmt register.
+                break;
+            }
+            case DW_LNS_set_basic_block: {
+                // no-op for us
+                break;
+            }
+            case DW_LNS_const_add_pc: {
+                u8 const adjusted_opcode =
+                    sub_u8(u8{255}, args.opcode_base, &overflow);
+                u64 const operation_advance =
+                    div_u8(adjusted_opcode, args.line_range, &overflow);
+                address = add_u64(address,
+                                  mul_u64(args.minimum_instruction_length,
+                                          operation_advance, &overflow),
+                                  &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_fixed_advance_pc: {
+                u16 const param = args.input->read_panic<u16>();
+                address = add_u64(address, param, &overflow);
+                assert(!overflow);
+                break;
+            }
+            case DW_LNS_set_prologue_end: {
+                // no-op for us
+                break;
+            }
+            case DW_LNS_set_epilogue_begin: {
+                // no-op for us
+                break;
+            }
+            case DW_LNS_set_isa: {
+                // shouldn't happen
+                //
+                // If want to change this to ignoring this opcode:
+                // - Add code to actually skip the leb128 operand so it doesn't
+                //   misalign the input stream.
+                panic();
+                break;
+            }
+            case 0: {
+                u64 const len = args.input->read_uleb128_panic();
+                u64 const exit_offset =
+                    add_u64(args.input->offset(), len, &overflow);
+                u8 const extended_opcode = args.input->read_panic<u8>();
+                switch (extended_opcode) {
+                case DW_LNE_end_sequence: {
+                    // append row
+                    args.infos->push_panic(InfoRow{
+                        .pc = address,
+                        .line_no = line,
+                        .column_no = column,
+                        .file_no = file,
+                    });
+                    *args.min_pc = min_u64(*args.min_pc, address);
+                    *args.max_pc = max_u64(*args.max_pc, address);
+
+                    // reset state
+                    address = 0;
+                    column = 0;
+                    line = 1;
+                    file = 1;
+
+                    break;
+                }
+                case DW_LNE_set_address: {
+                    u64 const new_addr = args.input->read_panic<u64>();
+                    address = new_addr;
+
+                    break;
+                };
+                case DW_LNE_set_discriminator: {
+                    u64 const operand = args.input->read_uleb128_panic();
+                    (void)operand;
+                    break;
+                };
+                case DW_LNE_reserved_: {
+                    panic();
+                    break;
+                }
+                default: {
+                    panic();
+                    break;
+                }
+                }
+
+                assert(args.input->offset() == exit_offset);
+                // assert(Cursor::Status::Ok == args.input->seek(exit_offset));
+                break;
+            }
+            default: {
+                assert(opcode >= args.opcode_base);
+
+                u8 const adjusted_opcode =
+                    sub_u8(opcode, args.opcode_base, &overflow);
+                u64 const operation_advance =
+                    div_u8(adjusted_opcode, args.line_range, &overflow);
+                address = add_u64(address,
+                                  mul_u64(args.minimum_instruction_length,
+                                          operation_advance, &overflow),
+                                  &overflow);
+
+                i32 const line_increment =
+                    add_i32(args.line_base,
+                            mod_u8(adjusted_opcode, args.line_range, &overflow),
+                            &overflow);
+                line = i32_to_u16(add_i32(line, line_increment, &overflow),
+                                  &overflow);
+
+                assert(!overflow);
+
+                break;
+            }
+            }
+        }
+    }
+
     static void parse_compilation_unit_panic_(Alloc *alloc, Alloc *tmp_alloc,
                                               Slice<u8> debug_line_str,
                                               Cursor *input,
@@ -1651,12 +1890,17 @@ struct DebugLine {
                                               u64 *min_pc, u64 *max_pc) {
         assert(alloc != tmp_alloc);
 
+        bool overflow = false;
+
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
 
         u32 const unit_length = input->read_panic<u32>();
         // this means DWARF 64bit version, we only support parsing the 32bit
         // version.
         assert(unit_length != U32_MAX);
+        u64 const expected_unit_end_offset =
+            add_u64(input->offset(), unit_length, &overflow);
+        assert(!overflow);
 
         u16 const version = input->read_panic<u16>();
         assert(version == 5);
@@ -1671,16 +1915,14 @@ struct DebugLine {
         // We don't support 64bit dwarf format. Only 32bit is supported.
         assert(header_length != U32_MAX);
 
-        bool overflow = false;
-
         u64 const expected_instructions_start_offset =
             add_u64(input->offset(), header_length, &overflow);
         assert(!overflow);
 
         u8 const minimum_instruction_length = input->read_panic<u8>();
         u8 const maximum_operations_per_instruction = input->read_panic<u8>();
-        (void)minimum_instruction_length;
-        (void)maximum_operations_per_instruction;
+        // We are not on a VLIW architecture.
+        assert(maximum_operations_per_instruction == 1);
 
         // unused, we don't care about breakpoints since we are not implementing
         // a debugger.
@@ -1691,16 +1933,9 @@ struct DebugLine {
 
         i8 const line_base = input->read_panic<i8>();
         u8 const line_range = input->read_panic<u8>();
-        (void)line_base;
-        (void)line_range;
+        assert(line_range > 0);
 
         u8 const opcode_base = input->read_panic<u8>();
-        (void)opcode_base;
-        // TODO: remove these (void) stuff
-        (void)infos;
-        (void)file_paths;
-        (void)min_pc;
-        (void)max_pc;
 
         // unused, we will error if we encounter an unknown opcode
         overflow = false;
@@ -1712,11 +1947,26 @@ struct DebugLine {
 
         Slice<u32> file_path_map = parse_filepaths_panic_(
             alloc, tmp_alloc, debug_line_str, input, file_paths);
-        (void)file_path_map;
 
         // parsing file paths should have consumed the right number of bytes at
         // this point.
         assert(input->offset() == expected_instructions_start_offset);
+
+        run_instructions_panic_(RunArgs{
+            .input = input,
+            .infos = infos,
+            .file_path_map = file_path_map,
+            .min_pc = min_pc,
+            .max_pc = max_pc,
+            .line_base = line_base,
+            .line_range = line_range,
+            .opcode_base = opcode_base,
+            .minimum_instruction_length = minimum_instruction_length,
+            .expected_unit_end_offset = expected_unit_end_offset,
+        });
+
+        // we should have reached the unit end by now.
+        assert(input->offset() == expected_unit_end_offset);
 
         assert(Alloc::ResizeStatus::Ok ==
                tmp_alloc->resize(tmp_alloc_initial_offset));
@@ -1760,17 +2010,17 @@ struct DebugLine {
             parse_compilation_unit_panic_(alloc, tmp_alloc, debug_line_str,
                                           &input, &infos, &file_paths, &min_pc,
                                           &max_pc);
-            // TODO: remove this!!
-            break;
         }
 
         bool overflow = false;
-        u64 const n_pcs = sub_u64(max_pc, min_pc, &overflow);
+        u64 const infos_capacity =
+            add_u64(1, sub_u64(max_pc, min_pc, &overflow), &overflow);
         assert(!overflow);
 
         // ## move the found infos to the orderly output array
         SliceMut<Info> infos_out;
-        assert(AllocStatus::Ok == alloc->alloc<Info>(n_pcs, &infos_out));
+        assert(AllocStatus::Ok ==
+               alloc->alloc<Info>(infos_capacity, &infos_out));
         infos_out.memset(0);
 
         Slice<InfoRow> collected_infos = infos.written();
