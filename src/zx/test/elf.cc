@@ -29,10 +29,11 @@ Slice<u8> read_self_bin(Alloc *alloc) {
     return buf.as_const();
 }
 
-void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
+void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
+          elf::DebugLine const *debug_line) {
     elf::UnwindContext ctx = elf::UnwindContext::init();
 
-    u8 fmt_buf[1024];
+    u8 fmt_buf[4096];
     SliceMut<u8> fmt_slice =
         SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf));
     Fmt fmt = Fmt::init(fmt_slice);
@@ -43,8 +44,17 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
 
     do {
         if (ctx.rip() != 0) {
-            fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
-            fmt.push_char('\n', &fmt_overflow);
+            u64 const pc = ctx.rip() - 1;
+            elf::DebugLine::LineInfo line_info;
+            if (elf::DebugLine::GetLineInfoStatus::Ok ==
+                debug_line->get_line_info(pc, &line_info)) {
+                fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.line_no, &fmt_overflow);
+                fmt.push_char('\n', &fmt_overflow);
+            } else {
+                panic();
+            }
         }
     } while (dbg_info->step_panic(tmp_alloc, &ctx));
 
@@ -58,13 +68,14 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info) {
     // panic();
 }
 
-void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
+void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
+                  elf::DebugLine const *debug_line, u64 iter) {
     if (iter > 5) {
         TimeInfo info;
         TimeInfo::InitStatus const status = TimeInfo::init(&info);
         assert(status == TimeInfo::InitStatus::Ok);
 
-        u8 fmt_buf[1024];
+        u8 fmt_buf[4096];
         SliceMut<u8> fmt_slice =
             SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf));
         Fmt fmt = Fmt::init(fmt_slice);
@@ -78,8 +89,13 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 
         Timer timer = Timer::init(info);
         do {
-            if (ctx.rip() != 0) {
-                fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
+            u64 const pc = ctx.rip() - 1;
+            elf::DebugLine::LineInfo line_info;
+            if (elf::DebugLine::GetLineInfoStatus::Ok ==
+                debug_line->get_line_info(pc, &line_info)) {
+                fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.line_no, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
             }
         } while (dbg_info->step_panic(tmp_alloc, &ctx));
@@ -95,17 +111,16 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info, u64 iter) {
 
         assert(!fmt_overflow);
 
-        // u64 n_written = 0;
-        // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-        //                                           fmt.written().ptr(),
-        //                                           fmt.n_written(),
-        //                                           &n_written));
-        // assert(n_written == fmt.n_written());
-        // panic();
+        u64 n_written = 0;
+        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+                                                  fmt.written().ptr(),
+                                                  fmt.n_written(), &n_written));
+        assert(n_written == fmt.n_written());
+        panic();
 
         return;
     } else {
-        callme_maybe(tmp_alloc, dbg_info, iter + 1);
+        callme_maybe(tmp_alloc, dbg_info, debug_line, iter + 1);
         return;
     }
 }
@@ -148,8 +163,8 @@ int main() {
         &alloc, &tmp_alloc, debug_line_raw, debug_line_str_raw);
     (void)debug_line;
 
-    callme_maybe(&tmp_alloc, &eh_frame, 0);
-    cmmb(&tmp_alloc, &eh_frame);
+    callme_maybe(&tmp_alloc, &eh_frame, &debug_line, 0);
+    cmmb(&tmp_alloc, &eh_frame, &debug_line);
 
     assert(page_alloc::FreeStatus::Ok == page_alloc::free(mem, mem_size));
 

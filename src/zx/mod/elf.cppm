@@ -1435,9 +1435,9 @@ struct DebugLine {
 
     enum class [[nodiscard]] GetLineInfoStatus : u8_c {
         Ok = 0,
-        NotFound,
-        Invalid,
         Nullptr,
+        NotFound,
+        InvalidPc,
     };
 
     struct InfoRow {
@@ -1464,7 +1464,7 @@ struct DebugLine {
     // go into the global `file_paths` list.
     //
     // Lifetimes of paths might be tied to debug_line_str data too.
-    static Slice<u32> parse_filepaths_panic_(Alloc *alloc, Alloc *tmp_alloc,
+    static Slice<u16> parse_filepaths_panic_(Alloc *alloc, Alloc *tmp_alloc,
                                              Slice<u8> debug_line_str,
                                              Cursor *input,
                                              List<CString> *file_paths) {
@@ -1528,7 +1528,7 @@ struct DebugLine {
         //
         // Practically we will use file_path_map[69] to record it as
         // InfoRow.file_no into the global InfoRow list.
-        SliceMut<u32> file_path_map;
+        SliceMut<u16> file_path_map;
         {
             u8 const file_name_entry_format_count = input->read_panic<u8>();
             assert(file_name_entry_format_count >= 2);
@@ -1569,7 +1569,7 @@ struct DebugLine {
             u64 const file_names_count = input->read_uleb128_panic();
 
             assert(AllocStatus::Ok ==
-                   tmp_alloc->alloc<u32>(file_names_count, &file_path_map));
+                   tmp_alloc->alloc<u16>(file_names_count, &file_path_map));
 
             for (u64 i = 0; i < file_names_count; i++) {
                 u32 const offset = input->read_panic<u32>();
@@ -1654,13 +1654,13 @@ struct DebugLine {
                 }
 
                 bool found = false;
-                u32 idx = U32_MAX;
+                u16 idx = U16_MAX;
                 for (u64 j = 0; j < file_paths->n_written(); j++) {
                     Slice<u8> other =
                         file_paths->written().read_unsafe(j).as_slice();
 
                     if (other.equals(abs_file_path.as_slice())) {
-                        idx = u64_to_u32(j, &overflow);
+                        idx = u64_to_u16(j, &overflow);
                         assert(!overflow);
                         found = true;
                         break;
@@ -1668,12 +1668,12 @@ struct DebugLine {
                 }
 
                 if (found) {
-                    assert(idx != U32_MAX);
+                    assert(idx != U16_MAX);
                     file_path_map.write_unsafe(i, idx);
                 } else {
+                    u64 const w_idx = file_paths->n_written();
                     file_paths->push_panic(abs_file_path);
-                    file_path_map.write_unsafe(
-                        i, u64_to_u32(file_paths->n_written(), &overflow));
+                    file_path_map.write_unsafe(i, u64_to_u16(w_idx, &overflow));
                     assert(!overflow);
                 }
             }
@@ -1699,7 +1699,7 @@ struct DebugLine {
     struct RunArgs {
         Cursor *input;
         List<InfoRow> *infos;
-        Slice<u32> file_path_map;
+        Slice<u16> file_path_map;
         u64 expected_unit_end_offset;
         u64 *min_pc;
         u64 *max_pc;
@@ -1723,11 +1723,12 @@ struct DebugLine {
             switch (opcode) {
             case DW_LNS_copy: {
                 // append row
+                assert(file < args.file_path_map.len());
                 args.infos->push_panic(InfoRow{
                     .pc = address,
                     .line_no = line,
                     .column_no = column,
-                    .file_no = file,
+                    .file_no = args.file_path_map.read_unsafe(file),
                 });
                 *args.min_pc = min_u64(*args.min_pc, address);
                 *args.max_pc = max_u64(*args.max_pc, address);
@@ -1813,11 +1814,12 @@ struct DebugLine {
                 switch (extended_opcode) {
                 case DW_LNE_end_sequence: {
                     // append row
+                    assert(file < args.file_path_map.len());
                     args.infos->push_panic(InfoRow{
                         .pc = address,
                         .line_no = line,
                         .column_no = column,
-                        .file_no = file,
+                        .file_no = args.file_path_map.read_unsafe(file),
                     });
                     *args.min_pc = min_u64(*args.min_pc, address);
                     *args.max_pc = max_u64(*args.max_pc, address);
@@ -1873,8 +1875,18 @@ struct DebugLine {
                             &overflow);
                 line = i32_to_u16(add_i32(line, line_increment, &overflow),
                                   &overflow);
-
                 assert(!overflow);
+
+                // append row
+                assert(file < args.file_path_map.len());
+                args.infos->push_panic(InfoRow{
+                    .pc = address,
+                    .line_no = line,
+                    .column_no = column,
+                    .file_no = args.file_path_map.read_unsafe(file),
+                });
+                *args.min_pc = min_u64(*args.min_pc, address);
+                *args.max_pc = max_u64(*args.max_pc, address);
 
                 break;
             }
@@ -1945,7 +1957,7 @@ struct DebugLine {
         assert(Cursor::Status::Ok ==
                input->skip(num_standard_opcodes * sizeof(u8)));
 
-        Slice<u32> file_path_map = parse_filepaths_panic_(
+        Slice<u16> file_path_map = parse_filepaths_panic_(
             alloc, tmp_alloc, debug_line_str, input, file_paths);
 
         // parsing file paths should have consumed the right number of bytes at
@@ -2002,7 +2014,7 @@ struct DebugLine {
 
         Cursor input = Cursor::init(input_bytes);
 
-        u64 min_pc = 0;
+        u64 min_pc = U64_MAX;
         u64 max_pc = 0;
 
         // iterate over compilation units
@@ -2021,7 +2033,7 @@ struct DebugLine {
         SliceMut<Info> infos_out;
         assert(AllocStatus::Ok ==
                alloc->alloc<Info>(infos_capacity, &infos_out));
-        infos_out.memset(0);
+        infos_out.memset(0xff);
 
         Slice<InfoRow> collected_infos = infos.written();
 
@@ -2038,6 +2050,20 @@ struct DebugLine {
                                                .line_no = inf.line_no,
                                                .column_no = inf.column_no,
                                            });
+        }
+
+        Info inf;
+        __builtin_memset(&inf, 0, sizeof(inf));
+        for (u64 i = 0; i < infos_out.len(); i++) {
+            Info n = infos_out.read_unsafe(i);
+            if (n.line_no != U16_MAX || n.column_no != U16_MAX ||
+                n.file_no != U16_MAX) {
+                inf = n;
+            }
+            if ((inf.line_no != 0 && inf.line_no != U16_MAX) ||
+                inf.column_no != U16_MAX || inf.file_no != U16_MAX) {
+                infos_out.write_unsafe(i, inf);
+            }
         }
 
         // ## move file path info to regular alloc since we will discard the tmp
@@ -2059,11 +2085,40 @@ struct DebugLine {
         };
     }
 
-    // GetLineInfoStatus get_line_info(u64 pc, LineInfo* out) const {
-    //    index into this->infos to get the info, don't forget to subtract
-    //    this->minimum_pc from the query pc.
-    //    file_path.len() == 0 means NOT FOUND
-    // }
+    GetLineInfoStatus get_line_info(u64 pc, LineInfo *out) const {
+        if (out == nullptr) {
+            return GetLineInfoStatus::Nullptr;
+        }
+
+        bool overflow = false;
+        u64 const pc_idx = sub_u64(pc, this->minimum_pc, &overflow);
+        if (overflow) {
+            return GetLineInfoStatus::InvalidPc;
+        }
+
+        Info info;
+        if (SliceStatus::Ok != this->infos.read(pc_idx, &info)) {
+            return GetLineInfoStatus::InvalidPc;
+        }
+
+        if (info.line_no == U16_MAX && info.column_no == U16_MAX &&
+            info.file_no == U16_MAX) {
+            return GetLineInfoStatus::NotFound;
+        }
+
+        if (info.line_no == 0) {
+            return GetLineInfoStatus::NotFound;
+        }
+
+        CString const file_path = this->file_paths.read_unsafe(info.file_no);
+
+        *out = LineInfo{
+            .file_path = file_path,
+            .line_no = info.line_no,
+            .column_no = info.column_no,
+        };
+        return GetLineInfoStatus::Ok;
+    }
 };
 
 } // namespace elf
