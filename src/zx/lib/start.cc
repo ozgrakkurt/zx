@@ -58,21 +58,27 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
 
     fmt.push_str(CString::init_unsafe(msg).as_slice(), &fmt_overflow);
 
-    while (ZX_EH_FRAME_.step_panic(&tmp_alloc, &ctx)) {
+    u64 sub = 0;
+    do {
         if (ctx.rip() != 0) {
-            u64 const pc = ctx.rip() - 1;
+            u64 const pc = ctx.rip() - sub;
             elf::DebugLine::LineInfo line_info;
             if (elf::DebugLine::GetLineInfoStatus::Ok ==
                 ZX_DEBUG_LINE_.get_line_info(pc, &line_info)) {
+                fmt.push_char('-', &fmt_overflow);
                 fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
                 fmt.push_char(':', &fmt_overflow);
                 fmt.push_u64(line_info.line_no, &fmt_overflow);
                 fmt.push_char(':', &fmt_overflow);
                 fmt.push_u64(line_info.column_no, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
+            } else {
+                fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
+                             &fmt_overflow);
             }
         }
-    }
+        sub = 1;
+    } while (ZX_EH_FRAME_.step_panic(&tmp_alloc, &ctx));
 
     assert(!fmt_overflow);
 
