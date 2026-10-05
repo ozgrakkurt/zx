@@ -5,12 +5,12 @@ using namespace zx;
 #ifdef ZX_DEBUG_INFO
 
 static elf::EhFrame ZX_EH_FRAME_;
-// static elf::DebugLine ZX_DEBUG_LINE_;
+static elf::DebugLine ZX_DEBUG_LINE_;
 
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
 
-    constexpr u64 tmp_mem_size = 1 << 18;
+    constexpr u64 tmp_mem_size = 1 << 20;
     u8 *tmp_mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
            page_alloc::alloc_4kb(tmp_mem_size, &tmp_mem));
@@ -26,8 +26,9 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     bool fmt_overflow = false;
 
     {
-        fmt.push_str(CString::init_unsafe("Received Signal: ").as_slice(),
-                     &fmt_overflow);
+        fmt.push_str(
+            CString::init_unsafe("Received Signal Number: ").as_slice(),
+            &fmt_overflow);
         fmt.push_i64(signum, &fmt_overflow);
         fmt.push_char('\n', &fmt_overflow);
 
@@ -59,8 +60,17 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
 
     while (ZX_EH_FRAME_.step_panic(&tmp_alloc, &ctx)) {
         if (ctx.rip() != 0) {
-            fmt.push_u64_hex(ctx.rip() - 1, &fmt_overflow);
-            fmt.push_char('\n', &fmt_overflow);
+            u64 const pc = ctx.rip() - 1;
+            elf::DebugLine::LineInfo line_info;
+            if (elf::DebugLine::GetLineInfoStatus::Ok ==
+                ZX_DEBUG_LINE_.get_line_info(pc, &line_info)) {
+                fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.line_no, &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.column_no, &fmt_overflow);
+                fmt.push_char('\n', &fmt_overflow);
+            }
         }
     }
 
@@ -101,8 +111,8 @@ static Slice<u8> read_self_bin(Alloc *alloc) {
 }
 
 extern "C" void zx_setup_() {
-    constexpr u64 tmp_mem_size = 1 << 20;
-    constexpr u64 mem_size = 1 << 20;
+    constexpr u64 tmp_mem_size = 1 << 24;
+    constexpr u64 mem_size = 1 << 24;
 
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
@@ -131,21 +141,18 @@ extern "C" void zx_setup_() {
     ZX_EH_FRAME_ = elf::EhFrame::init_panic(&alloc, &tmp_alloc, eh_frame_header,
                                             eh_frame_raw);
 
-    // u64 const debug_line_section_idx = file.get_section_index_panic(
-    //     CString::init_unsafe(".debug_line").as_slice());
+    u64 const debug_line_section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".debug_line").as_slice());
+    Slice<u8> debug_line_raw =
+        file.get_section_data_panic(debug_line_section_idx);
 
-    // Slice<u8> debug_line_raw =
-    //     file.get_section_data_panic(debug_line_section_idx);
+    u64 const debug_line_str_section_idx = file.get_section_index_panic(
+        CString::init_unsafe(".debug_line_str").as_slice());
+    Slice<u8> debug_line_str_raw =
+        file.get_section_data_panic(debug_line_str_section_idx);
 
-    // u64 const debug_line_str_section_idx = file.get_section_index_panic(
-    //     CString::init_unsafe(".debug_line_str").as_slice());
-
-    // Slice<u8> debug_line_str_raw =
-    //     file.get_section_data_panic(debug_line_str_section_idx);
-
-    // ZX_DEBUG_LINE_ =
-    //     elf::DebugLine::init_panic(&alloc, &tmp_alloc, debug_line_raw,
-    //     debug_line_str_raw);
+    ZX_DEBUG_LINE_ = elf::DebugLine::init_panic(
+        &alloc, &tmp_alloc, debug_line_raw, debug_line_str_raw);
 
     sys::SigAction act = sys::SigAction{
         .sigaction = signal_handler,

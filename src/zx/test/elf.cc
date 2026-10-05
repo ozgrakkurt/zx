@@ -54,8 +54,6 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
                 fmt.push_char(':', &fmt_overflow);
                 fmt.push_u64(line_info.column_no, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
-            } else {
-                panic();
             }
         }
     } while (dbg_info->step_panic(tmp_alloc, &ctx));
@@ -115,12 +113,13 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
 
         assert(!fmt_overflow);
 
-        u64 n_written = 0;
-        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-                                                  fmt.written().ptr(),
-                                                  fmt.n_written(), &n_written));
-        assert(n_written == fmt.n_written());
-        panic();
+        // u64 n_written = 0;
+        // assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+        //                                           fmt.written().ptr(),
+        //                                           fmt.n_written(),
+        //                                           &n_written));
+        // assert(n_written == fmt.n_written());
+        // panic();
 
         return;
     } else {
@@ -165,7 +164,6 @@ int main() {
 
     elf::DebugLine debug_line = elf::DebugLine::init_panic(
         &alloc, &tmp_alloc, debug_line_raw, debug_line_str_raw);
-    (void)debug_line;
 
     callme_maybe(&tmp_alloc, &eh_frame, &debug_line, 0);
     cmmb(&tmp_alloc, &eh_frame, &debug_line);
