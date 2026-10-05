@@ -51,6 +51,8 @@ void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
                 fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
                 fmt.push_char(':', &fmt_overflow);
                 fmt.push_u64(line_info.line_no, &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.column_no, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
             } else {
                 panic();
@@ -96,6 +98,8 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
                 fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
                 fmt.push_char(':', &fmt_overflow);
                 fmt.push_u64(line_info.line_no, &fmt_overflow);
+                fmt.push_char(':', &fmt_overflow);
+                fmt.push_u64(line_info.column_no, &fmt_overflow);
                 fmt.push_char('\n', &fmt_overflow);
             }
         } while (dbg_info->step_panic(tmp_alloc, &ctx));
