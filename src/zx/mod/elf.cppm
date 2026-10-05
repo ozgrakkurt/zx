@@ -9,6 +9,8 @@ import :leb128;
 import :cursor;
 import :list;
 import :ucontext;
+import :fmt;
+// TODO: remove this!!
 import :sys;
 
 export namespace zx {
@@ -1402,64 +1404,30 @@ struct DebugLine {
         u16 column_no;
     };
 
-    static void parse_compilation_unit_panic_(Alloc *tmp_alloc,
-                                              Slice<u8> debug_line_str,
-                                              Cursor *input,
-                                              List<InfoRow> *infos,
-                                              List<CString> *file_paths,
-                                              u64 *min_pc, u64 *max_pc) {
-        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+    // Parses the directory_path and file_path section of the compute unit
+    // header.
+    //
+    // Pushes the found paths into the global `file_path` list.
+    //
+    // Returns file_path_map which maps local file_no register values to global
+    // `file_paths` index. For example, if we are executing a debug_line program
+    // and file_no register has value 69. We can map that index to a global
+    // index by doing file_path_map[69], then we can write the global index to a
+    // InfoRow.
+    //
+    // Return slice is allocated using tmp_alloc.
+    //
+    // Regular alloc is only used for allocating the individual file paths that
+    // go into the global `file_paths` list.
+    //
+    // Lifetimes of paths might be tied to debug_line_str data too.
+    static Slice<u32> parse_filepaths_panic_(Alloc *alloc, Alloc *tmp_alloc,
+                                             Slice<u8> debug_line_str,
+                                             Cursor *input,
+                                             List<CString> *file_paths) {
+        assert(alloc != tmp_alloc);
 
-        u32 const unit_length = input->read_panic<u32>();
-        // this means DWARF 64bit version, we only support parsing the 32bit
-        // version.
-        assert(unit_length != U32_MAX);
-
-        u16 const version = input->read_panic<u16>();
-        assert(version == 5);
-
-        u8 const address_size = input->read_panic<u8>();
-        assert(address_size == 8);
-
-        u8 const segment_selector_size = input->read_panic<u8>();
-        assert(segment_selector_size == 0);
-
-        u32 const header_length = input->read_panic<u32>();
-        // We don't support 64bit dwarf format. Only 32bit is supported.
-        assert(header_length != U32_MAX);
-
-        u8 const minimum_instruction_length = input->read_panic<u8>();
-        u8 const maximum_operations_per_instruction = input->read_panic<u8>();
-        (void)minimum_instruction_length;
-        (void)maximum_operations_per_instruction;
-
-        // unused, we don't care about breakpoints since we are not implementing
-        // a debugger.
-        {
-            u8 const default_is_stmt = input->read_panic<u8>();
-            (void)default_is_stmt;
-        }
-
-        i8 const line_base = input->read_panic<i8>();
-        u8 const line_range = input->read_panic<u8>();
-        (void)line_base;
-        (void)line_range;
-
-        u8 const opcode_base = input->read_panic<u8>();
-        (void)opcode_base;
-        // TODO: remove these (void) stuff
-        (void)infos;
-        (void)file_paths;
-        (void)min_pc;
-        (void)max_pc;
-
-        // unused, we will error if we encounter an unknown opcode
         bool overflow = false;
-        u8 const num_standard_opcodes = sub_u8(opcode_base, 1, &overflow);
-        assert(!overflow);
-
-        assert(Cursor::Status::Ok ==
-               input->skip(num_standard_opcodes * sizeof(u8)));
 
         SliceMut<Slice<u8>> directory_paths;
         {
@@ -1487,15 +1455,27 @@ struct DebugLine {
 
                 Slice<u8> dir_path = Slice<u8>::init_unsafe(start, len);
                 assert(dir_path.len() > 0);
-                {
-                    u64 n_w = 0;
-                    (void)sys::write(sys::STDERR, dir_path.ptr(), dir_path.len(), &n_w);
-                }
-                assert(dir_path.read_unsafe(0) == '/');
 
-                directory_paths.write_unsafe(
-                    i, dir_path);
+                directory_paths.write_unsafe(i, dir_path);
             }
+        }
+
+        // should at least have the base absolute path at 0 index
+        assert(directory_paths.len() > 0);
+        // first one should be absolute
+        assert(directory_paths.read_unsafe(0).read_unsafe(0) == '/');
+        for (u64 i = 1; i < directory_paths.len(); i++) {
+            // rest should be relative
+            assert(directory_paths.read_unsafe(i).read_unsafe(0) != '/');
+        }
+
+        for (u64 i = 0; i < directory_paths.len(); i++) {
+            Slice<u8> path = directory_paths.read_unsafe(i);
+            u64 const last_idx = sub_u64(path.len(), 1, &overflow);
+            assert(!overflow);
+            // none of these should end with a '/'.
+            // this is important as we assume this while cancatenating them.
+            assert(path.read_unsafe(last_idx) != '/');
         }
 
         // maps local file_path index to global file path index
@@ -1551,7 +1531,7 @@ struct DebugLine {
             for (u64 i = 0; i < file_names_count; i++) {
                 u32 const offset = input->read_panic<u32>();
                 // skip directory index
-                (void)input->read_uleb128_panic();
+                u64 const directory_index = input->read_uleb128_panic();
                 // skip the unknown stuff
                 for (u64 j = 0; j < num_unknown_formats; j++) {
                     switch (unk_formats[j]) {
@@ -1580,12 +1560,45 @@ struct DebugLine {
                 Slice<u8> path = path_cstr.as_slice();
                 // can't be empty
                 assert(path.len() > 0);
-                // should be absolute.
-                {
-                    u64 n_w = 0;
-                    (void)sys::write(sys::STDERR, path.ptr(), path.len(), &n_w);
+
+                bool const is_absolute = path.read_unsafe(0) == '/';
+
+                CString abs_file_path;
+                if (is_absolute) {
+                    abs_file_path = path_cstr;
+                } else {
+                    assert(directory_paths.len() > 0);
+                    Slice<u8> base = directory_paths.read_unsafe(0);
+                    Slice<u8> dir;
+                    assert(SliceStatus::Ok ==
+                           directory_paths.read(directory_index, &dir));
+
+                    // 3 is because we have a format like `base / dir / path
+                    // NULL_BYTE` 2 for slashes one for the null byte.
+                    u64 const needed_len = add_u64(
+                        add_u64(base.len(), 3, &overflow),
+                        add_u64(dir.len(), path.len(), &overflow), &overflow);
+                    assert(!overflow);
+
+                    SliceMut<u8> abs_p;
+                    assert(AllocStatus::Ok ==
+                           alloc->alloc<u8>(needed_len, &abs_p));
+                    Fmt fmt = Fmt::init(abs_p);
+                    bool fmt_overflow = false;
+
+                    fmt.push_str(base, &fmt_overflow);
+                    fmt.push_char('/', &fmt_overflow);
+                    fmt.push_str(dir, &fmt_overflow);
+                    fmt.push_char('/', &fmt_overflow);
+                    fmt.push_str(path, &fmt_overflow);
+                    fmt.push_char(0, &fmt_overflow);
+                    assert(!fmt_overflow);
+
+                    abs_file_path =
+                        CString::init_unsafe((char const *)fmt.written().ptr());
+                    assert(abs_file_path.as_slice().len() ==
+                           sub_unsafe_u64(needed_len, 1));
                 }
-                assert(path.read_unsafe(0) == '/');
 
                 bool found = false;
                 u32 idx = U32_MAX;
@@ -1593,7 +1606,7 @@ struct DebugLine {
                     Slice<u8> other =
                         file_paths->written().read_unsafe(j).as_slice();
 
-                    if (other.equals(path)) {
+                    if (other.equals(abs_file_path.as_slice())) {
                         idx = u64_to_u32(j, &overflow);
                         assert(!overflow);
                         found = true;
@@ -1605,13 +1618,105 @@ struct DebugLine {
                     assert(idx != U32_MAX);
                     file_path_map.write_unsafe(i, idx);
                 } else {
-                    file_paths->push_panic(path_cstr);
+                    file_paths->push_panic(abs_file_path);
                     file_path_map.write_unsafe(
                         i, u64_to_u32(file_paths->n_written(), &overflow));
                     assert(!overflow);
                 }
             }
         }
+
+        // UNCOMMENT THIS TO PRINT ALL FILE PATHS, intended for debugging
+        // purposes. Don't forget to disable :sys import after using this.
+        //
+        // for (u64 i=0; i < file_paths->n_written(); i++) {
+        //     Slice<u8> path = file_paths->written().read_unsafe(i).as_slice();
+        //     u64 nw = 0;
+        //     assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
+        //     path.ptr(), path.len(), &nw)); assert(nw == path.len());
+
+        //     assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, (u8
+        //     const*)"\n", 1, &nw)); assert(nw == 1);
+        // }
+        // panic();
+
+        return file_path_map.as_const();
+    }
+
+    static void parse_compilation_unit_panic_(Alloc *alloc, Alloc *tmp_alloc,
+                                              Slice<u8> debug_line_str,
+                                              Cursor *input,
+                                              List<InfoRow> *infos,
+                                              List<CString> *file_paths,
+                                              u64 *min_pc, u64 *max_pc) {
+        assert(alloc != tmp_alloc);
+
+        u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
+
+        u32 const unit_length = input->read_panic<u32>();
+        // this means DWARF 64bit version, we only support parsing the 32bit
+        // version.
+        assert(unit_length != U32_MAX);
+
+        u16 const version = input->read_panic<u16>();
+        assert(version == 5);
+
+        u8 const address_size = input->read_panic<u8>();
+        assert(address_size == 8);
+
+        u8 const segment_selector_size = input->read_panic<u8>();
+        assert(segment_selector_size == 0);
+
+        u32 const header_length = input->read_panic<u32>();
+        // We don't support 64bit dwarf format. Only 32bit is supported.
+        assert(header_length != U32_MAX);
+
+        bool overflow = false;
+
+        u64 const expected_instructions_start_offset =
+            add_u64(input->offset(), header_length, &overflow);
+        assert(!overflow);
+
+        u8 const minimum_instruction_length = input->read_panic<u8>();
+        u8 const maximum_operations_per_instruction = input->read_panic<u8>();
+        (void)minimum_instruction_length;
+        (void)maximum_operations_per_instruction;
+
+        // unused, we don't care about breakpoints since we are not implementing
+        // a debugger.
+        {
+            u8 const default_is_stmt = input->read_panic<u8>();
+            (void)default_is_stmt;
+        }
+
+        i8 const line_base = input->read_panic<i8>();
+        u8 const line_range = input->read_panic<u8>();
+        (void)line_base;
+        (void)line_range;
+
+        u8 const opcode_base = input->read_panic<u8>();
+        (void)opcode_base;
+        // TODO: remove these (void) stuff
+        (void)infos;
+        (void)file_paths;
+        (void)min_pc;
+        (void)max_pc;
+
+        // unused, we will error if we encounter an unknown opcode
+        overflow = false;
+        u8 const num_standard_opcodes = sub_u8(opcode_base, 1, &overflow);
+        assert(!overflow);
+
+        assert(Cursor::Status::Ok ==
+               input->skip(num_standard_opcodes * sizeof(u8)));
+
+        Slice<u32> file_path_map = parse_filepaths_panic_(
+            alloc, tmp_alloc, debug_line_str, input, file_paths);
+        (void)file_path_map;
+
+        // parsing file paths should have consumed the right number of bytes at
+        // this point.
+        assert(input->offset() == expected_instructions_start_offset);
 
         assert(Alloc::ResizeStatus::Ok ==
                tmp_alloc->resize(tmp_alloc_initial_offset));
@@ -1652,8 +1757,8 @@ struct DebugLine {
 
         // iterate over compilation units
         while (!input.is_finished()) {
-            parse_compilation_unit_panic_(tmp_alloc, debug_line_str, &input,
-                                          &infos, &file_paths, &min_pc,
+            parse_compilation_unit_panic_(alloc, tmp_alloc, debug_line_str,
+                                          &input, &infos, &file_paths, &min_pc,
                                           &max_pc);
             // TODO: remove this!!
             break;
