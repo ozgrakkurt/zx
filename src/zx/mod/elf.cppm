@@ -897,12 +897,14 @@ struct Instructions {
             }
             // lo_user
             case u8{0x1c}: {
-                // skip this as it has no effect?
+                // shouldn't happen
+                panic();
                 break;
             }
             // hi_user
             case u8{0x3f}: {
-                // skip this as it has no effect?
+                // shouldn't happen
+                panic();
                 break;
             }
             // GNU_args_size
@@ -947,12 +949,12 @@ struct Instructions {
 
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
 
-        constexpr u64 max_num_instructions = u64{1} << 12;
+        constexpr u64 max_num_instructions = u64{1} << 14;
         SliceMut<Instr> instr;
         assert(AllocStatus::Ok ==
                tmp_alloc->alloc<Instr>(max_num_instructions, &instr));
 
-        constexpr u64 max_data_size = u64{1} << 16;
+        constexpr u64 max_data_size = u64{1} << 19;
         SliceMut<u8> data;
         assert(AllocStatus::Ok == tmp_alloc->alloc<u8>(max_data_size, &data));
 
@@ -1079,9 +1081,12 @@ struct EhFrame {
         for (u64 i = 0; i < this->m_fd_entries.len(); i++) {
             FDE const *candi = this->m_fd_entries.offset_unsafe(i);
 
-            u64 const pc_end = candi->pc_begin + candi->pc_range;
+            bool overflow = false;
+            u64 const pc_end =
+                add_u64(candi->pc_begin, candi->pc_range, &overflow);
+            assert(!overflow);
 
-            if (candi->pc_begin <= rip && rip <= pc_end) {
+            if (candi->pc_begin <= rip && rip < pc_end) {
                 fde = candi;
                 break;
             }
@@ -1277,7 +1282,7 @@ struct EhFrame {
 
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
 
-        constexpr u64 max_num_fdes = u64{1} << 14;
+        constexpr u64 max_num_fdes = u64{1} << 18;
 
         SliceMut<FDE> fdes;
         assert(AllocStatus::Ok == tmp_alloc->alloc<FDE>(max_num_fdes, &fdes));
@@ -1415,37 +1420,23 @@ u64 strnlen_panic_(u8 const *str, u64 max_len) {
 }
 
 struct DebugLine {
-    struct Info {
-        u16 file_no;
-        u16 line_no;
-        u16 column_no;
-    };
-    static_assert(sizeof(Info) == 6);
-    static_assert(alignof(Info) == alignof(u16));
-
-    Slice<CString> file_paths;
-    u64 minimum_pc;
-    Slice<Info> infos;
-
-    struct LineInfo {
-        CString file_path;
-        u16 line_no;
-        u16 column_no;
+    struct Sequence {
+        u64 pc_begin;
+        u64 pc_end;
     };
 
-    enum class [[nodiscard]] GetLineInfoStatus : u8_c {
-        Ok = 0,
-        Nullptr,
-        NotFound,
-        InvalidPc,
-    };
-
-    struct InfoRow {
+    struct Row {
         u64 pc;
         u16 file_no;
         u16 line_no;
         u16 column_no;
     };
+
+    Slice<CString> file_paths;
+    Slice<Row> rows;
+    Slice<Sequence> sequences;
+    // array[sequence_idx] = (index of the last row in sequence) + 1
+    Slice<u32> sequence_ends;
 
     // Parses the directory_path and file_path section of the compute unit
     // header.
@@ -1554,7 +1545,7 @@ struct DebugLine {
 
             u8 unk_formats[16];
 
-            assert(num_unknown_formats < sizeof(unk_formats));
+            assert(num_unknown_formats <= sizeof(unk_formats));
 
             for (u8 i = 0; i < num_unknown_formats; i++) {
                 u64 const def_content_type = input->read_uleb128_panic();
@@ -1698,68 +1689,153 @@ struct DebugLine {
 
     struct RunArgs {
         Cursor *input;
-        List<InfoRow> *infos;
+        List<Sequence> *sequences;
+        List<u32> *sequence_ends;
+        List<Row> *rows;
         Slice<u16> file_path_map;
         u64 expected_unit_end_offset;
-        u64 *min_pc;
-        u64 *max_pc;
         i8 line_base;
         u8 line_range;
         u8 opcode_base;
         u8 minimum_instruction_length;
     };
 
+    struct RunState {
+        u64 address;
+        u16 column;
+        u16 line;
+        u16 file;
+
+        static RunState init() {
+            return RunState{
+                .address = 0,
+                .column = 0,
+                .line = 1,
+                .file = 1,
+            };
+        }
+    };
+
+    static void push_row_panic_(RunArgs args, RunState state) {
+        u16 file_no = 0;
+        assert(SliceStatus::Ok ==
+               args.file_path_map.read(state.file, &file_no));
+
+        args.rows->push_panic(Row{
+            .pc = state.address,
+            .column_no = state.column,
+            .line_no = state.line,
+            .file_no = file_no,
+        });
+    }
+
+    static void end_sequence_panic_(RunArgs args) {
+        bool overflow = false;
+
+        u64 const sequence_index = args.sequences->n_written();
+
+        u32 const rows_end = u64_to_u32(args.rows->n_written(), &overflow);
+        assert(!overflow);
+
+        u32 rows_start = 0;
+        if (sequence_index > 0) {
+            u64 const before_index = sub_unsafe_u64(sequence_index, 1);
+            assert(SliceStatus::Ok == args.sequence_ends->written().read(
+                                          before_index, &rows_start));
+        }
+
+        // ignore if empty
+        if (rows_start == rows_end) {
+            return;
+        }
+
+        assert(rows_end > rows_start);
+
+        // assert row pc in this sequence are strictly increasing
+        {
+            u64 prev_pc = 0;
+            for (u64 i = rows_start; i < rows_end; i++) {
+                Row row;
+                assert(SliceStatus::Ok == args.rows->written().read(i, &row));
+
+                assert(row.pc == 0 || prev_pc < row.pc);
+
+                prev_pc = row.pc;
+            }
+        }
+
+        Row begin_row;
+        assert(SliceStatus::Ok ==
+               args.rows->written().read(rows_start, &begin_row));
+
+        u64 const last_row_index = sub_u64(rows_end, 1, &overflow);
+        assert(!overflow);
+
+        Row last_row;
+        assert(SliceStatus::Ok ==
+               args.rows->written().read(last_row_index, &last_row));
+
+        u64 const pc_begin = begin_row.pc;
+        u64 const pc_end = add_u64(last_row.pc, 1, &overflow);
+        assert(!overflow);
+
+        args.sequences->push_panic(Sequence{
+            .pc_begin = pc_begin,
+            .pc_end = pc_end,
+        });
+        args.sequence_ends->push_panic(rows_end);
+    }
+
     static void run_instructions_panic_(RunArgs args) {
-        u64 address = 0;
-        u16 column = 0;
-        u16 line = 1;
-        u16 file = 1;
+        RunState state = RunState::init();
 
         bool overflow = false;
 
+        // We set this to false on start of every loop iteration and then
+        // we set it to true only if the instruction was the end_sequence
+        // instruction.
+        //
+        // Then we expect it to be true at exit because the last instruction is
+        // defined to always be the end_sequence instruction by the DWARF
+        // standard.
+        bool end_sequence = true;
+
         while (args.input->offset() < args.expected_unit_end_offset) {
+            end_sequence = false;
+
             u8 const opcode = args.input->read_panic<u8>();
 
             switch (opcode) {
             case DW_LNS_copy: {
-                // append row
-                assert(file < args.file_path_map.len());
-                args.infos->push_panic(InfoRow{
-                    .pc = address,
-                    .line_no = line,
-                    .column_no = column,
-                    .file_no = args.file_path_map.read_unsafe(file),
-                });
-                *args.min_pc = min_u64(*args.min_pc, address);
-                *args.max_pc = max_u64(*args.max_pc, address);
+                push_row_panic_(args, state);
                 break;
             }
             case DW_LNS_advance_pc: {
                 u64 const operand = args.input->read_uleb128_panic();
-                address = add_u64(address,
-                                  mul_u64(args.minimum_instruction_length,
-                                          operand, &overflow),
-                                  &overflow);
+                state.address = add_u64(state.address,
+                                        mul_u64(args.minimum_instruction_length,
+                                                operand, &overflow),
+                                        &overflow);
                 assert(!overflow);
                 break;
             }
             case DW_LNS_advance_line: {
                 i64 const operand = args.input->read_sleb128_panic();
-                i64 const l = add_i64(operand, line, &overflow);
+                i64 const l = add_i64(operand, state.line, &overflow);
                 assert(!overflow);
-                line = i64_to_u16(l, &overflow);
+                state.line = i64_to_u16(l, &overflow);
                 assert(!overflow);
                 break;
             }
             case DW_LNS_set_file: {
                 u64 const operand = args.input->read_uleb128_panic();
-                file = u64_to_u16(operand, &overflow);
+                state.file = u64_to_u16(operand, &overflow);
                 assert(!overflow);
                 break;
             }
             case DW_LNS_set_column: {
                 u64 const operand = args.input->read_uleb128_panic();
-                column = u64_to_u16(operand, &overflow);
+                state.column = u64_to_u16(operand, &overflow);
                 assert(!overflow);
                 break;
             }
@@ -1776,16 +1852,16 @@ struct DebugLine {
                     sub_u8(u8{255}, args.opcode_base, &overflow);
                 u64 const operation_advance =
                     div_u8(adjusted_opcode, args.line_range, &overflow);
-                address = add_u64(address,
-                                  mul_u64(args.minimum_instruction_length,
-                                          operation_advance, &overflow),
-                                  &overflow);
+                state.address = add_u64(state.address,
+                                        mul_u64(args.minimum_instruction_length,
+                                                operation_advance, &overflow),
+                                        &overflow);
                 assert(!overflow);
                 break;
             }
             case DW_LNS_fixed_advance_pc: {
                 u16 const param = args.input->read_panic<u16>();
-                address = add_u64(address, param, &overflow);
+                state.address = add_u64(state.address, param, &overflow);
                 assert(!overflow);
                 break;
             }
@@ -1813,28 +1889,14 @@ struct DebugLine {
                 u8 const extended_opcode = args.input->read_panic<u8>();
                 switch (extended_opcode) {
                 case DW_LNE_end_sequence: {
-                    // append row
-                    assert(file < args.file_path_map.len());
-                    args.infos->push_panic(InfoRow{
-                        .pc = address,
-                        .line_no = line,
-                        .column_no = column,
-                        .file_no = args.file_path_map.read_unsafe(file),
-                    });
-                    *args.min_pc = min_u64(*args.min_pc, address);
-                    *args.max_pc = max_u64(*args.max_pc, address);
-
-                    // reset state
-                    address = 0;
-                    column = 0;
-                    line = 1;
-                    file = 1;
-
+                    end_sequence_panic_(args);
+                    state = RunState::init();
+                    end_sequence = true;
                     break;
                 }
                 case DW_LNE_set_address: {
                     u64 const new_addr = args.input->read_panic<u64>();
-                    address = new_addr;
+                    state.address = new_addr;
 
                     break;
                 };
@@ -1854,6 +1916,13 @@ struct DebugLine {
                 }
 
                 assert(args.input->offset() == exit_offset);
+                // Not 100% sure about the assert above, if that fails then
+                // uncomment this line and comment the assert line.
+                //
+                // The assert should probably fine as long as we don't
+                // allow/ignore instructions that we don't know of in the
+                // default arm of the switch statement.
+                //
                 // assert(Cursor::Status::Ok == args.input->seek(exit_offset));
                 break;
             }
@@ -1864,42 +1933,36 @@ struct DebugLine {
                     sub_u8(opcode, args.opcode_base, &overflow);
                 u64 const operation_advance =
                     div_u8(adjusted_opcode, args.line_range, &overflow);
-                address = add_u64(address,
-                                  mul_u64(args.minimum_instruction_length,
-                                          operation_advance, &overflow),
-                                  &overflow);
+                state.address = add_u64(state.address,
+                                        mul_u64(args.minimum_instruction_length,
+                                                operation_advance, &overflow),
+                                        &overflow);
 
                 i32 const line_increment =
                     add_i32(args.line_base,
                             mod_u8(adjusted_opcode, args.line_range, &overflow),
                             &overflow);
-                line = i32_to_u16(add_i32(line, line_increment, &overflow),
-                                  &overflow);
+                state.line = i32_to_u16(
+                    add_i32(state.line, line_increment, &overflow), &overflow);
                 assert(!overflow);
 
-                // append row
-                assert(file < args.file_path_map.len());
-                args.infos->push_panic(InfoRow{
-                    .pc = address,
-                    .line_no = line,
-                    .column_no = column,
-                    .file_no = args.file_path_map.read_unsafe(file),
-                });
-                *args.min_pc = min_u64(*args.min_pc, address);
-                *args.max_pc = max_u64(*args.max_pc, address);
+                push_row_panic_(args, state);
 
                 break;
             }
             }
         }
+
+        assert(end_sequence);
+        assert(args.sequence_ends->n_written() == args.sequences->n_written());
     }
 
     static void parse_compilation_unit_panic_(Alloc *alloc, Alloc *tmp_alloc,
                                               Slice<u8> debug_line_str,
-                                              Cursor *input,
-                                              List<InfoRow> *infos,
-                                              List<CString> *file_paths,
-                                              u64 *min_pc, u64 *max_pc) {
+                                              Cursor *input, List<Row> *rows,
+                                              List<Sequence> *sequences,
+                                              List<u32> *sequence_ends,
+                                              List<CString> *file_paths) {
         assert(alloc != tmp_alloc);
 
         bool overflow = false;
@@ -1966,10 +2029,10 @@ struct DebugLine {
 
         run_instructions_panic_(RunArgs{
             .input = input,
-            .infos = infos,
+            .rows = rows,
+            .sequences = sequences,
+            .sequence_ends = sequence_ends,
             .file_path_map = file_path_map,
-            .min_pc = min_pc,
-            .max_pc = max_pc,
             .line_base = line_base,
             .line_range = line_range,
             .opcode_base = opcode_base,
@@ -1984,6 +2047,13 @@ struct DebugLine {
                tmp_alloc->resize(tmp_alloc_initial_offset));
     }
 
+    template <typename T>
+    static List<T> make_tmp_list_panic_(Alloc *tmp_alloc, u64 len) {
+        SliceMut<T> mem;
+        assert(AllocStatus::Ok == tmp_alloc->alloc<T>(len, &mem));
+        return List<T>::init(mem);
+    }
+
     static DebugLine init_panic(Alloc *alloc, Alloc *tmp_alloc,
                                 Slice<u8> input_bytes,
                                 Slice<u8> debug_line_str) {
@@ -1994,94 +2064,85 @@ struct DebugLine {
         if (input_bytes.len() == 0) {
             return DebugLine{
                 .file_paths = Slice<CString>::init_dangling(),
-                .minimum_pc = 0,
-                .infos = Slice<Info>::init_dangling(),
+                .rows = Slice<Row>::init_dangling(),
+                .sequences = Slice<Sequence>::init_dangling(),
+                .sequence_ends = Slice<u32>::init_dangling(),
             };
         }
 
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
 
-        SliceMut<InfoRow> info_mem;
-        assert(AllocStatus::Ok ==
-               tmp_alloc->alloc<InfoRow>(input_bytes.len(), &info_mem));
-        List<InfoRow> infos = List<InfoRow>::init(info_mem);
-
         constexpr u64 max_num_files = 1024;
-        SliceMut<CString> file_paths_mem;
-        assert(AllocStatus::Ok ==
-               tmp_alloc->alloc<CString>(max_num_files, &file_paths_mem));
-        List<CString> file_paths = List<CString>::init(file_paths_mem);
+        List<CString> file_paths =
+            make_tmp_list_panic_<CString>(tmp_alloc, max_num_files);
+
+        constexpr u64 max_num_sequences = u64{1} << 16;
+        List<Sequence> sequences =
+            make_tmp_list_panic_<Sequence>(tmp_alloc, max_num_sequences);
+        List<u32> sequence_ends =
+            make_tmp_list_panic_<u32>(tmp_alloc, max_num_sequences);
+
+        constexpr u64 max_num_rows = u64{1} << 18;
+        List<Row> rows = make_tmp_list_panic_<Row>(tmp_alloc, max_num_rows);
 
         Cursor input = Cursor::init(input_bytes);
-
-        u64 min_pc = U64_MAX;
-        u64 max_pc = 0;
 
         // iterate over compilation units
         while (!input.is_finished()) {
             parse_compilation_unit_panic_(alloc, tmp_alloc, debug_line_str,
-                                          &input, &infos, &file_paths, &min_pc,
-                                          &max_pc);
+                                          &input, &rows, &sequences,
+                                          &sequence_ends, &file_paths);
+            assert(sequences.n_written() == sequence_ends.n_written());
         }
 
-        bool overflow = false;
-        u64 const infos_capacity =
-            add_u64(1, sub_u64(max_pc, min_pc, &overflow), &overflow);
-        assert(!overflow);
-
-        // ## move the found infos to the orderly output array
-        SliceMut<Info> infos_out;
-        assert(AllocStatus::Ok ==
-               alloc->alloc<Info>(infos_capacity, &infos_out));
-        infos_out.memset(0xff);
-
-        Slice<InfoRow> collected_infos = infos.written();
-
-        for (u64 i = 0; i < collected_infos.len(); i++) {
-            InfoRow const inf = collected_infos.read_unsafe(i);
-
-            overflow = false;
-            u64 const pc_idx = sub_u64(inf.pc, min_pc, &overflow);
-            assert(!overflow);
-
-            // write to output
-            infos_out.write_unsafe(pc_idx, Info{
-                                               .file_no = inf.file_no,
-                                               .line_no = inf.line_no,
-                                               .column_no = inf.column_no,
-                                           });
-        }
-
-        Info inf;
-        __builtin_memset(&inf, 0, sizeof(inf));
-        for (u64 i = 0; i < infos_out.len(); i++) {
-            Info n = infos_out.read_unsafe(i);
-            if (n.line_no != U16_MAX || n.column_no != U16_MAX ||
-                n.file_no != U16_MAX) {
-                inf = n;
-            }
-            if ((inf.line_no != 0 && inf.line_no != U16_MAX) ||
-                inf.column_no != U16_MAX || inf.file_no != U16_MAX) {
-                infos_out.write_unsafe(i, inf);
-            }
-        }
-
-        // ## move file path info to regular alloc since we will discard the tmp
+        // ## move parsed data to regular alloc since we will discard the tmp
         // alloc.
+
         SliceMut<CString> file_paths_out;
+        assert(AllocStatus::Ok == alloc->copy_from<CString>(
+                                      file_paths.written(), &file_paths_out));
+
+        SliceMut<Sequence> sequences_out;
         assert(AllocStatus::Ok ==
-               alloc->alloc<CString>(file_paths.n_written(), &file_paths_out));
-        assert(SliceMemcpyStatus::Ok ==
-               file_paths_out.memcpy_from(file_paths.written()));
+               alloc->copy_from<Sequence>(sequences.written(), &sequences_out));
+
+        SliceMut<u32> sequence_ends_out;
+        assert(AllocStatus::Ok == alloc->copy_from<u32>(sequence_ends.written(),
+                                                        &sequence_ends_out));
+
+        SliceMut<Row> rows_out;
+        assert(AllocStatus::Ok ==
+               alloc->copy_from<Row>(rows.written(), &rows_out));
 
         // discard tmp memory
         assert(Alloc::ResizeStatus::Ok ==
                tmp_alloc->resize(tmp_alloc_initial_offset));
 
         return DebugLine{
-            .infos = infos_out.as_const(),
+            .sequences = sequences_out.as_const(),
+            .sequence_ends = sequence_ends_out.as_const(),
+            .rows = rows_out.as_const(),
             .file_paths = file_paths_out.as_const(),
-            .minimum_pc = min_pc,
+        };
+    }
+
+    struct LineInfo {
+        CString file_path;
+        u16 line_no;
+        u16 column_no;
+    };
+
+    enum class [[nodiscard]] GetLineInfoStatus : u8_c {
+        Ok = 0,
+        Nullptr,
+        NotFound,
+    };
+
+    LineInfo row_to_line_info_unsafe_(Row const row) const {
+        return LineInfo{
+            .file_path = this->file_paths.read_unsafe(row.file_no),
+            .line_no = row.line_no,
+            .column_no = row.column_no,
         };
     }
 
@@ -2090,34 +2151,43 @@ struct DebugLine {
             return GetLineInfoStatus::Nullptr;
         }
 
-        bool overflow = false;
-        u64 const pc_idx = sub_u64(pc, this->minimum_pc, &overflow);
-        if (overflow) {
-            return GetLineInfoStatus::InvalidPc;
+        assert_dev(this->sequences.len() == this->sequence_ends.len());
+
+        for (u64 i = 0; i < this->sequences.len(); i++) {
+            Sequence const sq = this->sequences.read_unsafe(i);
+
+            if (sq.pc_begin <= pc && sq.pc_end > pc) {
+                u64 rows_begin = 0;
+                if (i != 0) {
+                    rows_begin = this->sequence_ends.read_unsafe(i - 1);
+                }
+                u64 const rows_end = this->sequence_ends.read_unsafe(i);
+
+                assert_dev(rows_end > rows_begin);
+
+                assert_dev(this->rows.read_unsafe(rows_begin).pc <= pc);
+                assert_dev(this->rows.read_unsafe(rows_begin).pc ==
+                           sq.pc_begin);
+
+                for (u64 row_idx = rows_begin;
+                     row_idx < sub_unsafe_u64(rows_end, 1); row_idx++) {
+                    Row const next_row =
+                        this->rows.read_unsafe(add_unsafe_u64(row_idx, 1));
+                    if (pc < next_row.pc) {
+                        *out = row_to_line_info_unsafe_(
+                            this->rows.read_unsafe(row_idx));
+                        return GetLineInfoStatus::Ok;
+                    }
+                }
+
+                // return last row
+                *out = row_to_line_info_unsafe_(
+                    this->rows.read_unsafe(sub_unsafe_u64(rows_end, 1)));
+                return GetLineInfoStatus::Ok;
+            }
         }
 
-        Info info;
-        if (SliceStatus::Ok != this->infos.read(pc_idx, &info)) {
-            return GetLineInfoStatus::InvalidPc;
-        }
-
-        if (info.line_no == U16_MAX && info.column_no == U16_MAX &&
-            info.file_no == U16_MAX) {
-            return GetLineInfoStatus::NotFound;
-        }
-
-        if (info.line_no == 0) {
-            return GetLineInfoStatus::NotFound;
-        }
-
-        CString const file_path = this->file_paths.read_unsafe(info.file_no);
-
-        *out = LineInfo{
-            .file_path = file_path,
-            .line_no = info.line_no,
-            .column_no = info.column_no,
-        };
-        return GetLineInfoStatus::Ok;
+        return GetLineInfoStatus::NotFound;
     }
 };
 

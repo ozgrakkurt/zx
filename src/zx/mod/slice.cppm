@@ -299,6 +299,27 @@ template <typename T> struct Slice {
         return this->m_ptr[offset];
     }
 
+    SliceStatus read_last(T *out) const {
+        if (out == nullptr) {
+            return SliceStatus::Nullptr;
+        }
+
+        if (this->m_len == 0) {
+            return SliceStatus::OutOfBounds;
+        }
+
+        u64 const idx = this->m_len - 1;
+        *out = this->m_ptr[idx];
+
+        return SliceStatus::Ok;
+    }
+
+    T read_last_unsafe() const {
+        assert_dev(this->m_len > 0);
+        u64 const idx = this->m_len - 1;
+        return this->m_ptr[idx];
+    }
+
     template <typename U> SliceStatus read_unaligned(u64 offset, U *out) const {
         if (out == nullptr) {
             return SliceStatus::Nullptr;
@@ -676,6 +697,27 @@ template <typename T> struct SliceMut {
     T read_unsafe(u64 offset) const {
         assert_dev(offset < this->m_len);
         return this->m_ptr[offset];
+    }
+
+    SliceStatus read_last(T *out) const {
+        if (out == nullptr) {
+            return SliceStatus::Nullptr;
+        }
+
+        if (this->m_len == 0) {
+            return SliceStatus::OutOfBounds;
+        }
+
+        u64 const idx = this->m_len - 1;
+        *out = this->m_ptr[idx];
+
+        return SliceStatus::Ok;
+    }
+
+    T read_last_unsafe() const {
+        assert_dev(this->m_len > 0);
+        u64 const idx = this->m_len - 1;
+        return this->m_ptr[idx];
     }
 
     template <typename U> SliceStatus read_unaligned(u64 offset, U *out) const {

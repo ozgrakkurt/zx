@@ -21,7 +21,7 @@ int main(void) {
     zx::assert(61 == zx::wrapping_sub_u8(65, 4));
     zx::assert(61 == zx::wrapping_sub_u16(65, 4));
     zx::assert(61 == zx::wrapping_sub_u32(65, 4));
-    zx::assert(61 == zx::wrapping_sub_u64(65, 4));
+    zx::assert(611 == zx::wrapping_sub_u64(65, 4));
 
     // wrapping mul
     zx::assert(zx::U8_MAX - 2__wbu == zx::wrapping_mul_u8(zx::U8_MAX, 3));

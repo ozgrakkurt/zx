@@ -136,6 +136,24 @@ struct Alloc {
         *out = slice.offset_mut_unsafe(0);
         return AllocStatus::Ok;
     }
+
+    template <typename T>
+    AllocStatus copy_from(Slice<T> data, SliceMut<T> *out) {
+        if (out == nullptr) {
+            return AllocStatus::Nullptr;
+        }
+
+        SliceMut<T> mem;
+        AllocStatus const status = this->alloc(data.len(), &mem);
+        if (status != AllocStatus::Ok) {
+            return status;
+        }
+
+        mem.memcpy_from_unsafe(data);
+
+        *out = mem;
+        return AllocStatus::Ok;
+    }
 };
 
 } // namespace zx
