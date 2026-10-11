@@ -10,6 +10,7 @@ import :cursor;
 import :list;
 import :ucontext;
 import :fmt;
+import :cpu_context;
 
 export namespace zx {
 
@@ -992,37 +993,21 @@ struct Instructions {
     }
 };
 
-extern "C" struct CPUContext {
-    u64 r12;
-    u64 r13;
-    u64 r14;
-    u64 r15;
-    u64 rbp;
-    u64 rbx;
-    u64 rsp;
-    u64 rip;
-};
-
-extern "C" void zx_elf_getcpucontext_(CPUContext *out);
-
 struct UnwindContext {
     u64 registers[NUM_REGS];
 
-    __attribute__((always_inline)) static UnwindContext init() {
-        CPUContext ctx;
-        zx_elf_getcpucontext_(&ctx);
-
+    static UnwindContext init_from_cpucontext(CPUContext const *ctx) {
         UnwindContext out;
         __builtin_memset(out.registers, 0, sizeof(out.registers));
 
-        out.registers[REG_MAP_R12] = ctx.r12;
-        out.registers[REG_MAP_R13] = ctx.r13;
-        out.registers[REG_MAP_R14] = ctx.r14;
-        out.registers[REG_MAP_R15] = ctx.r15;
-        out.registers[REG_MAP_RBP] = ctx.rbp;
-        out.registers[REG_MAP_RBX] = ctx.rbx;
-        out.registers[REG_MAP_RSP] = ctx.rsp;
-        out.registers[REG_MAP_RETURN_ADDRESS] = ctx.rip;
+        out.registers[REG_MAP_R12] = ctx->r12;
+        out.registers[REG_MAP_R13] = ctx->r13;
+        out.registers[REG_MAP_R14] = ctx->r14;
+        out.registers[REG_MAP_R15] = ctx->r15;
+        out.registers[REG_MAP_RBP] = ctx->rbp;
+        out.registers[REG_MAP_RBX] = ctx->rbx;
+        out.registers[REG_MAP_RSP] = ctx->rsp;
+        out.registers[REG_MAP_RETURN_ADDRESS] = ctx->rip;
 
         return out;
     }

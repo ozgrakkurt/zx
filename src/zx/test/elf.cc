@@ -31,7 +31,9 @@ Slice<u8> read_self_bin(Alloc *alloc) {
 
 void cmmb(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
           elf::DebugLine const *debug_line) {
-    elf::UnwindContext ctx = elf::UnwindContext::init();
+    CPUContext cpu_ctx;
+    zx_getcpucontext_(&cpu_ctx);
+    elf::UnwindContext ctx = elf::UnwindContext::init_from_cpucontext(&cpu_ctx);
 
     u8 fmt_buf[4096];
     SliceMut<u8> fmt_slice =
@@ -82,7 +84,10 @@ void callme_maybe(Alloc *tmp_alloc, elf::EhFrame const *dbg_info,
 
         bool fmt_overflow = false;
 
-        elf::UnwindContext ctx = elf::UnwindContext::init();
+        CPUContext cpu_ctx;
+        zx_getcpucontext_(&cpu_ctx);
+        elf::UnwindContext ctx =
+            elf::UnwindContext::init_from_cpucontext(&cpu_ctx);
 
         fmt.push_str(CString::init_unsafe("callme_maybe:\n").as_slice(),
                      &fmt_overflow);

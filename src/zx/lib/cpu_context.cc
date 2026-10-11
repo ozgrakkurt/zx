@@ -1,9 +1,11 @@
+import zx;
+
 #ifdef ZX_DEBUG_INFO
 
 __asm__(".text\n"
-        ".type zx_elf_getcpucontext_, @function\n"
-        ".global zx_elf_getcpucontext_\n"
-        "zx_elf_getcpucontext_:\n\t"
+        ".type zx_getcpucontext_, @function\n"
+        ".global zx_getcpucontext_\n"
+        "zx_getcpucontext_:\n\t"
         "movq %r12, 0(%rdi)\n\t"
         "movq %r13, 8(%rdi)\n\t"
         "movq %r14, 16(%rdi)\n\t"
@@ -18,5 +20,14 @@ __asm__(".text\n"
         "movq %rax, 56(%rdi)\n\t"
         "xorq %rax, %rax\n\t"
         "retq\n\t");
+
+#else // ifdef ZX_DEBUG_INFO
+
+extern "C" void zx_getcpucontext_(zx::CPUContext *x) {
+#ifdef ZX_DEV
+    __builtin_memset(x, 0xaa, sizeof(zx::CPUContext));
+#endif
+    (void)x;
+}
 
 #endif // ifdef ZX_DEBUG_INFO
