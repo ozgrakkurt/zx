@@ -21,13 +21,4 @@ __asm__(".text\n"
         "xorq %rax, %rax\n\t"
         "retq\n\t");
 
-#else // ifdef ZX_DEBUG_INFO
-
-extern "C" void zx_getcpucontext_(zx::CPUContext *x) {
-#ifdef ZX_DEV
-    __builtin_memset(x, 0xaa, sizeof(zx::CPUContext));
-#endif
-    (void)x;
-}
-
 #endif // ifdef ZX_DEBUG_INFO

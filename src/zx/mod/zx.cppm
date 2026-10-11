@@ -27,3 +27,6 @@ export import :cursor;
 export import :list;
 export import :ucontext;
 export import :cpu_context;
+export import :testing;
+export import :elf_eh_frame;
+export import :elf_debug_line;

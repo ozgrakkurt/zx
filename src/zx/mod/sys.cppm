@@ -127,6 +127,10 @@ constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
 constexpr i32 STDERR = 2;
 
+// grep -n "EXIT_" /usr/include/stdlib.h
+constexpr i32 EXIT_FAILURE = 1;
+constexpr i32 EXIT_SUCCESS = 0;
+
 // echo '#include <sys/types.h>' | gcc -E -dM | grep -E "SEEK_"
 constexpr i32 SEEK_SET = 0;
 constexpr i32 SEEK_CUR = 1;

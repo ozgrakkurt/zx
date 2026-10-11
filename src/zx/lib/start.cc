@@ -4,144 +4,38 @@ using namespace zx;
 
 #ifdef ZX_DEBUG_INFO
 
-static Slice<u8> read_self_bin(Alloc *alloc) {
-    i32 fd = -1;
-    assert(sys::OpenStatus::Ok ==
-           sys::open((u8 const *)"/proc/self/exe", sys::O_RDONLY, 0, &fd));
-    assert(fd != -1);
-
-    sys::StatX statx;
-    __builtin_memset(&statx, 0, sizeof(statx));
-    assert(sys::StatXStatus::Ok == sys::statx(fd, (u8 const *)"",
-                                              sys::AT_EMPTY_PATH,
-                                              sys::STATX_SIZE, &statx));
-    assert((statx.stx_mask & sys::STATX_SIZE) != 0);
-
-    u64 const file_size = statx.stx_size;
-
-    SliceMut<u8> buf;
-    assert(AllocStatus::Ok == alloc->aligned_alloc<64, u8>(file_size, &buf));
-
-    u64 n_read = 0;
-    assert(sys::ReadStatus::Ok == sys::read(fd, buf.ptr(), buf.len(), &n_read));
-    assert(n_read == file_size);
-
-    return buf.as_const();
-}
-
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
 
-    constexpr u64 tmp_mem_size = 1 << 24;
-    constexpr u64 mem_size = 1 << 24;
-
-    u8 *mem = nullptr;
-    assert(page_alloc::AllocStatus::Ok ==
-           page_alloc::alloc_4kb(mem_size, &mem));
-    assert(mem != nullptr);
-
-    u8 *tmp_mem = nullptr;
-    assert(page_alloc::AllocStatus::Ok ==
-           page_alloc::alloc_4kb(tmp_mem_size, &tmp_mem));
-    assert(tmp_mem != nullptr);
-
-    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, mem_size));
-    Alloc tmp_alloc =
-        Alloc::init(SliceMut<u8>::init_unsafe(tmp_mem, tmp_mem_size));
-
-    SliceMut<u8> fmt_slice;
-    assert(AllocStatus::Ok == tmp_alloc.alloc<u8>(u64{1} << 11, &fmt_slice));
-    Fmt fmt = Fmt::init(fmt_slice);
-
-    bool fmt_overflow = false;
-
-    {
-        fmt.push_str(
-            CString::init_unsafe("Received Signal Number: ").as_slice(),
-            &fmt_overflow);
-        fmt.push_i64(signum, &fmt_overflow);
-        fmt.push_char('\n', &fmt_overflow);
-
-        assert(!fmt_overflow);
-
-        u64 n_written = 0;
-        assert(sys::WriteStatus::Ok == sys::write(sys::STDERR,
-                                                  fmt.written().ptr(),
-                                                  fmt.n_written(), &n_written));
-        assert(n_written == fmt.n_written());
-
-        fmt.reset();
-    }
-
-    Slice<u8> buf = read_self_bin(&alloc);
-    elf::File const file = elf::File::init_panic(&alloc, buf);
-
-    u64 const eh_frame_section_idx = file.get_section_index_panic(
-        CString::init_unsafe(".eh_frame").as_slice());
-
-    Slice<u8> eh_frame_raw = file.get_section_data_panic(eh_frame_section_idx);
-    elf::SectionHeader const *eh_frame_header =
-        file.get_section_header_panic(eh_frame_section_idx);
-
-    elf::EhFrame const eh_frame = elf::EhFrame::init_panic(
-        &alloc, &tmp_alloc, eh_frame_header, eh_frame_raw);
-
-    u64 const debug_line_section_idx = file.get_section_index_panic(
-        CString::init_unsafe(".debug_line").as_slice());
-    Slice<u8> debug_line_raw =
-        file.get_section_data_panic(debug_line_section_idx);
-
-    u64 const debug_line_str_section_idx = file.get_section_index_panic(
-        CString::init_unsafe(".debug_line_str").as_slice());
-    Slice<u8> debug_line_str_raw =
-        file.get_section_data_panic(debug_line_str_section_idx);
-
-    elf::DebugLine const debug_line = elf::DebugLine::init_panic(
-        &alloc, &tmp_alloc, debug_line_raw, debug_line_str_raw);
+    assert(signum == (i32)sys::SIG::ILL || signum == (i32)sys::SIG::SEGV);
 
     sys::UContext const *uctx = (sys::UContext const *)ucontext;
-    elf::UnwindContext ctx = elf::UnwindContext::init_from_ucontext(uctx);
 
-    char const *msg = nullptr;
-    if (signum == (i32)sys::SIG::SEGV) {
-        msg = "SIGSEGV at:\n";
-    } else if (signum == (i32)sys::SIG::ILL) {
-        msg = "SIGILL at:\n";
-    } else {
-        panic();
-    }
-    assert(msg != nullptr);
+    CPUContext cpu_ctx = CPUContext{
+        .r12 = uctx->uc_mcontext.r12,
+        .r13 = uctx->uc_mcontext.r13,
+        .r14 = uctx->uc_mcontext.r14,
+        .r15 = uctx->uc_mcontext.r15,
+        .rbp = uctx->uc_mcontext.rbp,
+        .rbx = uctx->uc_mcontext.rbx,
+        .rsp = uctx->uc_mcontext.rsp,
+        // do this since this is the exact address of the instruction that
+        // panicked but the stack trace printer will subtract 1 from RIP since
+        // it expects the RIP to be the return address.
+        //
+        // If RIP is a return address then subtracting 1 from it will give the
+        // call instruction which is what the stack trace printer wants, but
+        // this case is special since RIP isn't a return address, it is the
+        // exact instruction that panicked.
+        .rip = add_unsafe_u64(uctx->uc_mcontext.rip, 1),
+    };
 
-    fmt.push_str(CString::init_unsafe(msg).as_slice(), &fmt_overflow);
+    elf::print_stack_trace_panic(&cpu_ctx);
 
-    u64 sub = 0;
-    do {
-        if (ctx.rip() != 0) {
-            u64 const pc = sub_unsafe_u64(ctx.rip(), sub);
-            elf::DebugLine::LineInfo line_info;
-            if (elf::DebugLine::GetLineInfoStatus::Ok ==
-                debug_line.get_line_info(pc, &line_info)) {
-                fmt.push_char('-', &fmt_overflow);
-                fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
-                fmt.push_char(':', &fmt_overflow);
-                fmt.push_u64(line_info.line_no, &fmt_overflow);
-                fmt.push_char(':', &fmt_overflow);
-                fmt.push_u64(line_info.column_no, &fmt_overflow);
-                fmt.push_char('\n', &fmt_overflow);
-            } else {
-                fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
-                             &fmt_overflow);
-            }
-        }
-        sub = 1;
-    } while (eh_frame.step_panic(&tmp_alloc, &ctx));
-
-    assert(!fmt_overflow);
-
-    u64 n_written = 0;
-    assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
-                                              fmt.n_written(), &n_written));
-    assert(n_written == fmt.n_written());
+    // control will fall back to the instruction that raised the signal,
+    // it will raise the same signal again and the default handler for that
+    // signal will run, which should cause the kernel to end the process with
+    // the correspoding error code.
 }
 
 extern "C" void zx_setup_() {

@@ -14,6 +14,19 @@ extern "C" struct CPUContext {
     u64 rip;
 };
 
+#ifdef ZX_DEBUG_INFO
+
 extern "C" void zx_getcpucontext_(CPUContext *out);
+
+#else // ifdef ZX_DEBUG_INFO
+
+extern "C" void zx_getcpucontext_(CPUContext *out) {
+#ifdef ZX_DEV
+    __builtin_memset(out, 0xaa, sizeof(CPUContext));
+#endif
+    (void)out;
+}
+
+#endif // ifdef ZX_DEBUG_INFO
 
 } // namespace zx
