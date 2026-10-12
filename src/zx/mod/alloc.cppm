@@ -3,6 +3,7 @@ import :def;
 import :assert;
 import :slice;
 import :arith;
+import :cpu_context;
 
 export namespace zx {
 
@@ -43,8 +44,9 @@ struct Alloc {
         OutOfBounds,
     };
 
-    ResizeStatus resize(u64 offset) {
-        if (offset > this->m_mem.len()) {
+    ResizeStatus resize(CPUContext *err_ctx, u64 offset) {
+        if (offset > this->m_mem.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return ResizeStatus::OutOfBounds;
         }
 
@@ -68,12 +70,13 @@ struct Alloc {
     u64 offset() const { return this->m_offset; }
 
     template <u16 ALIGN, typename T>
-    AllocStatus aligned_alloc(u64 len, SliceMut<T> *out) {
+    AllocStatus aligned_alloc(CPUContext *err_ctx, u64 len, SliceMut<T> *out) {
         static_assert(ALIGN >= alignof(T));
         static_assert(ALIGN <= 128);
         static_assert(is_pow_two_u16(ALIGN));
 
-        if (out == nullptr) {
+        if (out == nullptr) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return AllocStatus::Nullptr;
         }
 
@@ -95,11 +98,13 @@ struct Alloc {
         u64 const alloc_offset = add_u64(offset, padding, &overflow);
         u64 const new_offset = add_u64(alloc_offset, size, &overflow);
 
-        if (overflow) {
+        if (overflow) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return AllocStatus::IntegerOverflow;
         }
 
-        if (new_offset > mem.len()) {
+        if (new_offset > mem.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return AllocStatus::OutOfMemory;
         }
 
@@ -118,17 +123,19 @@ struct Alloc {
         return AllocStatus::Ok;
     }
 
-    template <typename T> AllocStatus alloc(u64 len, SliceMut<T> *out) {
-        return this->aligned_alloc<alignof(T), T>(len, out);
+    template <typename T>
+    AllocStatus alloc(CPUContext *err_ctx, u64 len, SliceMut<T> *out) {
+        return this->aligned_alloc<alignof(T), T>(err_ctx, len, out);
     }
 
-    template <typename T> AllocStatus create(T **out) {
-        if (out == nullptr) {
+    template <typename T> AllocStatus create(CPUContext *err_ctx, T **out) {
+        if (out == nullptr) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return AllocStatus::Nullptr;
         }
 
         SliceMut<T> slice;
-        AllocStatus const status = this->alloc<T>(1, &slice);
+        AllocStatus const status = this->alloc<T>(err_ctx, 1, &slice);
         if (status != AllocStatus::Ok) {
             return status;
         }
@@ -138,13 +145,15 @@ struct Alloc {
     }
 
     template <typename T>
-    AllocStatus copy_from(Slice<T> data, SliceMut<T> *out) {
-        if (out == nullptr) {
+    AllocStatus copy_from(CPUContext *err_ctx, Slice<T> data,
+                          SliceMut<T> *out) {
+        if (out == nullptr) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return AllocStatus::Nullptr;
         }
 
         SliceMut<T> mem;
-        AllocStatus const status = this->alloc(data.len(), &mem);
+        AllocStatus const status = this->alloc(err_ctx, data.len(), &mem);
         if (status != AllocStatus::Ok) {
             return status;
         }

@@ -5,6 +5,7 @@ import :perf_event;
 import :statx;
 import :io_uring;
 import :signal;
+import :cpu_context;
 
 export namespace zx {
 
@@ -337,14 +338,15 @@ enum class [[nodiscard]] ReadStatus : u8_c {
     EIsDir,
 };
 
-ReadStatus read(i32 fd, u8 *buf, u64 count, u64 *n_read) {
-    if (n_read == nullptr || buf == nullptr) {
+ReadStatus read(CPUContext *err_ctx, i32 fd, u8 *buf, u64 count, u64 *n_read) {
+    if (n_read == nullptr || buf == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return ReadStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_READ, (u64)fd, (u64)buf, count);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         // The returned n_read count isn't supposed to be used on error case.
         // Set to max value so the caller will do something unexpected if it
         // tries to use this value on error case. Then we can hope to catch this
@@ -356,27 +358,35 @@ ReadStatus read(i32 fd, u8 *buf, u64 count, u64 *n_read) {
 
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EAgain;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EBadF;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EFault;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EInval;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EIo;
         }
         case EISDIR: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::EIsDir;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return ReadStatus::UnexpectedErr;
         }
         }
@@ -403,54 +413,68 @@ enum class [[nodiscard]] WriteStatus : u8_c {
     EPipe,
 };
 
-WriteStatus write(i32 fd, u8 const *buf, u64 count, u64 *n_written) {
-    if (n_written == nullptr || buf == nullptr) {
+WriteStatus write(CPUContext *err_ctx, i32 fd, u8 const *buf, u64 count,
+                  u64 *n_written) {
+    if (n_written == nullptr || buf == nullptr) [[unlikely]] {
         return WriteStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_WRITE, (u64)fd, (u64)buf, count);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *n_written = U64_MAX;
 
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EAgain;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EBadF;
         }
         case EDESTADDRREQ: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EDestAddrReq;
         }
         case EDQUOT: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EDQuot;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EFault;
         }
         case EFBIG: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EFBig;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EInval;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EIo;
         }
         case ENOSPC: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::ENoSpc;
         }
         case EPERM: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EPerm;
         }
         case EPIPE: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::EPipe;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return WriteStatus::UnexpectedErr;
         }
         }
@@ -492,96 +516,125 @@ enum class [[nodiscard]] OpenStatus : u8_c {
     EWouldBlock,
 };
 
-OpenStatus open(u8 const *path, i32 flags, u32 mode, i32 *fd) {
-    if (path == nullptr || fd == nullptr) {
+OpenStatus open(CPUContext *err_ctx, u8 const *path, i32 flags, u32 mode,
+                i32 *fd) {
+    if (path == nullptr || fd == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return OpenStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_OPEN, (u64)path, (u64)flags, mode);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *fd = -1;
 
         switch (errno) {
         case EACCES: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EAcces;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EBadF;
         }
         case EBUSY: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EBusy;
         }
         case EDQUOT: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EDQuot;
         }
         case EEXIST: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EExist;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EFault;
         }
         case EFBIG: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EFBig;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EInval;
         }
         case EISDIR: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EIsDir;
         }
         case ELOOP: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ELoop;
         }
         case EMFILE: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EMFile;
         }
         case ENAMETOOLONG: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENameTooLong;
         }
         case ENFILE: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENFile;
         }
         case ENODEV: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENoDev;
         }
         case ENOENT: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENoEnt;
         }
         case ENOMEM: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENoMem;
         }
         case ENOSPC: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENoSpc;
         }
         case ENOTDIR: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENotDir;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ENXIo;
         }
         case EOPNOTSUPP: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EOpNotSupp;
         }
         case EOVERFLOW: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EOverflow;
         }
         case EPERM: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EPerm;
         }
         case EROFS: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ERoFs;
         }
         case ETXTBSY: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::ETxtBsy;
         }
         case EWOULDBLOCK: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::EWouldBlock;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return OpenStatus::UnexpectedErr;
         }
         }
@@ -601,27 +654,33 @@ enum class [[nodiscard]] CloseStatus : u8_c {
     EDQuot,
 };
 
-CloseStatus close(i32 fd) {
+CloseStatus close(CPUContext *err_ctx, i32 fd) {
     u64 const res = syscall1(NR_CLOSE, (u64)fd);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::EBadF;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::EIntr;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::EIo;
         }
         case ENOSPC: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::ENoSpc;
         }
         case EDQUOT: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::EDQuot;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return CloseStatus::UnexpectedErr;
         }
         }
@@ -647,50 +706,63 @@ enum class [[nodiscard]] MMapStatus : u8_c {
     ETxtBsy,
 };
 
-MMapStatus mmap_err_(u64 errno) {
+MMapStatus mmap_err_(CPUContext *err_ctx, u64 errno) {
     switch (errno) {
     case EACCES: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EAcces;
     }
     case EAGAIN: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EAgain;
     }
     case EBADF: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EBadF;
     }
     case EEXIST: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EExist;
     }
     case EINVAL: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EInval;
     }
     case ENFILE: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::ENFile;
     }
     case ENODEV: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::ENoDev;
     }
     case ENOMEM: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::ENoMem;
     }
     case EOVERFLOW: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EOverflow;
     }
     case EPERM: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::EPerm;
     }
     case ETXTBSY: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::ETxtBsy;
     }
     default: {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::UnexpectedErr;
     }
     }
 }
 
-MMapStatus mmap(u8 *addr, u64 length, i32 prot, i32 flags, i32 fd, i64 offset,
-                u8 **mem) {
-    if (mem == nullptr) {
+MMapStatus mmap(CPUContext *err_ctx, u8 *addr, u64 length, i32 prot, i32 flags,
+                i32 fd, i64 offset, u8 **mem) {
+    if (mem == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::Nullptr;
     }
 
@@ -698,25 +770,26 @@ MMapStatus mmap(u8 *addr, u64 length, i32 prot, i32 flags, i32 fd, i64 offset,
                              (u64)fd, (u64)offset);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *mem = nullptr;
-        return mmap_err_(errno);
+        return mmap_err_(err_ctx, errno);
     }
 
     *mem = (u8 *)res;
     return MMapStatus::Ok;
 }
 
-MMapStatus munmap(u8 *mem, u64 length) {
-    if (mem == nullptr) {
+MMapStatus munmap(CPUContext *err_ctx, u8 *mem, u64 length) {
+    if (mem == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return MMapStatus::Nullptr;
     }
 
     u64 const res = syscall2(NR_MUNMAP, (u64)mem, length);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
-        return mmap_err_(errno);
+    if (errno != SUCCESS) [[unlikely]] {
+        return mmap_err_(err_ctx, errno);
     }
 
     return MMapStatus::Ok;
@@ -731,26 +804,31 @@ enum class [[nodiscard]] MProtectStatus : u8_c {
     ENoMem,
 };
 
-MProtectStatus mprotect(u8 *addr, u64 length, i32 prot) {
-    if (addr == nullptr) {
+MProtectStatus mprotect(CPUContext *err_ctx, u8 *addr, u64 length, i32 prot) {
+    if (addr == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return MProtectStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_MPROTECT, (u64)addr, length, (u64)prot);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EACCES: {
+            zx_getcpucontext_(err_ctx);
             return MProtectStatus::EAcces;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return MProtectStatus::EInval;
         }
         case ENOMEM: {
+            zx_getcpucontext_(err_ctx);
             return MProtectStatus::ENoMem;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return MProtectStatus::UnexpectedErr;
         }
         }
@@ -790,9 +868,11 @@ enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
     ESrch,
 };
 
-PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
-                                    i32 group_fd, u64 flags, i32 *fd) {
-    if (attr == nullptr || fd == nullptr) {
+PerfEventOpenStatus perf_event_open(CPUContext *err_ctx, PerfEventAttr *attr,
+                                    i32 pid, i32 cpu, i32 group_fd, u64 flags,
+                                    i32 *fd) {
+    if (attr == nullptr || fd == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return PerfEventOpenStatus::Nullptr;
     }
 
@@ -800,64 +880,82 @@ PerfEventOpenStatus perf_event_open(PerfEventAttr *attr, i32 pid, i32 cpu,
                              (u64)group_fd, flags);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *fd = -1;
         switch (errno) {
         case E2BIG: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::E2Big;
         }
         case EACCES: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EAcces;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EBadF;
         }
         case EBUSY: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EBusy;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EFault;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EInval;
         }
         case EMFILE: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EMFile;
         }
         case ENODEV: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::ENoDev;
         }
         case ENOENT: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::ENoEnt;
         }
         case ENOSPC: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::ENoSpc;
         }
         case ENOSYS: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::ENoSys;
         }
         case EOPNOTSUPP: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EOpNotSupp;
         }
         case EOVERFLOW: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EOverflow;
         }
         case EPERM: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::EPerm;
         }
         case ESRCH: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::ESrch;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return PerfEventOpenStatus::UnexpectedErr;
         }
         }
     }
     i32 const ret_fd = (i32)res;
-    if (ret_fd < 0) {
+    if (ret_fd < 0) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         *fd = -1;
         return PerfEventOpenStatus::InvalidFd;
     }
@@ -881,45 +979,56 @@ enum class [[nodiscard]] StatXStatus : u8_c {
     ENotDir,
 };
 
-StatXStatus statx(i32 dirfd, u8 const *path, i32 flags, u32 mask,
-                  StatX *statxbuf) {
-    if (statxbuf == nullptr) {
+StatXStatus statx(CPUContext *err_ctx, i32 dirfd, u8 const *path, i32 flags,
+                  u32 mask, StatX *statxbuf) {
+    if (statxbuf == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return StatXStatus::Nullptr;
     }
     __builtin_memset(statxbuf, 0, sizeof(StatX));
     u64 const res = syscall5(NR_STATX, (u64)dirfd, (u64)path, (u64)flags,
                              (u64)mask, (u64)statxbuf);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EACCES: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::EAcces;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::EBadF;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::EFault;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::EInval;
         }
         case ELOOP: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::ELoop;
         }
         case ENAMETOOLONG: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::ENameTooLong;
         }
         case ENOENT: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::ENoEnt;
         }
         case ENOMEM: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::ENoMem;
         }
         case ENOTDIR: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::ENotDir;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return StatXStatus::UnexpectedErr;
         }
         }
@@ -941,39 +1050,48 @@ enum class [[nodiscard]] IoUringSetupStatus : u8_c {
     ENXIo,
 };
 
-IoUringSetupStatus io_uring_setup(u32 n_entries, IoUringParams *params,
-                                  i32 *fd) {
-    if (fd == nullptr || params == nullptr) {
+IoUringSetupStatus io_uring_setup(CPUContext *err_ctx, u32 n_entries,
+                                  IoUringParams *params, i32 *fd) {
+    if (fd == nullptr || params == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return IoUringSetupStatus::Nullptr;
     }
 
     u64 const res = syscall2(NR_IO_URING_SETUP, n_entries, (u64)params);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *fd = -1;
         switch (errno) {
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::EFault;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::EInval;
         }
         case EMFILE: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::EMFile;
         }
         case ENFILE: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::ENFile;
         }
         case ENOMEM: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::ENoMem;
         }
         case EPERM: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::EPerm;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::ENXIo;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return IoUringSetupStatus::UnexpectedErr;
         }
         }
@@ -1000,50 +1118,64 @@ enum class [[nodiscard]] IoUringEnterStatus : u8_c {
     EOwnerDead,
 };
 
-IoUringEnterStatus io_uring_enter(i32 fd, u32 to_submit, u32 min_complete,
-                                  u32 flags, void *arg, u64 sz) {
+IoUringEnterStatus io_uring_enter(CPUContext *err_ctx, i32 fd, u32 to_submit,
+                                  u32 min_complete, u32 flags, void *arg,
+                                  u64 sz) {
     u64 const res = syscall6(NR_IO_URING_ENTER, (u64)fd, to_submit,
                              min_complete, flags, (u64)arg, sz);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EAgain;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EBadF;
         }
         case EBADFD: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EBadFd;
         }
         case EBADR: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EBadR;
         }
         case EBUSY: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EBusy;
         }
         case EEXIST: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EExist;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EInval;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EFault;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::ENXIo;
         }
         case EOPNOTSUPP: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EOpNotSupp;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EIntr;
         }
         case EOWNERDEAD: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::EOwnerDead;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return IoUringEnterStatus::UnexpectedErr;
         }
         }
@@ -1068,50 +1200,63 @@ enum class [[nodiscard]] IoUringRegisterStatus : u8_c {
     ENoEnt,
 };
 
-IoUringRegisterStatus io_uring_register(i32 fd, u32 opcode, void const *arg,
-                                        u32 nr_args) {
+IoUringRegisterStatus io_uring_register(CPUContext *err_ctx, i32 fd, u32 opcode,
+                                        void const *arg, u32 nr_args) {
     u64 const res =
         syscall4(NR_IO_URING_REGISTER, (u64)fd, opcode, (u64)arg, nr_args);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EACCES: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EAcces;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EBadF;
         }
         case EBADFD: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EBadFd;
         }
         case EBUSY: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EBusy;
         }
         case EEXIST: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EExist;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EFault;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EInval;
         }
         case EMFILE: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EMFile;
         }
         case ENOMEM: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::ENoMem;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::ENXIo;
         }
         case ENOTSUP: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::EOpNotSupp;
         }
         case ENOENT: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::ENoEnt;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return IoUringRegisterStatus::UnexpectedErr;
         }
         }
@@ -1128,26 +1273,32 @@ enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     ENotDir,
 };
 
-UnlinkAtStatus unlink_at(i32 dirfd, u8 const *pathname, i32 flags) {
-    if (pathname == nullptr) {
+UnlinkAtStatus unlink_at(CPUContext *err_ctx, i32 dirfd, u8 const *pathname,
+                         i32 flags) {
+    if (pathname == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return UnlinkAtStatus::Nullptr;
     }
 
     u64 const res =
         syscall3(NR_UNLINKAT, (u64)dirfd, (u64)pathname, (u64)flags);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return UnlinkAtStatus::EBadF;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return UnlinkAtStatus::EInval;
         }
         case ENOTDIR: {
+            zx_getcpucontext_(err_ctx);
             return UnlinkAtStatus::ENotDir;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return UnlinkAtStatus::UnexpectedErr;
         }
         }
@@ -1172,14 +1323,16 @@ enum class [[nodiscard]] PReadStatus : u8_c {
     ENXIo,
 };
 
-PReadStatus pread(i32 fd, u8 *buf, u64 count, u64 offset, u64 *n_read) {
-    if (n_read == nullptr || buf == nullptr) {
+PReadStatus pread(CPUContext *err_ctx, i32 fd, u8 *buf, u64 count, u64 offset,
+                  u64 *n_read) {
+    if (n_read == nullptr || buf == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return PReadStatus::Nullptr;
     }
 
     u64 const res = syscall4(NR_PREAD64, (u64)fd, (u64)buf, count, offset);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         // The returned n_read count isn't supposed to be used on error case.
         // Set to max value so the caller will do something unexpected if it
         // tries to use this value on error case. Then we can hope to catch this
@@ -1191,36 +1344,47 @@ PReadStatus pread(i32 fd, u8 *buf, u64 count, u64 offset, u64 *n_read) {
 
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EAgain;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EBadF;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EFault;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EInval;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EIo;
         }
         case EISDIR: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EIsDir;
         }
         case EOVERFLOW: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::EOverflow;
         }
         case ESPIPE: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::ESPipe;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::ENXIo;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return PReadStatus::UnexpectedErr;
         }
         }
@@ -1250,64 +1414,81 @@ enum class [[nodiscard]] PWriteStatus : u8_c {
     ENXIo,
 };
 
-PWriteStatus pwrite(i32 fd, u8 const *buf, u64 count, u64 offset,
-                    u64 *n_written) {
-    if (n_written == nullptr || buf == nullptr) {
+PWriteStatus pwrite(CPUContext *err_ctx, i32 fd, u8 const *buf, u64 count,
+                    u64 offset, u64 *n_written) {
+    if (n_written == nullptr || buf == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return PWriteStatus::Nullptr;
     }
 
     u64 const res = syscall4(NR_PWRITE64, (u64)fd, (u64)buf, count, offset);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *n_written = U64_MAX;
 
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EAgain;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EBadF;
         }
         case EDESTADDRREQ: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EDestAddrReq;
         }
         case EDQUOT: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EDQuot;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EFault;
         }
         case EFBIG: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EFBig;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EInval;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EIo;
         }
         case ENOSPC: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::ENoSpc;
         }
         case EPERM: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EPerm;
         }
         case EPIPE: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EPipe;
         }
         case EOVERFLOW: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::EOverflow;
         }
         case ESPIPE: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::ESPipe;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::ENXIo;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return PWriteStatus::UnexpectedErr;
         }
         }
@@ -1328,36 +1509,44 @@ enum class [[nodiscard]] LSeekStatus : u8_c {
     ESPipe,
 };
 
-LSeekStatus lseek(i32 fd, u64 offset, i32 whence, u64 *new_offset) {
-    if (new_offset == nullptr) {
+LSeekStatus lseek(CPUContext *err_ctx, i32 fd, u64 offset, i32 whence,
+                  u64 *new_offset) {
+    if (new_offset == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return LSeekStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_LSEEK, (u64)fd, offset, (u64)whence);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         // Make the output invalid so callers can detect misuse if they
         // ignore the returned status.
         *new_offset = U64_MAX;
 
         switch (errno) {
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::EBadF;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::EInval;
         }
         case ENXIO: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::ENXIo;
         }
         case EOVERFLOW: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::EOverflow;
         }
         case ESPIPE: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::ESPipe;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return LSeekStatus::UnexpectedErr;
         }
         }
@@ -1378,33 +1567,41 @@ enum class [[nodiscard]] GetRandomStatus : u8_c {
     ENoSys,
 };
 
-GetRandomStatus getrandom(u8 *buf, u64 size, u32 flags, u64 *n_read) {
-    if (buf == nullptr || n_read == nullptr) {
+GetRandomStatus getrandom(CPUContext *err_ctx, u8 *buf, u64 size, u32 flags,
+                          u64 *n_read) {
+    if (buf == nullptr || n_read == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return GetRandomStatus::Nullptr;
     }
 
     u64 const res = syscall3(NR_GETRANDOM, (u64)buf, size, (u64)flags);
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         *n_read = U64_MAX;
 
         switch (errno) {
         case EAGAIN: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::EAgain;
         }
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::EFault;
         }
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::EInval;
         }
         case ENOSYS: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::ENoSys;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return GetRandomStatus::UnexpectedErr;
         }
         }
@@ -1424,28 +1621,34 @@ enum class [[nodiscard]] FTruncateStatus : u8_c {
     EBadF,
 };
 
-FTruncateStatus ftruncate(i32 fildes, u64 length) {
+FTruncateStatus ftruncate(CPUContext *err_ctx, i32 fildes, u64 length) {
     u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, length);
     u64 const errno = errno_(res);
 
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EINTR: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::EIntr;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::EInval;
         }
         case EFBIG: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::EFBig;
         }
         case EIO: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::EIo;
         }
         case EBADF: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::EBadF;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return FTruncateStatus::UnexpectedErr;
         }
         }
@@ -1471,7 +1674,8 @@ enum class [[nodiscard]] SigActionStatus : u8_c {
     EInval,
 };
 
-SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
+SigActionStatus sigaction(CPUContext *err_ctx, SIG signum,
+                          SigAction const *__restrict act,
                           SigAction *__restrict oldact) {
     SigAction_ k_act;
     if (act != nullptr) {
@@ -1488,15 +1692,18 @@ SigActionStatus sigaction(SIG signum, SigAction const *__restrict act,
     u64 const res = syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)new_ptr,
                              (u64)old_ptr, sizeof(SigSet));
     u64 const errno = errno_(res);
-    if (errno != SUCCESS) {
+    if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
         case EFAULT: {
+            zx_getcpucontext_(err_ctx);
             return SigActionStatus::EFault;
         }
         case EINVAL: {
+            zx_getcpucontext_(err_ctx);
             return SigActionStatus::EInval;
         }
         default: {
+            zx_getcpucontext_(err_ctx);
             return SigActionStatus::UnexpectedErr;
         }
         }

@@ -4,6 +4,7 @@ import :slice;
 import :arith;
 import :assert;
 import :leb128;
+import :cpu_context;
 
 export namespace zx {
 
@@ -32,19 +33,22 @@ struct Cursor {
 
     bool is_finished() const { return this->m_offset == this->m_buf.len(); }
 
-    template <typename T> Status read(T *out) {
-        if (out == nullptr) {
+    template <typename T> Status read(CPUContext *err_ctx, T *out) {
+        if (out == nullptr) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::Nullptr;
         }
 
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
 
-        if (overflow) {
+        if (overflow) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::IntegerOverflow;
         }
 
-        if (end > this->m_buf.len()) {
+        if (end > this->m_buf.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::OutOfBounds;
         }
 
@@ -54,53 +58,23 @@ struct Cursor {
         return Status::Ok;
     }
 
-    template <typename T> T read_unsafe() {
-        u64 const end = add_unsafe_u64(this->m_offset, sizeof(T));
-        assert_dev(end <= this->m_buf.len());
-
-        T out;
-        __builtin_memcpy(&out, this->m_buf.offset_unsafe(this->m_offset),
-                         sizeof(T));
-        this->m_offset = end;
-        return out;
+    leb128::DecodeStatus read_uleb128(CPUContext *err_ctx, u64 *out) {
+        return leb128::decode_u64(err_ctx, this->m_buf, &this->m_offset, out);
     }
 
-    template <typename T> T read_panic() {
-        T out;
-        __builtin_memset(&out, 0xaa, sizeof(out));
-        assert(Status::Ok == this->read(&out));
-        return out;
+    leb128::DecodeStatus read_sleb128(CPUContext *err_ctx, i64 *out) {
+        return leb128::decode_i64(err_ctx, this->m_buf, &this->m_offset, out);
     }
 
-    leb128::DecodeStatus read_uleb128(u64 *out) {
-        return leb128::decode_u64(this->m_buf, &this->m_offset, out);
-    }
-
-    u64 read_uleb128_panic() {
-        u64 out = 0;
-        assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_u64(this->m_buf, &this->m_offset, &out));
-        return out;
-    }
-
-    leb128::DecodeStatus read_sleb128(i64 *out) {
-        return leb128::decode_i64(this->m_buf, &this->m_offset, out);
-    }
-
-    i64 read_sleb128_panic() {
-        i64 out = 0;
-        assert(leb128::DecodeStatus::Ok ==
-               leb128::decode_i64(this->m_buf, &this->m_offset, &out));
-        return out;
-    }
-
-    Status skip(u64 len) {
+    Status skip(CPUContext *err_ctx, u64 len) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, len, &overflow);
-        if (overflow) {
+        if (overflow) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::IntegerOverflow;
         }
-        if (end > this->m_buf.len()) {
+        if (end > this->m_buf.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::OutOfBounds;
         }
 
@@ -109,7 +83,8 @@ struct Cursor {
     }
 
     Status seek(u64 offset) {
-        if (offset > this->m_buf.len()) {
+        if (offset > this->m_buf.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::OutOfBounds;
         }
         this->m_offset = offset;
@@ -145,14 +120,16 @@ struct WriteCursor {
         return this->m_buf.slice_unsafe(0, this->m_offset).as_const();
     }
 
-    template <typename T> Status write(T val) {
+    template <typename T> Status write(CPUContext *err_ctx, T val) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
-        if (overflow) {
+        if (overflow) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::IntegerOverflow;
         }
 
-        if (end > this->m_buf.len()) {
+        if (end > this->m_buf.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return Status::OutOfBounds;
         }
 
@@ -160,19 +137,6 @@ struct WriteCursor {
                          sizeof(T));
         this->m_offset = end;
         return Status::Ok;
-    }
-
-    template <typename T> void write_unsafe(T val) {
-        u64 const end = add_unsafe_u64(this->m_offset, sizeof(T));
-        assert_dev(end <= this->m_buf.len());
-
-        __builtin_memcpy(this->m_buf.offset_mut_unsafe(this->m_offset), &val,
-                         sizeof(T));
-        this->m_offset = end;
-    }
-
-    template <typename T> void write_panic(T val) {
-        assert(Status::Ok == this->write(val));
     }
 };
 

@@ -2,6 +2,7 @@ export module zx:list;
 import :def;
 import :arith;
 import :slice;
+import :cpu_context;
 
 export namespace zx {
 
@@ -46,9 +47,10 @@ template <typename T> struct List {
         this->m_offset = 0;
     }
 
-    ListPushStatus push(T val) {
+    ListPushStatus push(CPUContext *err_ctx, T val) {
         assert_dev(this->m_offset <= this->m_slice.len());
-        if (this->m_offset == this->m_slice.len()) {
+        if (this->m_offset == this->m_slice.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return ListPushStatus::OutOfCapacity;
         }
 
@@ -57,32 +59,22 @@ template <typename T> struct List {
         return ListPushStatus::Ok;
     }
 
-    void push_panic(T val) {
-        assert(this->m_offset < this->m_slice.len());
-        this->m_slice.write_unsafe(this->m_offset, val);
-        this->m_offset += 1;
-    }
-
-    ListPopStatus pop(T *out) {
+    ListPopStatus pop(CPUContext *err_ctx, T *out) {
         assert_dev(this->m_offset <= this->m_slice.len());
 
-        if (out == nullptr) {
+        if (out == nullptr) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return ListPopStatus::Nullptr;
         }
 
-        if (this->m_offset == 0) {
+        if (this->m_offset == 0) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             return ListPopStatus::Empty;
         }
 
         this->m_offset -= 1;
         *out = this->m_slice.read_unsafe(this->m_offset);
         return ListPopStatus::Ok;
-    }
-
-    T pop_panic() {
-        assert(this->m_offset > 0);
-        this->m_offset -= 1;
-        return this->m_slice.read_unsafe(this->m_offset);
     }
 };
 

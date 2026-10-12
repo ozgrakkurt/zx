@@ -2,6 +2,7 @@ export module zx:leb128;
 import :def;
 import :assert;
 import :slice;
+import :cpu_context;
 
 export namespace zx {
 
@@ -19,20 +20,24 @@ enum class [[nodiscard]] EncodeStatus : u8_c {
     OutOfCapacity,
 };
 
-EncodeStatus encode_u64(u64 num, SliceMut<u8> out, u64 *offset) {
-    if (offset == nullptr) {
+EncodeStatus encode_u64(CPUContext *err_ctx, u64 num, SliceMut<u8> out,
+                        u64 *offset) {
+    if (offset == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > out.len()) {
+    if (offs > out.len()) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
         assert_dev(offs <= out.len());
-        if (offs == out.len()) {
+        if (offs == out.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -59,14 +64,17 @@ enum class [[nodiscard]] DecodeStatus : u8_c {
     InvalidInput,
 };
 
-DecodeStatus decode_u64(Slice<u8> input, u64 *offset, u64 *num) {
-    if (offset == nullptr || num == nullptr) {
+DecodeStatus decode_u64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
+                        u64 *num) {
+    if (offset == nullptr || num == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > input.len()) {
+    if (offs > input.len()) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return DecodeStatus::InvalidOffset;
     }
 
@@ -74,7 +82,8 @@ DecodeStatus decode_u64(Slice<u8> input, u64 *offset, u64 *num) {
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
         assert_dev(offs <= input.len());
-        if (offs == input.len()) {
+        if (offs == input.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
@@ -93,25 +102,30 @@ DecodeStatus decode_u64(Slice<u8> input, u64 *offset, u64 *num) {
         }
     }
 
+    zx_getcpucontext_(err_ctx);
     *num = 0;
     *offset = offs;
     return DecodeStatus::InvalidInput;
 }
 
-EncodeStatus encode_i64(i64 num, SliceMut<u8> out, u64 *offset) {
-    if (offset == nullptr) {
+EncodeStatus encode_i64(CPUContext *err_ctx, i64 num, SliceMut<u8> out,
+                        u64 *offset) {
+    if (offset == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > out.len()) {
+    if (offs > out.len()) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
         assert_dev(offs <= out.len());
-        if (offs == out.len()) {
+        if (offs == out.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -132,14 +146,17 @@ EncodeStatus encode_i64(i64 num, SliceMut<u8> out, u64 *offset) {
     }
 }
 
-DecodeStatus decode_i64(Slice<u8> input, u64 *offset, i64 *num) {
-    if (offset == nullptr || num == nullptr) {
+DecodeStatus decode_i64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
+                        i64 *num) {
+    if (offset == nullptr || num == nullptr) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
-    if (offs > input.len()) {
+    if (offs > input.len()) [[unlikely]] {
+        zx_getcpucontext_(err_ctx);
         return DecodeStatus::InvalidOffset;
     }
 
@@ -147,7 +164,8 @@ DecodeStatus decode_i64(Slice<u8> input, u64 *offset, i64 *num) {
     u8 shift = 0;
     for (u8 iter = 0; iter < 10; iter++) {
         assert_dev(offs <= input.len());
-        if (offs == input.len()) {
+        if (offs == input.len()) [[unlikely]] {
+            zx_getcpucontext_(err_ctx);
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
@@ -170,6 +188,7 @@ DecodeStatus decode_i64(Slice<u8> input, u64 *offset, i64 *num) {
         }
     }
 
+    zx_getcpucontext_(err_ctx);
     *num = 0;
     *offset = offs;
     return DecodeStatus::InvalidInput;
