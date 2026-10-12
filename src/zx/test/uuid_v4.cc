@@ -3,6 +3,9 @@ import zx;
 using namespace zx;
 
 int main() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     constexpr u64 N_IDS = 50;
     u128 ids[N_IDS];
     for (u64 i = 0; i < N_IDS; i++) {
@@ -30,7 +33,8 @@ int main() {
                    &fmt_overflow);
     assert(!fmt_overflow);
 
-    assert(Fmt::PrintStatus::Ok == fmt.eprint());
+    testing::assert_with_trace(Fmt::PrintStatus::Ok == fmt.eprint(&err_ctx),
+                               &err_ctx);
 
     assert(fmt.written().equals(
         CString::init_unsafe("e65dad9e-ae41-11f1-a125-325096b39f47")

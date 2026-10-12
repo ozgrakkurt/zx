@@ -4,26 +4,32 @@ using namespace zx;
 
 // this is how to pass a template to a template
 template <template <typename T> class S> static void test_slicing_impl() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
     S<u16> const slice = S<u16>::init_unsafe(data, data_len);
     S<u16> other;
 
     // SLICE
-    assert(SliceStatus::Ok == slice.slice(0, 5, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice(&err_ctx, 0, 5, &other), &err_ctx);
     assert(slice.equals(other));
 
-    assert(SliceStatus::Ok == slice.slice(4, 0, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice(&err_ctx, 4, 0, &other), &err_ctx);
     assert(other.len() == 0);
 
     // edge
-    assert(SliceStatus::Ok == slice.slice(5, 0, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice(&err_ctx, 5, 0, &other), &err_ctx);
     assert(other.len() == 0);
 
     // oob
-    assert(SliceStatus::OutOfBounds == slice.slice(6, 0, &other));
-    assert(SliceStatus::OutOfBounds == slice.slice(1, 5, &other));
-    assert(SliceStatus::OutOfBounds == slice.slice(0, 6, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice(&err_ctx, 6, 0, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice(&err_ctx, 1, 5, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice(&err_ctx, 0, 6, &other));
 
     // SLICE_UNSAFE
     other = slice.slice_unsafe(0, 5);
@@ -36,18 +42,21 @@ template <template <typename T> class S> static void test_slicing_impl() {
     assert(other.len() == 0);
 
     // SLICE_AT
-    assert(SliceStatus::Ok == slice.slice_at(0, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice_at(&err_ctx, 0, &other), &err_ctx);
     assert(other.equals(slice));
 
-    assert(SliceStatus::Ok == slice.slice_at(4, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice_at(&err_ctx, 4, &other), &err_ctx);
     assert(other.len() == 1);
     assert(other.equals(slice.slice_unsafe(4, 1)));
 
-    assert(SliceStatus::Ok == slice.slice_at(5, &other));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.slice_at(&err_ctx, 5, &other), &err_ctx);
     assert(other.len() == 0);
 
     // oob
-    assert(SliceStatus::OutOfBounds == slice.slice_at(6, &other));
+    assert(SliceStatus::OutOfBounds == slice.slice_at(&err_ctx, 6, &other));
 
     // SLICE_AT_UNSAFE
     other = slice.slice_at_unsafe(0);
@@ -80,6 +89,9 @@ static void test_cstring() {
 }
 
 static void test_memfunctions() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
     SliceMut<u16> const slice = SliceMut<u16>::init_unsafe(data, data_len);
@@ -99,15 +111,18 @@ static void test_memfunctions() {
     assert(slice.slice_unsafe(0, 2).is_overlapping(slice.slice_unsafe(1, 2)));
     assert(SliceMemcpyStatus::Overlapping ==
            slice.slice_unsafe(0, 2).memcpy_from(
-               slice.slice_unsafe(1, 2).as_const()));
+               &err_ctx, slice.slice_unsafe(1, 2).as_const()));
 
     assert(SliceMemcpyStatus::SizeMismatch ==
-           slice.slice_unsafe(0, 1).memcpy_from(slice.as_const()));
+           slice.slice_unsafe(0, 1).memcpy_from(&err_ctx, slice.as_const()));
 
     data[0] = 1131;
     data[4] = 69;
-    assert(SliceMemcpyStatus::Ok == slice.slice_unsafe(0, 1).memcpy_from(
-                                        slice.slice_unsafe(4, 1).as_const()));
+    testing::assert_with_trace(
+        SliceMemcpyStatus::Ok ==
+            slice.slice_unsafe(0, 1).memcpy_from(
+                &err_ctx, slice.slice_unsafe(4, 1).as_const()),
+        &err_ctx);
     assert(data[0] == 69);
 
     data[0] = 69;
@@ -122,20 +137,25 @@ static void test_memfunctions() {
 }
 
 static void test_write_access() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
     SliceMut<u16> const slice = SliceMut<u16>::init_unsafe(data, data_len);
 
     // WRITE
-    assert(SliceStatus::Ok == slice.write(0, 69));
+    testing::assert_with_trace(SliceStatus::Ok == slice.write(&err_ctx, 0, 69),
+                               &err_ctx);
     assert(data[0] == 69);
 
-    assert(SliceStatus::Ok == slice.write(4, 1131));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.write(&err_ctx, 4, 1131), &err_ctx);
     assert(data[4] == 1131);
 
     // oob
-    assert(SliceStatus::OutOfBounds == slice.write(5, 100));
-    assert(SliceStatus::OutOfBounds == slice.write(500, 100));
+    assert(SliceStatus::OutOfBounds == slice.write(&err_ctx, 5, 100));
+    assert(SliceStatus::OutOfBounds == slice.write(&err_ctx, 500, 100));
 
     // WRITE_UNSAFE
     slice.write_unsafe(0, 10);
@@ -145,33 +165,42 @@ static void test_write_access() {
     assert(data[2] == 11);
 
     // WRITE_UNALIGNED
-    assert(SliceStatus::Ok == slice.template write_unaligned<u8>(1, 255));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.template write_unaligned<u8>(&err_ctx, 1, 255),
+        &err_ctx);
     assert(data[0] == 10);  // unchanged
     assert(data[1] == 255); // low byte should be 255
     assert(data[2] == 11);  // unchanged
 
-    assert(SliceStatus::Ok ==
-           slice.template write_unaligned<u64>(0, 0x0123456789ABCDEF__wbu));
+    testing::assert_with_trace(SliceStatus::Ok ==
+                                   slice.template write_unaligned<u64>(
+                                       &err_ctx, 0, 0x0123456789ABCDEF__wbu),
+                               &err_ctx);
     u64 result;
     __builtin_memcpy(&result, &data[0], sizeof(u64));
     assert(result == 0x0123456789ABCDEF__wbu);
 
     // oob
     assert(SliceStatus::OutOfBounds ==
-           slice.template write_unaligned<u64>(5, 100));
+           slice.template write_unaligned<u64>(&err_ctx, 5, 100));
     assert(SliceStatus::OutOfBounds ==
-           slice.template write_unaligned<u64>(50, 100));
+           slice.template write_unaligned<u64>(&err_ctx, 50, 100));
     assert(SliceStatus::OutOfBounds ==
-           slice.template write_unaligned<u8>(5, 100));
+           slice.template write_unaligned<u8>(&err_ctx, 5, 100));
     assert(SliceStatus::OutOfBounds ==
-           slice.template write_unaligned<u8>(50, 100));
+           slice.template write_unaligned<u8>(&err_ctx, 50, 100));
 
     // Should still work for valid offset
-    assert(SliceStatus::Ok == slice.template write_unaligned<u16>(4, 42));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.template write_unaligned<u16>(&err_ctx, 4, 42),
+        &err_ctx);
     assert(data[4] == 42);
 }
 
 template <template <typename T> class S> static void test_read_access_impl() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
     S<u16> const slice = S<u16>::init_unsafe(data, data_len);
@@ -184,15 +213,17 @@ template <template <typename T> class S> static void test_read_access_impl() {
     u8 small_val = 211;
 
     // OFFSET
-    assert(SliceStatus::Ok == slice.offset(0, &ptr));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.offset(&err_ctx, 0, &ptr), &err_ctx);
     assert(*ptr == 1);
 
-    assert(SliceStatus::Ok == slice.offset(4, &ptr));
+    testing::assert_with_trace(
+        SliceStatus::Ok == slice.offset(&err_ctx, 4, &ptr), &err_ctx);
     assert(*ptr == 5);
 
     // oob
-    assert(SliceStatus::OutOfBounds == slice.offset(5, &ptr));
-    assert(SliceStatus::OutOfBounds == slice.offset(55, &ptr));
+    assert(SliceStatus::OutOfBounds == slice.offset(&err_ctx, 5, &ptr));
+    assert(SliceStatus::OutOfBounds == slice.offset(&err_ctx, 55, &ptr));
 
     // OFFSET_UNSAFE
     ptr = slice.offset_unsafe(0);
@@ -202,10 +233,12 @@ template <template <typename T> class S> static void test_read_access_impl() {
     assert(*ptr == 5);
 
     // READ
-    assert(SliceStatus::Ok == slice.read(0, &val));
+    testing::assert_with_trace(SliceStatus::Ok == slice.read(&err_ctx, 0, &val),
+                               &err_ctx);
     assert(val == 1);
 
-    assert(SliceStatus::Ok == slice.read(3, &val));
+    testing::assert_with_trace(SliceStatus::Ok == slice.read(&err_ctx, 3, &val),
+                               &err_ctx);
     assert(val == 4);
 
     // READ_UNSAFE
@@ -218,23 +251,29 @@ template <template <typename T> class S> static void test_read_access_impl() {
     // READ_UNALIGNED
     u64 expected;
     __builtin_memcpy(&expected, &data[1], sizeof(u64));
-    assert(SliceStatus::Ok == slice.template read_unaligned<u64>(1, &big_val));
+    testing::assert_with_trace(
+        SliceStatus::Ok ==
+            slice.template read_unaligned<u64>(&err_ctx, 1, &big_val),
+        &err_ctx);
     assert(big_val == expected);
 
-    assert(SliceStatus::Ok == slice.template read_unaligned<u8>(2, &small_val));
+    testing::assert_with_trace(
+        SliceStatus::Ok ==
+            slice.template read_unaligned<u8>(&err_ctx, 2, &small_val),
+        &err_ctx);
     assert(small_val == 3);
 
     // oob
     assert(SliceStatus::OutOfBounds ==
-           slice.template read_unaligned<u64>(2, &big_val));
+           slice.template read_unaligned<u64>(&err_ctx, 2, &big_val));
     assert(SliceStatus::OutOfBounds ==
-           slice.template read_unaligned<u64>(5, &big_val));
+           slice.template read_unaligned<u64>(&err_ctx, 5, &big_val));
     assert(SliceStatus::OutOfBounds ==
-           slice.template read_unaligned<u64>(77, &big_val));
+           slice.template read_unaligned<u64>(&err_ctx, 77, &big_val));
     assert(SliceStatus::OutOfBounds ==
-           slice.template read_unaligned<u8>(77, &small_val));
+           slice.template read_unaligned<u8>(&err_ctx, 77, &small_val));
     assert(SliceStatus::OutOfBounds ==
-           slice.template read_unaligned<u8>(5, &small_val));
+           slice.template read_unaligned<u8>(&err_ctx, 5, &small_val));
 
     // READ_UNALIGNED_UNSAFE
     __builtin_memcpy(&expected, &data[0], sizeof(u64));
@@ -312,16 +351,23 @@ static void test_is_overlapping() {
 }
 
 static void test_from_ptr() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u256 data = 69;
     u256 *ptr_mut = &data;
     SliceMut<u16> slice_mut;
-    assert(SliceInitStatus::Ok ==
-           SliceMut<u16>::init_from_ptr(ptr_mut, &slice_mut));
+    testing::assert_with_trace(
+        SliceInitStatus::Ok ==
+            SliceMut<u16>::init_from_ptr(&err_ctx, ptr_mut, &slice_mut),
+        &err_ctx);
     assert(slice_mut.len() == sizeof(u256) / sizeof(u16));
 
     u256 const *ptr = &data;
     Slice<u32> slice;
-    assert(SliceInitStatus::Ok == Slice<u32>::init_from_ptr(ptr, &slice));
+    testing::assert_with_trace(
+        SliceInitStatus::Ok == Slice<u32>::init_from_ptr(&err_ctx, ptr, &slice),
+        &err_ctx);
     assert(slice.len() == sizeof(u256) / sizeof(u32));
 }
 
@@ -343,9 +389,14 @@ static void test_cstr() {
 }
 
 static void test_immut() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u32 data[20];
     Slice<u32> sli;
-    assert(Slice<u32>::init(data, 20, &sli) == SliceInitStatus::Ok);
+    testing::assert_with_trace(Slice<u32>::init(&err_ctx, data, 20, &sli) ==
+                                   SliceInitStatus::Ok,
+                               &err_ctx);
 
     for (u64 i = 0; i < 20; i++) {
         data[i] = 100;
@@ -357,16 +408,16 @@ static void test_immut() {
     assert((u64)&data[10] == (u64)sli.offset_unsafe(10));
 
     u32 const *pp = nullptr;
-    SliceStatus status = sli.offset(20, &pp);
+    SliceStatus status = sli.offset(&err_ctx, 20, &pp);
     assert(status == SliceStatus::OutOfBounds);
 
-    status = sli.offset(3, &pp);
-    assert(status == SliceStatus::Ok);
+    status = sli.offset(&err_ctx, 3, &pp);
+    testing::assert_with_trace(status == SliceStatus::Ok, &err_ctx);
     assert((u64)&data[3] == (u64)pp);
 
     Slice<u16> sli16;
-    SliceCastStatus cast_status = sli.cast<u16>(&sli16);
-    assert(cast_status == SliceCastStatus::Ok);
+    SliceCastStatus cast_status = sli.cast<u16>(&err_ctx, &sli16);
+    testing::assert_with_trace(cast_status == SliceCastStatus::Ok, &err_ctx);
     assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
 
     Slice<u8> sli8 = sli.cast_unsafe<u8>();
@@ -390,9 +441,14 @@ static void test_immut() {
 }
 
 static void test_mut() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u32 data[20];
     SliceMut<u32> sli;
-    assert(SliceMut<u32>::init(data, 20, &sli) == SliceInitStatus::Ok);
+    testing::assert_with_trace(SliceMut<u32>::init(&err_ctx, data, 20, &sli) ==
+                                   SliceInitStatus::Ok,
+                               &err_ctx);
 
     sli.fill(100);
 
@@ -408,16 +464,16 @@ static void test_mut() {
     assert((u64)&data[10] == (u64)sli.offset_unsafe(10));
 
     u32 *pp = nullptr;
-    SliceStatus status = sli.offset_mut(20, &pp);
+    SliceStatus status = sli.offset_mut(&err_ctx, 20, &pp);
     assert(status == SliceStatus::OutOfBounds);
 
-    status = sli.offset_mut(3, &pp);
-    assert(status == SliceStatus::Ok);
+    status = sli.offset_mut(&err_ctx, 3, &pp);
+    testing::assert_with_trace(status == SliceStatus::Ok, &err_ctx);
     assert((u64)&data[3] == (u64)pp);
 
     SliceMut<u16> sli16;
-    SliceCastStatus cast_status = sli.cast<u16>(&sli16);
-    assert(cast_status == SliceCastStatus::Ok);
+    SliceCastStatus cast_status = sli.cast<u16>(&err_ctx, &sli16);
+    testing::assert_with_trace(cast_status == SliceCastStatus::Ok, &err_ctx);
     assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
 
     SliceMut<u8> sli8 = sli.cast_unsafe<u8>();

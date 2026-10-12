@@ -96,19 +96,23 @@ __attribute__((no_builtin)) static void check_strlen(zx::u8 *str, zx::u64 len) {
 }
 
 __attribute__((no_builtin)) static zx::u8 *make_alloc(zx::u64 capacity) {
+    zx::CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     // has to be power of two
     zx::assert(__builtin_popcountg(capacity) == 1);
     zx::assert(capacity >= 4096);
 
     zx::u8 *alloc;
-    if (zx::page_alloc::AllocStatus const status =
-            zx::page_alloc::alloc_4kb(capacity * 2__wbu, &alloc);
-        zx::page_alloc::AllocStatus::Ok != status) {
-        __builtin_trap();
-    }
-    zx::sys::MProtectStatus const sys_status =
-        zx::sys::mprotect(&alloc[capacity], capacity, zx::sys::PROT_NONE);
-    zx::assert(sys_status == zx::sys::MProtectStatus::Ok);
+    zx::testing::assert_with_trace(
+        zx::page_alloc::AllocStatus::Ok ==
+            zx::page_alloc::alloc_4kb(&err_ctx, capacity * 2__wbu, &alloc),
+        &err_ctx);
+
+    zx::sys::MProtectStatus const sys_status = zx::sys::mprotect(
+        &err_ctx, &alloc[capacity], capacity, zx::sys::PROT_NONE);
+    zx::testing::assert_with_trace(sys_status == zx::sys::MProtectStatus::Ok,
+                                   &err_ctx);
 
     return alloc;
 }

@@ -3,6 +3,9 @@ import zx;
 using namespace zx;
 
 void test_empty() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     Cursor empty = Cursor::init(Slice<u8>::init_dangling());
 
     u8 val8 = 69;
@@ -10,20 +13,26 @@ void test_empty() {
 
     assert(empty.is_finished());
 
-    assert(Cursor::Status::OutOfBounds == empty.read<u8>(&val8));
-    assert(Cursor::Status::OutOfBounds == empty.read<i32>(&val32));
+    assert(Cursor::Status::OutOfBounds == empty.read<u8>(&err_ctx, &val8));
+    assert(Cursor::Status::OutOfBounds == empty.read<i32>(&err_ctx, &val32));
 
     assert(empty.is_finished());
 }
 
 void test_empty_write() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     WriteCursor empty = WriteCursor::init(SliceMut<u8>::init_dangling());
 
-    assert(WriteCursor::Status::OutOfBounds == empty.write<u8>(69));
-    assert(WriteCursor::Status::OutOfBounds == empty.write<i32>(69));
+    assert(WriteCursor::Status::OutOfBounds == empty.write<u8>(&err_ctx, 69));
+    assert(WriteCursor::Status::OutOfBounds == empty.write<i32>(&err_ctx, 69));
 }
 
 void test_write_cursor() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u8 buf[100];
     SliceMut<u8> mut_slice = SliceMut<u8>::init_unsafe(buf, 100);
     WriteCursor wc = WriteCursor::init(mut_slice);
@@ -34,18 +43,19 @@ void test_write_cursor() {
     assert(wc.written().len() == 0);
 
     // write
-    u32 v1 = 0x12345678;
-    assert(WriteCursor::Status::Ok == wc.write(v1));
+    u32 const v1 = 0x12345678;
+    testing::assert_with_trace(
+        WriteCursor::Status::Ok == wc.write(&err_ctx, v1), &err_ctx);
     assert(wc.offset() == 4);
 
-    // write_unsafe
-    i32 v2 = -42;
-    wc.write_unsafe(v2);
+    i32 const v2 = -42;
+    testing::assert_with_trace(
+        WriteCursor::Status::Ok == wc.write(&err_ctx, v2), &err_ctx);
     assert(wc.offset() == 8);
 
-    // write_panic
-    u16 v3 = 0xabcd;
-    wc.write_panic(v3);
+    u16 const v3 = 0xabcd;
+    testing::assert_with_trace(
+        WriteCursor::Status::Ok == wc.write(&err_ctx, v3), &err_ctx);
     assert(wc.offset() == 10);
 
     // written
@@ -53,40 +63,59 @@ void test_write_cursor() {
 
     // OutOfBounds
     for (int i = 0; i < 90; i++) {
-        wc.write_panic((u8)i);
+        testing::assert_with_trace(
+            WriteCursor::Status::Ok == wc.write<u8>(&err_ctx, (u8)i), &err_ctx);
     }
     assert(wc.offset() == 100);
     assert(wc.is_finished());
-    assert(WriteCursor::Status::OutOfBounds == wc.write((u8)0));
+    assert(WriteCursor::Status::OutOfBounds == wc.write(&err_ctx, (u8)0));
 
     // IntegerOverflow
     WriteCursor wc2 = WriteCursor::init(mut_slice);
     wc2.m_offset = ~0ull - 2;
-    assert(WriteCursor::Status::IntegerOverflow == wc2.write(u32{0}));
+    assert(WriteCursor::Status::IntegerOverflow == wc2.write(&err_ctx, u32{0}));
 }
 
 void test_cursor() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u8 buf[100];
     SliceMut<u8> mut_slice = SliceMut<u8>::init_unsafe(buf, 100);
     WriteCursor wc = WriteCursor::init(mut_slice);
 
     // Prepare a known byte sequence
-    assert(WriteCursor::Status::Ok == wc.write(u32{0x12345678})); // 4 bytes
-    assert(WriteCursor::Status::Ok == wc.write(i32{-42}));        // 4 bytes
-    assert(WriteCursor::Status::Ok == wc.write(u16{0xabcd}));     // 2 bytes
-    assert(WriteCursor::Status::Ok == wc.write(u8{0x55}));        // 1 byte
-    assert(WriteCursor::Status::Ok == wc.write(u8{0x80}));
-    assert(WriteCursor::Status::Ok ==
-           wc.write(u8{0x01})); // uleb128 128 (2 bytes)
-    assert(WriteCursor::Status::Ok ==
-           wc.write(u8{0x7f})); // sleb128 -1 (1 byte)
-    assert(WriteCursor::Status::Ok == wc.write(u8{0xAC}));
-    assert(WriteCursor::Status::Ok ==
-           wc.write(u8{0x02})); // uleb128 300 (2 bytes)
-    assert(WriteCursor::Status::Ok ==
-           wc.write(u8{0x7e})); // sleb128 -2 (1 byte)
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u32{0x12345678}),
+                               &err_ctx); // 4 bytes
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, i32{-42}),
+                               &err_ctx); // 4 bytes
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u16{0xabcd}),
+                               &err_ctx); // 2 bytes
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u8{0x55}),
+                               &err_ctx); // 1 byte
+    testing::assert_with_trace(
+        WriteCursor::Status::Ok == wc.write(&err_ctx, u8{0x80}), &err_ctx);
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u8{0x01}),
+                               &err_ctx); // uleb128 128 (2 bytes)
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u8{0x7f}),
+                               &err_ctx); // sleb128 -1 (1 byte)
+    testing::assert_with_trace(
+        WriteCursor::Status::Ok == wc.write(&err_ctx, u8{0xAC}), &err_ctx);
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u8{0x02}),
+                               &err_ctx); // uleb128 300 (2 bytes)
+    testing::assert_with_trace(WriteCursor::Status::Ok ==
+                                   wc.write(&err_ctx, u8{0x7e}),
+                               &err_ctx); // sleb128 -2 (1 byte)
     for (int i = 0; i < 10; i++) {
-        assert(WriteCursor::Status::Ok == wc.write(u8{0xaa}));
+        testing::assert_with_trace(
+            WriteCursor::Status::Ok == wc.write(&err_ctx, u8{0xaa}), &err_ctx);
     }
 
     Slice<u8> written = wc.written();
@@ -97,71 +126,85 @@ void test_cursor() {
     assert(!cur.is_finished());
 
     // read
-    u32 v1;
-    assert(Cursor::Status::Ok == cur.read(&v1));
+    u32 v1 = 0;
+    testing::assert_with_trace(
+        Cursor::Status::Ok == cur.read<u32>(&err_ctx, &v1), &err_ctx);
     assert(v1 == 0x12345678);
     assert(cur.offset() == 4);
 
-    // read_unsafe
-    i32 v2 = cur.read_unsafe<i32>();
+    i32 v2 = 0;
+    testing::assert_with_trace(
+        Cursor::Status::Ok == cur.read<i32>(&err_ctx, &v2), &err_ctx);
     assert(v2 == -42);
     assert(cur.offset() == 8);
 
-    // read_panic
-    u16 v3 = cur.read_panic<u16>();
+    u16 v3 = 0;
+    testing::assert_with_trace(
+        Cursor::Status::Ok == cur.read<u16>(&err_ctx, &v3), &err_ctx);
     assert(v3 == 0xabcd);
     assert(cur.offset() == 10);
 
-    u8 v4 = cur.read_panic<u8>();
+    u8 v4 = 0;
+    testing::assert_with_trace(
+        Cursor::Status::Ok == cur.read<u8>(&err_ctx, &v4), &err_ctx);
     assert(v4 == 0x55);
     assert(cur.offset() == 11);
 
     // read_uleb128
     u64 v5;
-    assert(leb128::DecodeStatus::Ok == cur.read_uleb128(&v5));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok == cur.read_uleb128(&err_ctx, &v5), &err_ctx);
     assert(v5 == 128);
     assert(cur.offset() == 13);
 
     // read_sleb128
     i64 v6;
-    assert(leb128::DecodeStatus::Ok == cur.read_sleb128(&v6));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok == cur.read_sleb128(&err_ctx, &v6), &err_ctx);
     assert(v6 == -1);
     assert(cur.offset() == 14);
 
-    // read_uleb128_panic
-    u64 v7 = cur.read_uleb128_panic();
+    // read_uleb128
+    u64 v7 = 0;
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok == cur.read_uleb128(&err_ctx, &v7), &err_ctx);
     assert(v7 == 300);
     assert(cur.offset() == 16);
 
-    // read_sleb128_panic
-    i64 v8 = cur.read_sleb128_panic();
+    // read_sleb128
+    i64 v8 = 0;
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok == cur.read_sleb128(&err_ctx, &v8), &err_ctx);
     assert(v8 == -2);
     assert(cur.offset() == 17);
 
     // Nullptr
-    assert(Cursor::Status::Nullptr == cur.read<u32>(nullptr));
+    assert(Cursor::Status::Nullptr == cur.read<u32>(&err_ctx, nullptr));
 
     // skip
-    assert(Cursor::Status::Ok == cur.skip(5));
+    testing::assert_with_trace(Cursor::Status::Ok == cur.skip(&err_ctx, 5),
+                               &err_ctx);
     assert(cur.offset() == 22);
 
     // OutOfBounds on read
     u64 dummy;
-    assert(Cursor::Status::OutOfBounds == cur.read(&dummy));
+    assert(Cursor::Status::OutOfBounds == cur.read(&err_ctx, &dummy));
 
     // seek
-    assert(Cursor::Status::Ok == cur.seek(10));
+    testing::assert_with_trace(Cursor::Status::Ok == cur.seek(&err_ctx, 10),
+                               &err_ctx);
     assert(cur.offset() == 10);
-    assert(Cursor::Status::OutOfBounds == cur.seek(100));
+    assert(Cursor::Status::OutOfBounds == cur.seek(&err_ctx, 100));
 
     // IntegerOverflow on skip
     Cursor cur2 = Cursor::init(written);
     cur2.m_offset = ~0ull - 2;
-    assert(Cursor::Status::IntegerOverflow == cur2.skip(10));
+    assert(Cursor::Status::IntegerOverflow == cur2.skip(&err_ctx, 10));
 
     // is_finished
     Cursor cur3 = Cursor::init(written);
-    assert(Cursor::Status::Ok == cur3.seek(written.len()));
+    testing::assert_with_trace(
+        Cursor::Status::Ok == cur3.seek(&err_ctx, written.len()), &err_ctx);
     assert(cur3.is_finished());
 }
 

@@ -45,10 +45,13 @@ extern "C" void zx_setup_() {
         .mask = sys::SigSet::init(),
     };
 
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     assert(sys::SigActionStatus::Ok ==
-           sys::sigaction(sys::SIG::ILL, &act, nullptr));
+           sys::sigaction(&err_ctx, sys::SIG::ILL, &act, nullptr));
     assert(sys::SigActionStatus::Ok ==
-           sys::sigaction(sys::SIG::SEGV, &act, nullptr));
+           sys::sigaction(&err_ctx, sys::SIG::SEGV, &act, nullptr));
 }
 
 #else // ifdef ZX_DEBUG_INFO

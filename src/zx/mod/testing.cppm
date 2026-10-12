@@ -1,16 +1,19 @@
 export module zx:testing;
-// import :def;
-// import :elf;
-// import :cpu_context;
-// import :sys;
+import :elf;
+import :cpu_context;
+import :panic;
 
-// export namespace zx {
+export namespace zx {
 
-// namespace testing {
+namespace testing {
 
-// [[noreturn]] void fail_with_trace(CPUContext const* ctx) {
-//   elf::UnwindContext ctx = elf::UnwindContext::init_from_cpucontext(cpu_ctx);
-//   sys::exit_group(sys::EXIT_FAILURE);
-// }
+void assert_with_trace(bool cond, CPUContext const *ctx) {
+    if (!cond) [[unlikely]] {
+        elf::print_stack_trace_panic(ctx);
+        panic();
+    }
+}
 
-// } //export namespace zx
+} // namespace testing
+
+} // namespace zx

@@ -3,10 +3,15 @@ import zx;
 using namespace zx;
 
 static void testcase_unsigned(Slice<u8> buf, u64 num) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u64 out_num = U64_MAX;
     u64 offset = 0;
-    assert(leb128::DecodeStatus::Ok ==
-           leb128::decode_u64(buf, &offset, &out_num));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok ==
+            leb128::decode_u64(&err_ctx, buf, &offset, &out_num),
+        &err_ctx);
     assert(offset == buf.len());
     assert(out_num == num);
 
@@ -16,16 +21,24 @@ static void testcase_unsigned(Slice<u8> buf, u64 num) {
     SliceMut<u8> out = SliceMut<u8>::init_unsafe(out_buf, sizeof(out_buf));
 
     offset = 0;
-    assert(leb128::EncodeStatus::Ok == leb128::encode_u64(num, out, &offset));
+    testing::assert_with_trace(
+        leb128::EncodeStatus::Ok ==
+            leb128::encode_u64(&err_ctx, num, out, &offset),
+        &err_ctx);
     assert(offset == buf.len());
     assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
 }
 
 static void testcase_signed(Slice<u8> buf, i64 num) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     i64 out_num = I64_MAX;
     u64 offset = 0;
-    assert(leb128::DecodeStatus::Ok ==
-           leb128::decode_i64(buf, &offset, &out_num));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok ==
+            leb128::decode_i64(&err_ctx, buf, &offset, &out_num),
+        &err_ctx);
     assert(offset == buf.len());
     assert(out_num == num);
 
@@ -35,7 +48,10 @@ static void testcase_signed(Slice<u8> buf, i64 num) {
     SliceMut<u8> out = SliceMut<u8>::init_unsafe(out_buf, sizeof(out_buf));
 
     offset = 0;
-    assert(leb128::EncodeStatus::Ok == leb128::encode_i64(num, out, &offset));
+    testing::assert_with_trace(
+        leb128::EncodeStatus::Ok ==
+            leb128::encode_i64(&err_ctx, num, out, &offset),
+        &err_ctx);
     assert(offset == buf.len());
     assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
 }
@@ -70,28 +86,42 @@ static void test_signed() {
 }
 
 static void signed_roundtrip(SliceMut<u8> slice, i64 i) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u64 write_offset = 0;
-    assert(leb128::EncodeStatus::Ok ==
-           leb128::encode_i64(i, slice, &write_offset));
+    testing::assert_with_trace(
+        leb128::EncodeStatus::Ok ==
+            leb128::encode_i64(&err_ctx, i, slice, &write_offset),
+        &err_ctx);
 
     u64 read_offset = 0;
     i64 num = I64_MAX;
-    assert(leb128::DecodeStatus::Ok ==
-           leb128::decode_i64(slice.as_const(), &read_offset, &num));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok ==
+            leb128::decode_i64(&err_ctx, slice.as_const(), &read_offset, &num),
+        &err_ctx);
 
     assert(num == i);
     assert(read_offset == write_offset);
 }
 
 static void unsigned_roundtrip(SliceMut<u8> slice, u64 i) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u64 write_offset = 0;
-    assert(leb128::EncodeStatus::Ok ==
-           leb128::encode_u64(i, slice, &write_offset));
+    testing::assert_with_trace(
+        leb128::EncodeStatus::Ok ==
+            leb128::encode_u64(&err_ctx, i, slice, &write_offset),
+        &err_ctx);
 
     u64 read_offset = 0;
     u64 num = U64_MAX;
-    assert(leb128::DecodeStatus::Ok ==
-           leb128::decode_u64(slice.as_const(), &read_offset, &num));
+    testing::assert_with_trace(
+        leb128::DecodeStatus::Ok ==
+            leb128::decode_u64(&err_ctx, slice.as_const(), &read_offset, &num),
+        &err_ctx);
 
     assert(num == i);
     assert(read_offset == write_offset);
@@ -127,6 +157,9 @@ static void test_roundtrip() {
 }
 
 static void test_read_with_overflow() {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     u8 buf_buf[] = {
         0xff__wbu, 0xff__wbu, 0xff__wbu,       0xff__wbu,
         0xff__wbu, 0xff__wbu, 0xff__wbu,       0xff__wbu,
@@ -138,12 +171,12 @@ static void test_read_with_overflow() {
     u64 offset = 0;
     u64 num = 0;
     assert(leb128::DecodeStatus::InvalidInput ==
-           leb128::decode_u64(buf.as_const(), &offset, &num));
+           leb128::decode_u64(&err_ctx, buf.as_const(), &offset, &num));
 
     offset = 0;
     i64 inum = 0;
     assert(leb128::DecodeStatus::InvalidInput ==
-           leb128::decode_i64(buf.as_const(), &offset, &inum));
+           leb128::decode_i64(&err_ctx, buf.as_const(), &offset, &inum));
 }
 
 int main(void) {
