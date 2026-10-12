@@ -155,6 +155,9 @@ struct Instructions {
         assert(args.current_state != nullptr);
         assert(args.stack != nullptr);
 
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         Cursor cursor = Cursor::init(this->m_data);
 
         u64 pc = args.pc_begin;
@@ -162,14 +165,19 @@ struct Instructions {
         for (u64 i = 0; i < this->m_instr.len(); i++) {
             switch (this->m_instr.read_unsafe(i)) {
             case Instr::AdvanceLoc: {
-                u8 const delta = cursor.read_panic<u8>();
+                u8 delta = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &delta));
+
                 pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
 
                 break;
             }
             case Instr::Offset: {
-                u8 const regno = cursor.read_panic<u8>();
-                u32 const off = cursor.read_panic<u32>();
+                u8 regno = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &regno));
+
+                u32 off = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &off));
 
                 bool overflow = false;
                 i32 const soff = u32_to_i32(off, &overflow);
@@ -190,7 +198,8 @@ struct Instructions {
             case Instr::Restore: {
                 assert(args.cie_state != nullptr);
 
-                u8 const regno = cursor.read_panic<u8>();
+                u8 regno = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &regno));
 
                 assert(regno < NUM_REGS);
 
@@ -200,34 +209,45 @@ struct Instructions {
                 break;
             }
             case Instr::SetLoc: {
-                u64 const addr = cursor.read_panic<u64>();
+                u64 addr = 0;
+                assert(Cursor::Status::Ok == cursor.read<u64>(&err_ctx, &addr));
+
                 assert(addr > pc);
                 pc = addr;
 
                 break;
             }
             case Instr::AdvanceLoc1: {
-                u8 const delta = cursor.read_panic<u8>();
+                u8 delta = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &delta));
+
                 pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
 
                 break;
             }
             case Instr::AdvanceLoc2: {
-                u16 const delta = cursor.read_panic<u16>();
+                u16 delta = 0;
+                assert(Cursor::Status::Ok == cursor.read<u16>(&err_ctx, &delta));
+
                 pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
 
                 break;
             }
             case Instr::AdvanceLoc4: {
-                u32 const delta = cursor.read_panic<u32>();
+                u32 delta = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &delta));
+
                 pc = advance_loc_panic_(args.code_alignment_factor, pc, delta);
 
                 break;
             }
             case Instr::OffsetExtended: {
-                u8 const reg = cursor.read_panic<u8>();
-                u32 const off = cursor.read_panic<u32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
 
+                u32 off = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &off));
+                
                 bool overflow = false;
 
                 i32 const soff = u32_to_i32(off, &overflow);
@@ -246,7 +266,8 @@ struct Instructions {
                 break;
             }
             case Instr::RestoreExtended: {
-                u8 const reg = cursor.read_panic<u8>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
 
                 assert(reg < NUM_REGS);
 
@@ -257,7 +278,8 @@ struct Instructions {
                 break;
             }
             case Instr::Undefined: {
-                u8 const reg = cursor.read_panic<u8>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
 
                 assert(reg < NUM_REGS);
 
@@ -267,7 +289,8 @@ struct Instructions {
                 break;
             }
             case Instr::SameValue: {
-                u8 const reg = cursor.read_panic<u8>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
 
                 assert(reg < NUM_REGS);
 
@@ -280,8 +303,10 @@ struct Instructions {
                 break;
             }
             case Instr::Register: {
-                u8 const reg_tgt = cursor.read_panic<u8>();
-                u8 const reg_src = cursor.read_panic<u8>();
+                u8 reg_tgt = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg_tgt));
+                u8 reg_src = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg_src));
 
                 assert(reg_tgt < NUM_REGS);
                 assert(reg_src < NUM_REGS);
@@ -295,18 +320,21 @@ struct Instructions {
                 break;
             }
             case Instr::RememberState: {
-                args.stack->push_panic(*args.current_state);
+                assert(ListPushStatus::Ok == args.stack->push(&err_ctx, *args.current_state));
 
                 break;
             }
             case Instr::RestoreState: {
-                *args.current_state = args.stack->pop_panic();
+                assert(ListPopStatus::Ok == args.stack->pop(&err_ctx, args.current_state));
 
                 break;
             }
             case Instr::DefCfa: {
-                u8 const reg = cursor.read_panic<u8>();
-                u32 const off = cursor.read_panic<u32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
+
+                u32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &off));
 
                 assert(reg < NUM_REGS);
 
@@ -321,7 +349,8 @@ struct Instructions {
                 break;
             }
             case Instr::DefCfaRegister: {
-                u8 const reg = cursor.read_panic<u8>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
 
                 assert(reg < NUM_REGS);
 
@@ -334,7 +363,8 @@ struct Instructions {
                 break;
             }
             case Instr::DefCfaOffset: {
-                u32 const off = cursor.read_panic<u32>();
+                u32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &off));
 
                 bool overflow = false;
                 args.current_state->cfa = CFARule{
@@ -347,8 +377,11 @@ struct Instructions {
                 break;
             }
             case Instr::OffsetExtendedSf: {
-                u8 const reg = cursor.read_panic<u8>();
-                i32 const off = cursor.read_panic<i32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
+
+                i32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<i32>(&err_ctx, &off));
 
                 assert(reg < NUM_REGS);
 
@@ -366,8 +399,11 @@ struct Instructions {
                 break;
             }
             case Instr::DefCfaSf: {
-                u8 const reg = cursor.read_panic<u8>();
-                i32 const off = cursor.read_panic<i32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
+
+                i32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<i32>(&err_ctx, &off));
 
                 assert(reg < NUM_REGS);
 
@@ -385,7 +421,8 @@ struct Instructions {
                 break;
             }
             case Instr::DefCfaOffsetSf: {
-                i32 const off = cursor.read_panic<i32>();
+                i32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<i32>(&err_ctx, &off));
 
                 bool overflow = false;
                 i32 const scaled =
@@ -401,8 +438,11 @@ struct Instructions {
                 break;
             }
             case Instr::ValOffset: {
-                u8 const reg = cursor.read_panic<u8>();
-                u32 const off = cursor.read_panic<u32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
+
+                u32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<u32>(&err_ctx, &off));
 
                 assert(reg < NUM_REGS);
 
@@ -421,8 +461,11 @@ struct Instructions {
                 break;
             }
             case Instr::ValOffsetSf: {
-                u8 const reg = cursor.read_panic<u8>();
-                i32 const off = cursor.read_panic<i32>();
+                u8 reg = 0;
+                assert(Cursor::Status::Ok == cursor.read<u8>(&err_ctx, &reg));
+
+                i32 off  = 0;
+                assert(Cursor::Status::Ok == cursor.read<i32>(&err_ctx, &off));
 
                 assert(reg < NUM_REGS);
 
@@ -474,7 +517,11 @@ struct Instructions {
     static void parse_one_panic_(u64 section_addr, List<Instr> *instr_list,
                                  WriteCursor *data_writer,
                                  Cursor *input_cursor) {
-        u8 const byte = input_cursor->read_panic<u8>();
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
+        u8 byte = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &byte));
 
         u8 const high2 = (byte & 0b11000000) >> 6;
         u8 const low6 = byte & 0b00111111;
@@ -482,26 +529,26 @@ struct Instructions {
         switch (high2) {
         // advance_loc
         case u8{0x1}: {
-            instr_list->push_panic(Instr::AdvanceLoc);
-            data_writer->write_panic<u8>(low6);
+            assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::AdvanceLoc));
+            assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, low6));
             break;
         }
         // offset
         case u8{0x2}: {
             u64 off = 0;
             assert(leb128::DecodeStatus::Ok ==
-                   input_cursor->read_uleb128(&off));
+                   input_cursor->read_uleb128(&err_ctx, &off));
 
-            instr_list->push_panic(Instr::Offset);
-            data_writer->write_panic<u8>(low6);
-            data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+            assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::Offset));
+            assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, low6));
+            assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, offset_to_u32_panic_(off)));
 
             break;
         }
         // restore
         case u8{0x3}: {
-            data_writer->write_panic<u8>(low6);
-            instr_list->push_panic(Instr::Restore);
+            assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, low6));
+            assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::Restore));
 
             break;
         }
@@ -516,137 +563,158 @@ struct Instructions {
             // set_loc
             case u8{0x01}: {
                 u64 const field_offset = input_cursor->offset();
-                i32 const addr_encoded = input_cursor->read_panic<i32>();
+
+                i32 addr_encoded = 0;
+                assert(Cursor::Status::Ok == input_cursor->read<i32>(&err_ctx, &addr_encoded));
+                
                 u64 const addr = decode_pcrel_panic_(section_addr, field_offset,
                                                      addr_encoded);
 
-                data_writer->write_panic<u64>(addr);
+                assert(WriteCursor::Status::Ok == data_writer->write<u64>(&err_ctx, addr));
 
-                instr_list->push_panic(Instr::SetLoc);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::SetLoc));
 
                 break;
             }
             // advance_loc1
             case u8{0x02}: {
-                u8 const delta = input_cursor->read_panic<u8>();
+                u8 delta = 0;
+                assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &delta));
 
-                data_writer->write_panic<u8>(delta);
-                instr_list->push_panic(Instr::AdvanceLoc1);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, delta));
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::AdvanceLoc1));
 
                 break;
             }
             // advance_loc2
             case u8{0x03}: {
-                u16 const delta = input_cursor->read_panic<u16>();
+                u16 delta = 0;
+                assert(Cursor::Status::Ok == input_cursor->read<u16>(&err_ctx, &delta));
 
-                data_writer->write_panic<u16>(delta);
-                instr_list->push_panic(Instr::AdvanceLoc2);
+                assert(WriteCursor::Status::Ok == data_writer->write<u16>(&err_ctx, delta));
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::AdvanceLoc2));
 
                 break;
             }
             // advance_loc4
             case u8{0x04}: {
-                u32 const delta = input_cursor->read_panic<u32>();
-                data_writer->write_panic<u32>(delta);
+                u32 delta = 0;
+                assert(Cursor::Status::Ok == input_cursor->read<u32>(&err_ctx, &delta));
 
-                instr_list->push_panic(Instr::AdvanceLoc4);
+                assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, delta));
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::AdvanceLoc4));
 
                 break;
             }
             // offset_extended
             case u8{0x05}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                u64 const off = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+                u64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::OffsetExtended);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, offset_to_u32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::OffsetExtended));
 
                 break;
             }
             // restore_extended
             case u8{0x06}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
 
-                instr_list->push_panic(Instr::RestoreExtended);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::RestoreExtended));
 
                 break;
             }
             // undefined
             case u8{0x07}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
 
-                instr_list->push_panic(Instr::Undefined);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::Undefined));
 
                 break;
             }
             // same_value
             case u8{0x08}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
 
-                instr_list->push_panic(Instr::SameValue);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::SameValue));
 
                 break;
             }
             // register
             case u8{0x09}: {
-                u64 const reg0 = input_cursor->read_uleb128_panic();
-                u64 const reg1 = input_cursor->read_uleb128_panic();
+                u64 reg0 = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg0));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg0));
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg1));
+                u64 reg1 = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg1));
 
-                instr_list->push_panic(Instr::Register);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg0)));
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg1)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::Register));
 
                 break;
             }
             // remember_state
             case u8{0x0a}: {
-                instr_list->push_panic(Instr::RememberState);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::RememberState));
 
                 break;
             }
             // restore_state
             case u8{0x0b}: {
-                instr_list->push_panic(Instr::RestoreState);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::RestoreState));
 
                 break;
             }
             // def_cfa
             case u8{0x0c}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                u64 const off = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+                u64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::DefCfa);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, offset_to_u32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::DefCfa));
 
                 break;
             }
             // def_cfa_register
             case u8{0x0d}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
 
-                instr_list->push_panic(Instr::DefCfaRegister);
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::DefCfaRegister));
 
                 break;
             }
             // def_cfa_offset
             case u8{0x0e}: {
-                u64 const off = input_cursor->read_uleb128_panic();
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+                u64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::DefCfaOffset);
+                assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, offset_to_u32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::DefCfaOffset));
 
                 break;
             }
@@ -664,56 +732,72 @@ struct Instructions {
             }
             // offset_extended_sf
             case u8{0x11}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                instr_list->push_panic(Instr::OffsetExtendedSf);
+                i64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_sleb128(&err_ctx, &off));
+
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<i32>(&err_ctx, offset_to_i32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::OffsetExtendedSf));
 
                 break;
             }
             // def_cfa_sf
             case u8{0x12}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                instr_list->push_panic(Instr::DefCfaSf);
+                i64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_sleb128(&err_ctx, &off));
+
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<i32>(&err_ctx, offset_to_i32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::DefCfaSf));
 
                 break;
             }
             // def_cfa_offset_sf
             case u8{0x13}: {
-                i64 const off = input_cursor->read_sleb128_panic();
-                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
+                i64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_sleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::DefCfaOffsetSf);
+                assert(WriteCursor::Status::Ok == data_writer->write<i32>(&err_ctx, offset_to_i32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::DefCfaOffsetSf));
 
                 break;
             }
             // val_offset
             case u8{0x14}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                u64 const off = input_cursor->read_uleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<u32>(offset_to_u32_panic_(off));
+                u64 off = 0;
+                assert(leb128::DecodeStatus::Ok  == input_cursor->read_uleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::ValOffset);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<u32>(&err_ctx, offset_to_u32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::ValOffset));
 
                 break;
             }
             // val_offset_sf
             case u8{0x15}: {
-                u64 const reg = input_cursor->read_uleb128_panic();
-                i64 const off = input_cursor->read_sleb128_panic();
+                u64 reg = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &reg));
 
-                data_writer->write_panic<u8>(register_to_u8_panic_(reg));
-                data_writer->write_panic<i32>(offset_to_i32_panic_(off));
+                i64 off = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_sleb128(&err_ctx, &off));
 
-                instr_list->push_panic(Instr::ValOffsetSf);
+                assert(WriteCursor::Status::Ok == data_writer->write<u8>(&err_ctx, register_to_u8_panic_(reg)));
+                assert(WriteCursor::Status::Ok == data_writer->write<i32>(&err_ctx, offset_to_i32_panic_(off)));
+
+                assert(ListPushStatus::Ok == instr_list->push(&err_ctx, Instr::ValOffsetSf));
 
                 break;
             }
@@ -739,8 +823,10 @@ struct Instructions {
             case u8{0x2e}: {
                 // skip this by consuming the argument, we don't need
                 // to record it as it has no effect on the state.
-                u64 const arg_size = input_cursor->read_uleb128_panic();
+                u64 arg_size = 0;
+                assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &arg_size));
                 (void)arg_size;
+
                 break;
             }
             // GNU_negative_offset_extended
@@ -768,6 +854,7 @@ struct Instructions {
                                     u64 instructions_end_offset,
                                     Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
+
         if (input_cursor->offset() == instructions_end_offset) {
             return Instructions{
                 .m_instr = Slice<Instr>::init_dangling(),
@@ -775,16 +862,19 @@ struct Instructions {
             };
         }
 
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
 
         constexpr u64 max_num_instructions = u64{1} << 14;
         SliceMut<Instr> instr;
         assert(AllocStatus::Ok ==
-               tmp_alloc->alloc<Instr>(max_num_instructions, &instr));
+               tmp_alloc->alloc<Instr>(&err_ctx, max_num_instructions, &instr));
 
         constexpr u64 max_data_size = u64{1} << 19;
         SliceMut<u8> data;
-        assert(AllocStatus::Ok == tmp_alloc->alloc<u8>(max_data_size, &data));
+        assert(AllocStatus::Ok == tmp_alloc->alloc<u8>(&err_ctx, max_data_size, &data));
 
         List<Instr> instr_list = List<Instr>::init(instr);
         WriteCursor data_writer = WriteCursor::init(data);
@@ -798,20 +888,20 @@ struct Instructions {
         // move instr to real alloc
         SliceMut<Instr> instr_out;
         assert(AllocStatus::Ok ==
-               alloc->alloc<Instr>(instr_list.n_written(), &instr_out));
+               alloc->alloc<Instr>(&err_ctx, instr_list.n_written(), &instr_out));
         assert(SliceMemcpyStatus::Ok ==
-               instr_out.memcpy_from(instr_list.written()));
+               instr_out.memcpy_from(&err_ctx, instr_list.written()));
 
         // move data to real alloc
         SliceMut<u8> data_out;
         assert(AllocStatus::Ok ==
-               alloc->alloc<u8>(data_writer.offset(), &data_out));
+               alloc->alloc<u8>(&err_ctx, data_writer.offset(), &data_out));
         assert(SliceMemcpyStatus::Ok ==
-               data_out.memcpy_from(data_writer.written()));
+               data_out.memcpy_from(&err_ctx, data_writer.written()));
 
         // dealloc temporary memory we used
         assert(Alloc::ResizeStatus::Ok ==
-               tmp_alloc->resize(tmp_alloc_initial_offset));
+               tmp_alloc->resize(&err_ctx, tmp_alloc_initial_offset));
 
         return Instructions{
             .m_instr = instr_out.as_const(),
@@ -863,12 +953,15 @@ struct EhFrame {
 
         assert(rip != 0);
 
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         u64 const tmp_alloc_offset = tmp_alloc->offset();
 
         constexpr u64 state_stack_size = 16;
         SliceMut<RegisterState> stack_slice;
         assert(AllocStatus::Ok ==
-               tmp_alloc->alloc<RegisterState>(state_stack_size, &stack_slice));
+               tmp_alloc->alloc<RegisterState>(&err_ctx, state_stack_size, &stack_slice));
         List<RegisterState> stack = List<RegisterState>::init(stack_slice);
 
         FDE const *fde = nullptr;
@@ -912,7 +1005,7 @@ struct EhFrame {
             .stack = &stack,
         });
 
-        assert(Alloc::ResizeStatus::Ok == tmp_alloc->resize(tmp_alloc_offset));
+        assert(Alloc::ResizeStatus::Ok == tmp_alloc->resize(&err_ctx, tmp_alloc_offset));
 
         // APPLY THE RULES
 
@@ -971,7 +1064,12 @@ struct EhFrame {
     static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
                                u64 section_addr, Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
-        u8 const version = input_cursor->read_panic<u8>();
+
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
+        u8 version = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &version));
         assert(version == 1);
 
         // This block of code just asserts that the augmentation string is equal
@@ -982,32 +1080,45 @@ struct EhFrame {
         // We assume that this will be the case for all CIE so we just assert it
         // instead of conditionally parsing the augmentation string.
         {
-            assert(input_cursor->read_panic<u8>() == 'z');
-            assert(input_cursor->read_panic<u8>() == 'R');
-            assert(input_cursor->read_panic<u8>() == '\0');
+            u8 byte = 0;
+
+            assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &byte));
+            assert(byte == 'z');
+
+            assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &byte));
+            assert(byte == 'R');
+        
+            assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &byte));
+            assert(byte == '\0');
         }
 
         bool overflow = false;
 
-        u64 const code_alignment_factor_64 = input_cursor->read_uleb128_panic();
+
+        u64 code_alignment_factor_64 = 0;
+        assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &code_alignment_factor_64));
         assert(code_alignment_factor_64 != 0);
         u32 const code_alignment_factor =
             u64_to_u32(code_alignment_factor_64, &overflow);
         assert(!overflow);
 
-        i64 const data_alignment_factor_64 = input_cursor->read_sleb128_panic();
+        i64 data_alignment_factor_64 = 0;
+        assert(leb128::DecodeStatus::Ok == input_cursor->read_sleb128(&err_ctx, &data_alignment_factor_64));
         assert(data_alignment_factor_64 != 0);
         i32 const data_alignment_factor =
             i64_to_i32(data_alignment_factor_64, &overflow);
         assert(!overflow);
 
-        u8 const return_address_register = input_cursor->read_panic<u8>();
+        u8 return_address_register = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &return_address_register));
         assert(RETURN_ADDRESS_REGISTER == return_address_register);
 
-        u64 const aug_data_len = input_cursor->read_uleb128_panic();
+        u64 aug_data_len = 0;
+        assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &aug_data_len));
         assert(aug_data_len == 1);
 
-        u8 const fde_ptr_enc = input_cursor->read_panic<u8>();
+        u8 fde_ptr_enc  = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<u8>(&err_ctx, &fde_ptr_enc ));
         // Assert that we have the expected encoding.
         {
             assert((fde_ptr_enc & EH_VALUE_MASK) == EH_VALUE_SDATA4);
@@ -1029,16 +1140,25 @@ struct EhFrame {
                                u64 section_addr, CIE const *cie,
                                Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
+
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         // We know this is a SDATA4 encoded and PCREL applied value because we
         // assert this when parsing CIE.
         u64 const pc_begin_field_offset = input_cursor->offset();
-        i32 const pc_begin_encoded = input_cursor->read_panic<i32>();
+
+        i32 pc_begin_encoded = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<i32>(&err_ctx, &pc_begin_encoded));
+
         u64 const pc_begin = decode_pcrel_panic_(
             section_addr, pc_begin_field_offset, pc_begin_encoded);
 
-        u32 const pc_range = input_cursor->read_panic<u32>();
+        u32 pc_range = 0;
+        assert(Cursor::Status::Ok == input_cursor->read<u32>(&err_ctx, &pc_range));
 
-        u64 const aug_data_len = input_cursor->read_uleb128_panic();
+        u64 aug_data_len = 0;
+        assert(leb128::DecodeStatus::Ok == input_cursor->read_uleb128(&err_ctx, &aug_data_len));
         assert(aug_data_len == 0);
 
         Instructions instr = Instructions::parse_panic(
@@ -1068,6 +1188,9 @@ struct EhFrame {
             };
         }
 
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         Cursor input_cursor = Cursor::init(input_bytes);
 
         u64 const tmp_alloc_initial_offset = tmp_alloc->offset();
@@ -1075,7 +1198,7 @@ struct EhFrame {
         constexpr u64 max_num_fdes = u64{1} << 18;
 
         SliceMut<FDE> fdes;
-        assert(AllocStatus::Ok == tmp_alloc->alloc<FDE>(max_num_fdes, &fdes));
+        assert(AllocStatus::Ok == tmp_alloc->alloc<FDE>(&err_ctx, max_num_fdes, &fdes));
 
         List<FDE> fde_list = List<FDE>::init(fdes);
 
@@ -1084,7 +1207,8 @@ struct EhFrame {
         for (;;) {
             u64 const offset = input_cursor.offset();
             // length is common between CIE and FDE so we parse it regardless
-            u32 const length = input_cursor.read_panic<u32>();
+            u32 length  = 0;
+            assert(Cursor::Status::Ok == input_cursor.read<u32>(&err_ctx, &length));
 
             // This can't happen as that (0xff..) is a marker defined to
             // indicate this section is in 64bit dwarf format. And we expect
@@ -1105,11 +1229,12 @@ struct EhFrame {
             // it is defined to be 0 for cie and non-zero for fde so we use it
             // to differentiate between them.
             u64 const cie_id_offset = input_cursor.offset();
-            u32 const cie_id = input_cursor.read_panic<u32>();
+            u32 cie_id = 0;
+            assert(Cursor::Status::Ok == input_cursor.read<u32>(&err_ctx, &cie_id));
 
             if (cie_id == 0) {
                 // parse cie
-                assert(AllocStatus::Ok == alloc->create<CIE>(&cie));
+                assert(AllocStatus::Ok == alloc->create<CIE>(&err_ctx, &cie));
                 *cie = parse_cie_panic(alloc, tmp_alloc, end_offset,
                                        section_address, &input_cursor);
                 cie_offset = offset;
@@ -1121,7 +1246,8 @@ struct EhFrame {
                 FDE const fde =
                     parse_fde_panic(alloc, tmp_alloc, end_offset,
                                     section_address, cie, &input_cursor);
-                fde_list.push_panic(fde);
+
+                assert(ListPushStatus::Ok == fde_list.push(&err_ctx, fde));
             }
         }
         assert(input_cursor.is_finished());
@@ -1129,13 +1255,13 @@ struct EhFrame {
         // move fdes to long term alloc (non-tmp)
         SliceMut<FDE> out_fdes;
         assert(AllocStatus::Ok ==
-               alloc->alloc<FDE>(fde_list.n_written(), &out_fdes));
+               alloc->alloc<FDE>(&err_ctx, fde_list.n_written(), &out_fdes));
         assert(SliceMemcpyStatus::Ok ==
-               out_fdes.memcpy_from(fde_list.written()));
+               out_fdes.memcpy_from(&err_ctx, fde_list.written()));
 
         // dealloc temporary memory that we used for this function
         assert(Alloc::ResizeStatus::Ok ==
-               tmp_alloc->resize(tmp_alloc_initial_offset));
+               tmp_alloc->resize(&err_ctx, tmp_alloc_initial_offset));
 
         return EhFrame{
             .m_fd_entries = out_fdes.as_const(),

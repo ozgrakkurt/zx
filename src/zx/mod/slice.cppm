@@ -771,12 +771,12 @@ template <typename T> struct SliceMut {
 
     template <typename U>
     SliceStatus read_unaligned(CPUContext *err_ctx, u64 offset, U *out) const {
-        if (out == nullptr) [[nodiscard]] {
+        if (out == nullptr) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return SliceStatus::Nullptr;
         }
 
-        if (offset >= this->m_len) [[nodiscard]] {
+        if (offset >= this->m_len) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return SliceStatus::OutOfBounds;
         }
@@ -785,12 +785,12 @@ template <typename T> struct SliceMut {
         u64 const item_cap = sub_u64(this->m_len, offset, &overflow);
         u64 const byte_cap = mul_u64(item_cap, sizeof(T), &overflow);
 
-        if (overflow) [[nodiscard]] {
+        if (overflow) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return SliceStatus::IntegerOverflow;
         }
 
-        if (byte_cap < sizeof(U)) [[nodiscard]] {
+        if (byte_cap < sizeof(U)) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return SliceStatus::OutOfBounds;
         }

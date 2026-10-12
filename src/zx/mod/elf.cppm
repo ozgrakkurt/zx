@@ -56,13 +56,16 @@ extern "C" struct ElfHeader {
 
 void parse_section_name_table_panic_(Slice<SectionHeader> headers,
                                      Slice<u8> data, SliceMut<Slice<u8>> out) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+    
     assert(headers.len() == out.len());
     if (out.len() == 0) {
         return;
     }
 
     u8 starting_byte = 0xaa;
-    assert(SliceStatus::Ok == data.read(0, &starting_byte));
+    assert(SliceStatus::Ok == data.read(&err_ctx, 0, &starting_byte));
     assert(starting_byte == 0);
 
     u64 last_null_pos = 0;
@@ -98,17 +101,21 @@ struct File {
     static File init_panic(Alloc *alloc, Slice<u8> buf) {
         assert(alloc != nullptr);
 
+        // Dummy context to pass to fallible functions. It is otherwise unused.
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
         Slice<u8> header_bytes;
         assert(SliceStatus::Ok ==
-               buf.slice(0, sizeof(ElfHeader), &header_bytes));
+               buf.slice(&err_ctx, 0, sizeof(ElfHeader), &header_bytes));
 
         Slice<ElfHeader> header_list;
         assert(SliceCastStatus::Ok ==
-               header_bytes.cast<ElfHeader>(&header_list));
+               header_bytes.cast<ElfHeader>(&err_ctx, &header_list));
         assert(header_list.len() == 1);
 
         ElfHeader const *header = nullptr;
-        assert(SliceStatus::Ok == header_list.offset(0, &header));
+        assert(SliceStatus::Ok == header_list.offset(&err_ctx, 0, &header));
         assert(header != nullptr);
 
         assert(header->ehsize == sizeof(ElfHeader));
@@ -120,32 +127,32 @@ struct File {
         assert(!overflow);
 
         Slice<u8> section_header_bytes;
-        assert(SliceStatus::Ok == buf.slice(header->shoff,
+        assert(SliceStatus::Ok == buf.slice(&err_ctx, header->shoff,
                                             section_headers_nbytes,
                                             &section_header_bytes));
 
         Slice<SectionHeader> section_headers;
         assert(SliceCastStatus::Ok ==
-               section_header_bytes.cast<SectionHeader>(&section_headers));
+               section_header_bytes.cast<SectionHeader>(&err_ctx, &section_headers));
         assert(section_headers.len() == header->shnum);
 
         Slice<u8> dummy;
         for (u64 i = 0; i < section_headers.len(); i++) {
             SectionHeader const *hdr = section_headers.offset_unsafe(i);
             assert(SliceStatus::Ok ==
-                   buf.slice(hdr->offset, hdr->size, &dummy));
+                   buf.slice(&err_ctx, hdr->offset, hdr->size, &dummy));
         }
 
         SectionHeader const *names_header = nullptr;
         assert(SliceStatus::Ok ==
-               section_headers.offset(header->shstrndx, &names_header));
+               section_headers.offset(&err_ctx, header->shstrndx, &names_header));
 
         SliceMut<Slice<u8>> section_names;
         assert(AllocStatus::Ok ==
-               alloc->alloc<Slice<u8>>(header->shnum, &section_names));
+               alloc->alloc<Slice<u8>>(&err_ctx, header->shnum, &section_names));
 
         Slice<u8> section_names_data;
-        assert(SliceStatus::Ok == buf.slice(names_header->offset,
+        assert(SliceStatus::Ok == buf.slice(&err_ctx, names_header->offset,
                                             names_header->size,
                                             &section_names_data));
 
@@ -161,7 +168,7 @@ struct File {
         };
     }
 
-    u64 get_section_index_panic(Slice<u8> name) const {
+    u64 get_section_index_panic_(Slice<u8> name) const {
         Slice<Slice<u8>> section_names = this->m_section_names;
 
         for (u64 i = 0; i < section_names.len(); i++) {
@@ -176,15 +183,18 @@ struct File {
     }
 
     Section get_section_panic(Slice<u8> name) const {
-        u64 const index = this->get_section_index_panic(name);
+        CPUContext err_ctx;
+        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
+        u64 const index = this->get_section_index_panic_(name);
 
         SectionHeader const *header = nullptr;
         assert(SliceStatus::Ok ==
-               this->m_section_headers.offset(index, &header));
+               this->m_section_headers.offset(&err_ctx, index, &header));
 
         Slice<u8> body;
         assert(SliceStatus::Ok ==
-               this->m_buf.slice(header->offset, header->size, &body));
+               this->m_buf.slice(&err_ctx, header->offset, header->size, &body));
 
         return Section{
             .header = header,
@@ -194,14 +204,17 @@ struct File {
 };
 
 Slice<u8> read_self_exe_panic(Alloc *alloc) {
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     i32 fd = -1;
     assert(sys::OpenStatus::Ok ==
-           sys::open((u8 const *)"/proc/self/exe", sys::O_RDONLY, 0, &fd));
+           sys::open(&err_ctx, (u8 const *)"/proc/self/exe", sys::O_RDONLY, 0, &fd));
     assert(fd != -1);
 
     sys::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
-    assert(sys::StatXStatus::Ok == sys::statx(fd, (u8 const *)"",
+    assert(sys::StatXStatus::Ok == sys::statx(&err_ctx, fd, (u8 const *)"",
                                               sys::AT_EMPTY_PATH,
                                               sys::STATX_SIZE, &statx));
     assert((statx.stx_mask & sys::STATX_SIZE) != 0);
@@ -209,10 +222,12 @@ Slice<u8> read_self_exe_panic(Alloc *alloc) {
     u64 const file_size = statx.stx_size;
 
     SliceMut<u8> buf;
-    assert(AllocStatus::Ok == alloc->aligned_alloc<64, u8>(file_size, &buf));
+    // Need the explicit alignment since we cast pointers into this buffer into struct pointers
+    // while parsing the ELF format.
+    assert(AllocStatus::Ok == alloc->aligned_alloc<8, u8>(&err_ctx, file_size, &buf));
 
     u64 n_read = 0;
-    assert(sys::ReadStatus::Ok == sys::read(fd, buf.ptr(), buf.len(), &n_read));
+    assert(sys::ReadStatus::Ok == sys::read(&err_ctx, fd, buf.ptr(), buf.len(), &n_read));
     assert(n_read == file_size);
 
     return buf.as_const();
@@ -221,10 +236,13 @@ Slice<u8> read_self_exe_panic(Alloc *alloc) {
 void print_stack_trace_panic(CPUContext const *cpu_ctx) {
     assert(cpu_ctx != nullptr);
 
+    CPUContext err_ctx;
+    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+
     constexpr u64 MEM_SIZE = u64{1} << 25;
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
-           page_alloc::alloc_4kb(MEM_SIZE, &mem));
+           page_alloc::alloc_4kb(&err_ctx, MEM_SIZE, &mem));
     assert(mem != nullptr);
 
     constexpr u64 ALLOC_SIZE = u64{1} << 22;
@@ -255,7 +273,7 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
     constexpr u64 FMT_SIZE = u64{1} << 14;
 
     SliceMut<u8> fmt_mem;
-    assert(AllocStatus::Ok == alloc.alloc<u8>(FMT_SIZE, &fmt_mem));
+    assert(AllocStatus::Ok == alloc.alloc<u8>(&err_ctx, FMT_SIZE, &fmt_mem));
     Fmt fmt = Fmt::init(fmt_mem);
 
     UnwindContext unwind_ctx = UnwindContext::init(cpu_ctx);
@@ -269,7 +287,7 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
         u64 const pc = sub_unsafe_u64(unwind_ctx.rip(), 1);
         elf::DebugLine::LineInfo line_info;
         if (elf::DebugLine::GetLineInfoStatus::Ok ==
-            debug_line.get_line_info(pc, &line_info)) {
+            debug_line.get_line_info(&err_ctx, pc, &line_info)) {
             fmt.push_char('-', &fmt_overflow);
             fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
             fmt.push_char(':', &fmt_overflow);
@@ -288,11 +306,11 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
     assert(!fmt_overflow);
 
     u64 n_written = 0;
-    assert(sys::WriteStatus::Ok == sys::write(sys::STDERR, fmt.written().ptr(),
+    assert(sys::WriteStatus::Ok == sys::write(&err_ctx, sys::STDERR, fmt.written().ptr(),
                                               fmt.n_written(), &n_written));
     assert(n_written == fmt.n_written());
 
-    assert(page_alloc::FreeStatus::Ok == page_alloc::free(mem, MEM_SIZE));
+    assert(page_alloc::FreeStatus::Ok == page_alloc::free(&err_ctx, mem, MEM_SIZE));
 }
 
 } // namespace elf
