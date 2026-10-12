@@ -204,6 +204,8 @@ struct File {
     }
 };
 
+#ifdef ZX_DEBUG_INFO
+
 Slice<u8> read_self_exe_panic(Alloc *alloc) {
     CPUContext err_ctx;
     __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
@@ -318,6 +320,8 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
     assert(page_alloc::FreeStatus::Ok ==
            page_alloc::free(&err_ctx, mem, MEM_SIZE));
 }
+
+#endif // ifdef ZX_DEBUG_INFO
 
 } // namespace elf
 
