@@ -131,13 +131,16 @@ struct DebugLine {
         SliceMut<Slice<u8>> directory_paths;
         {
             u8 directory_entry_format_count = 0;
-            assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &directory_entry_format_count));
+            assert(Cursor::Status::Ok ==
+                   input->read<u8>(&err_ctx, &directory_entry_format_count));
             assert(directory_entry_format_count == 1);
 
             u64 def_content_type = 0;
-            assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_content_type));
+            assert(leb128::DecodeStatus::Ok ==
+                   input->read_uleb128(&err_ctx, &def_content_type));
             u64 def_form_code = 0;
-            assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_form_code));
+            assert(leb128::DecodeStatus::Ok ==
+                   input->read_uleb128(&err_ctx, &def_form_code));
 
             assert(def_content_type == DW_LNCT_path);
             // means that the value is an u32 offset into the .debug_line_str
@@ -145,13 +148,16 @@ struct DebugLine {
             assert(def_form_code == DW_FORM_line_strp);
 
             u64 directories_count = 0;
-            assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &directories_count));
-            assert(AllocStatus::Ok == tmp_alloc->alloc<Slice<u8>>(
-                                          &err_ctx, directories_count, &directory_paths));
+            assert(leb128::DecodeStatus::Ok ==
+                   input->read_uleb128(&err_ctx, &directories_count));
+            assert(AllocStatus::Ok ==
+                   tmp_alloc->alloc<Slice<u8>>(&err_ctx, directories_count,
+                                               &directory_paths));
 
             for (u64 i = 0; i < directories_count; i++) {
                 u32 offset = 0;
-                assert(Cursor::Status::Ok == input->read<u32>(&err_ctx, &offset));
+                assert(Cursor::Status::Ok ==
+                       input->read<u32>(&err_ctx, &offset));
                 u8 const *start = debug_line_str.offset_unsafe(offset);
                 assert(offset < debug_line_str.len());
                 u64 const len = strnlen_panic_(
@@ -192,15 +198,18 @@ struct DebugLine {
         SliceMut<u16> file_path_map;
         {
             u8 file_name_entry_format_count = 0;
-            assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &file_name_entry_format_count));
+            assert(Cursor::Status::Ok ==
+                   input->read<u8>(&err_ctx, &file_name_entry_format_count));
             assert(file_name_entry_format_count >= 2);
 
             // file path
             {
                 u64 def_content_type = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_content_type));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_content_type));
                 u64 def_form_code = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_form_code));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_form_code));
                 assert(def_content_type == DW_LNCT_path);
                 assert(def_form_code == DW_FORM_line_strp);
             }
@@ -208,9 +217,11 @@ struct DebugLine {
             // directory index
             {
                 u64 def_content_type = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_content_type));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_content_type));
                 u64 def_form_code = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_form_code));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_form_code));
                 assert(def_content_type == DW_LNCT_directory_index);
                 assert(def_form_code == DW_FORM_udata);
             }
@@ -224,9 +235,11 @@ struct DebugLine {
 
             for (u8 i = 0; i < num_unknown_formats; i++) {
                 u64 def_content_type = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_content_type));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_content_type));
                 u64 def_form_code = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &def_form_code));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &def_form_code));
                 // don't care about this as we will just skip this one.
                 (void)def_content_type;
                 overflow = false;
@@ -235,23 +248,28 @@ struct DebugLine {
             }
 
             u64 file_names_count = 0;
-            assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &file_names_count));
+            assert(leb128::DecodeStatus::Ok ==
+                   input->read_uleb128(&err_ctx, &file_names_count));
 
-            assert(AllocStatus::Ok ==
-                   tmp_alloc->alloc<u16>(&err_ctx, file_names_count, &file_path_map));
+            assert(AllocStatus::Ok == tmp_alloc->alloc<u16>(&err_ctx,
+                                                            file_names_count,
+                                                            &file_path_map));
 
             for (u64 i = 0; i < file_names_count; i++) {
                 u32 offset = 0;
-                assert(Cursor::Status::Ok == input->read<u32>(&err_ctx, &offset));
+                assert(Cursor::Status::Ok ==
+                       input->read<u32>(&err_ctx, &offset));
                 // skip directory index
                 u64 directory_index = 0;
-                assert(leb128::DecodeStatus::Ok == input->read_uleb128(&err_ctx, &directory_index));
+                assert(leb128::DecodeStatus::Ok ==
+                       input->read_uleb128(&err_ctx, &directory_index));
                 // skip the unknown stuff
                 for (u64 j = 0; j < num_unknown_formats; j++) {
                     switch (unk_formats[j]) {
                     case DW_FORM_line_strp: {
                         u32 dummy = 0;
-                        assert(Cursor::Status::Ok == input->read<u32>(&err_ctx, &dummy));
+                        assert(Cursor::Status::Ok ==
+                               input->read<u32>(&err_ctx, &dummy));
                         break;
                     }
                     case DW_FORM_data16: {
@@ -295,8 +313,9 @@ struct DebugLine {
                     assert(directory_paths.len() > 0);
                     Slice<u8> base = directory_paths.read_unsafe(0);
                     Slice<u8> dir;
-                    assert(SliceStatus::Ok ==
-                           directory_paths.read(&err_ctx, directory_index, &dir));
+                    assert(
+                        SliceStatus::Ok ==
+                        directory_paths.read(&err_ctx, directory_index, &dir));
 
                     // 3 is because we have a format like `base / dir / path
                     // NULL_BYTE` 2 for slashes one for the null byte.
@@ -344,7 +363,8 @@ struct DebugLine {
                     file_path_map.write_unsafe(i, idx);
                 } else {
                     u64 const w_idx = file_paths->n_written();
-                    assert(ListPushStatus::Ok == file_paths->push(&err_ctx, abs_file_path));
+                    assert(ListPushStatus::Ok ==
+                           file_paths->push(&err_ctx, abs_file_path));
                     file_path_map.write_unsafe(i, u64_to_u16(w_idx, &overflow));
                     assert(!overflow);
                 }
@@ -386,7 +406,7 @@ struct DebugLine {
     static void push_row_panic_(RunArgs args, RunState state) {
         CPUContext err_ctx;
         __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-        
+
         u16 file_no = 0;
         assert(SliceStatus::Ok ==
                args.file_path_map.read(&err_ctx, state.file, &file_no));
@@ -430,7 +450,8 @@ struct DebugLine {
             u64 prev_pc = 0;
             for (u64 i = rows_start; i < rows_end; i++) {
                 Row row;
-                assert(SliceStatus::Ok == args.rows->written().read(&err_ctx, i, &row));
+                assert(SliceStatus::Ok ==
+                       args.rows->written().read(&err_ctx, i, &row));
 
                 assert(row.pc == 0 || prev_pc < row.pc);
 
@@ -453,12 +474,14 @@ struct DebugLine {
         u64 const pc_end = add_u64(last_row.pc, 1, &overflow);
         assert(!overflow);
 
-        assert(ListPushStatus::Ok == args.sequences->push(&err_ctx, Sequence{
-            .pc_begin = pc_begin,
-            .pc_end = pc_end,
-        }));
+        assert(ListPushStatus::Ok ==
+               args.sequences->push(&err_ctx, Sequence{
+                                                  .pc_begin = pc_begin,
+                                                  .pc_end = pc_end,
+                                              }));
 
-        assert(ListPushStatus::Ok == args.sequence_ends->push(&err_ctx, rows_end));
+        assert(ListPushStatus::Ok ==
+               args.sequence_ends->push(&err_ctx, rows_end));
     }
 
     static void run_instructions_panic_(RunArgs args) {
@@ -482,7 +505,8 @@ struct DebugLine {
             end_sequence = false;
 
             u8 opcode = 0;
-            assert(Cursor::Status::Ok == args.input->read<u8>(&err_ctx, &opcode));
+            assert(Cursor::Status::Ok ==
+                   args.input->read<u8>(&err_ctx, &opcode));
 
             switch (opcode) {
             case DW_LNS_copy: {
@@ -491,8 +515,9 @@ struct DebugLine {
             }
             case DW_LNS_advance_pc: {
                 u64 operand = 0;
-                assert(leb128::DecodeStatus::Ok == args.input->read_uleb128(&err_ctx, &operand));
-                    
+                assert(leb128::DecodeStatus::Ok ==
+                       args.input->read_uleb128(&err_ctx, &operand));
+
                 state.address = add_u64(state.address,
                                         mul_u64(args.minimum_instruction_length,
                                                 operand, &overflow),
@@ -502,7 +527,8 @@ struct DebugLine {
             }
             case DW_LNS_advance_line: {
                 i64 operand = 0;
-                assert(leb128::DecodeStatus::Ok == args.input->read_sleb128(&err_ctx, &operand));
+                assert(leb128::DecodeStatus::Ok ==
+                       args.input->read_sleb128(&err_ctx, &operand));
                 i64 const l = add_i64(operand, state.line, &overflow);
                 assert(!overflow);
                 state.line = i64_to_u16(l, &overflow);
@@ -511,7 +537,8 @@ struct DebugLine {
             }
             case DW_LNS_set_file: {
                 u64 operand = 0;
-                assert(leb128::DecodeStatus::Ok == args.input->read_uleb128(&err_ctx, &operand));
+                assert(leb128::DecodeStatus::Ok ==
+                       args.input->read_uleb128(&err_ctx, &operand));
 
                 state.file = u64_to_u16(operand, &overflow);
                 assert(!overflow);
@@ -519,7 +546,8 @@ struct DebugLine {
             }
             case DW_LNS_set_column: {
                 u64 operand = 0;
-                assert(leb128::DecodeStatus::Ok == args.input->read_uleb128(&err_ctx, &operand));
+                assert(leb128::DecodeStatus::Ok ==
+                       args.input->read_uleb128(&err_ctx, &operand));
 
                 state.column = u64_to_u16(operand, &overflow);
                 assert(!overflow);
@@ -547,7 +575,8 @@ struct DebugLine {
             }
             case DW_LNS_fixed_advance_pc: {
                 u16 param = 0;
-                assert(Cursor::Status::Ok == args.input->read<u16>(&err_ctx, &param));
+                assert(Cursor::Status::Ok ==
+                       args.input->read<u16>(&err_ctx, &param));
                 state.address = add_u64(state.address, param, &overflow);
                 assert(!overflow);
                 break;
@@ -571,13 +600,15 @@ struct DebugLine {
             }
             case 0: {
                 u64 len = 0;
-                assert(leb128::DecodeStatus::Ok == args.input->read_uleb128(&err_ctx, &len));
+                assert(leb128::DecodeStatus::Ok ==
+                       args.input->read_uleb128(&err_ctx, &len));
 
                 u64 const exit_offset =
                     add_u64(args.input->offset(), len, &overflow);
 
                 u8 extended_opcode = 0;
-                assert(Cursor::Status::Ok == args.input->read<u8>(&err_ctx, &extended_opcode));
+                assert(Cursor::Status::Ok ==
+                       args.input->read<u8>(&err_ctx, &extended_opcode));
 
                 switch (extended_opcode) {
                 case DW_LNE_end_sequence: {
@@ -588,7 +619,8 @@ struct DebugLine {
                 }
                 case DW_LNE_set_address: {
                     u64 new_addr = 0;
-                    assert(Cursor::Status::Ok == args.input->read<u64>(&err_ctx, &new_addr));
+                    assert(Cursor::Status::Ok ==
+                           args.input->read<u64>(&err_ctx, &new_addr));
 
                     state.address = new_addr;
 
@@ -596,8 +628,9 @@ struct DebugLine {
                 };
                 case DW_LNE_set_discriminator: {
                     u64 operand = 0;
-                    assert(leb128::DecodeStatus::Ok == args.input->read_uleb128(&err_ctx, &operand));
-                        
+                    assert(leb128::DecodeStatus::Ok ==
+                           args.input->read_uleb128(&err_ctx, &operand));
+
                     (void)operand;
                     break;
                 };
@@ -616,8 +649,8 @@ struct DebugLine {
                 // uncomment the line below and comment the assert line.
                 //
                 // The assert should probably fine as long as we don't
-                // allow/ignore instructions that we don't know of by removing the
-                // panic in the default arm of the switch statement.
+                // allow/ignore instructions that we don't know of by removing
+                // the panic in the default arm of the switch statement.
                 //
                 // assert(Cursor::Status::Ok == args.input->seek(exit_offset));
                 break;
@@ -681,16 +714,18 @@ struct DebugLine {
         assert(Cursor::Status::Ok == input->read<u16>(&err_ctx, &version));
         assert(version == 5);
 
-        u8 address_size  = 0;
-        assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &address_size ));
+        u8 address_size = 0;
+        assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &address_size));
         assert(address_size == 8);
 
-        u8 segment_selector_size  = 0;
-        assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &segment_selector_size ));
+        u8 segment_selector_size = 0;
+        assert(Cursor::Status::Ok ==
+               input->read<u8>(&err_ctx, &segment_selector_size));
         assert(segment_selector_size == 0);
 
-        u32 header_length  = 0;
-        assert(Cursor::Status::Ok == input->read<u32>(&err_ctx, &header_length ));
+        u32 header_length = 0;
+        assert(Cursor::Status::Ok ==
+               input->read<u32>(&err_ctx, &header_length));
         // We don't support 64bit dwarf format. Only 32bit is supported.
         assert(header_length != U32_MAX);
 
@@ -699,10 +734,12 @@ struct DebugLine {
         assert(!overflow);
 
         u8 minimum_instruction_length = 0;
-        assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &minimum_instruction_length));
+        assert(Cursor::Status::Ok ==
+               input->read<u8>(&err_ctx, &minimum_instruction_length));
 
         u8 maximum_operations_per_instruction = 0;
-        assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &maximum_operations_per_instruction));
+        assert(Cursor::Status::Ok ==
+               input->read<u8>(&err_ctx, &maximum_operations_per_instruction));
         // We are not on a VLIW architecture.
         assert(maximum_operations_per_instruction == 1);
 
@@ -710,7 +747,8 @@ struct DebugLine {
         // a debugger.
         {
             u8 default_is_stmt = 0;
-            assert(Cursor::Status::Ok == input->read<u8>(&err_ctx, &default_is_stmt));
+            assert(Cursor::Status::Ok ==
+                   input->read<u8>(&err_ctx, &default_is_stmt));
             (void)default_is_stmt;
         }
 
@@ -763,7 +801,7 @@ struct DebugLine {
     static List<T> make_tmp_list_panic_(Alloc *tmp_alloc, u64 len) {
         CPUContext err_ctx;
         __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-        
+
         SliceMut<T> mem;
         assert(AllocStatus::Ok == tmp_alloc->alloc<T>(&err_ctx, len, &mem));
         return List<T>::init(mem);
@@ -817,15 +855,18 @@ struct DebugLine {
         // alloc.
 
         SliceMut<CString> file_paths_out;
-        assert(AllocStatus::Ok == alloc->copy_from<CString>(
-                                      &err_ctx, file_paths.written(), &file_paths_out));
+        assert(AllocStatus::Ok ==
+               alloc->copy_from<CString>(&err_ctx, file_paths.written(),
+                                         &file_paths_out));
 
         SliceMut<Sequence> sequences_out;
         assert(AllocStatus::Ok ==
-               alloc->copy_from<Sequence>(&err_ctx, sequences.written(), &sequences_out));
+               alloc->copy_from<Sequence>(&err_ctx, sequences.written(),
+                                          &sequences_out));
 
         SliceMut<u32> sequence_ends_out;
-        assert(AllocStatus::Ok == alloc->copy_from<u32>(&err_ctx, sequence_ends.written(),
+        assert(AllocStatus::Ok == alloc->copy_from<u32>(&err_ctx,
+                                                        sequence_ends.written(),
                                                         &sequence_ends_out));
 
         SliceMut<Row> rows_out;
@@ -864,7 +905,8 @@ struct DebugLine {
         };
     }
 
-    GetLineInfoStatus get_line_info(CPUContext* err_ctx, u64 pc, LineInfo *out) const {
+    GetLineInfoStatus get_line_info(CPUContext *err_ctx, u64 pc,
+                                    LineInfo *out) const {
         if (out == nullptr) {
             return GetLineInfoStatus::Nullptr;
         }

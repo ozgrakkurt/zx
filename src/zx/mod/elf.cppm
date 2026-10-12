@@ -58,7 +58,7 @@ void parse_section_name_table_panic_(Slice<SectionHeader> headers,
                                      Slice<u8> data, SliceMut<Slice<u8>> out) {
     CPUContext err_ctx;
     __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-    
+
     assert(headers.len() == out.len());
     if (out.len() == 0) {
         return;
@@ -132,8 +132,8 @@ struct File {
                                             &section_header_bytes));
 
         Slice<SectionHeader> section_headers;
-        assert(SliceCastStatus::Ok ==
-               section_header_bytes.cast<SectionHeader>(&err_ctx, &section_headers));
+        assert(SliceCastStatus::Ok == section_header_bytes.cast<SectionHeader>(
+                                          &err_ctx, &section_headers));
         assert(section_headers.len() == header->shnum);
 
         Slice<u8> dummy;
@@ -144,12 +144,13 @@ struct File {
         }
 
         SectionHeader const *names_header = nullptr;
-        assert(SliceStatus::Ok ==
-               section_headers.offset(&err_ctx, header->shstrndx, &names_header));
+        assert(SliceStatus::Ok == section_headers.offset(&err_ctx,
+                                                         header->shstrndx,
+                                                         &names_header));
 
         SliceMut<Slice<u8>> section_names;
-        assert(AllocStatus::Ok ==
-               alloc->alloc<Slice<u8>>(&err_ctx, header->shnum, &section_names));
+        assert(AllocStatus::Ok == alloc->alloc<Slice<u8>>(
+                                      &err_ctx, header->shnum, &section_names));
 
         Slice<u8> section_names_data;
         assert(SliceStatus::Ok == buf.slice(&err_ctx, names_header->offset,
@@ -193,8 +194,8 @@ struct File {
                this->m_section_headers.offset(&err_ctx, index, &header));
 
         Slice<u8> body;
-        assert(SliceStatus::Ok ==
-               this->m_buf.slice(&err_ctx, header->offset, header->size, &body));
+        assert(SliceStatus::Ok == this->m_buf.slice(&err_ctx, header->offset,
+                                                    header->size, &body));
 
         return Section{
             .header = header,
@@ -208,8 +209,9 @@ Slice<u8> read_self_exe_panic(Alloc *alloc) {
     __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
 
     i32 fd = -1;
-    assert(sys::OpenStatus::Ok ==
-           sys::open(&err_ctx, (u8 const *)"/proc/self/exe", sys::O_RDONLY, 0, &fd));
+    assert(sys::OpenStatus::Ok == sys::open(&err_ctx,
+                                            (u8 const *)"/proc/self/exe",
+                                            sys::O_RDONLY, 0, &fd));
     assert(fd != -1);
 
     sys::StatX statx;
@@ -222,12 +224,14 @@ Slice<u8> read_self_exe_panic(Alloc *alloc) {
     u64 const file_size = statx.stx_size;
 
     SliceMut<u8> buf;
-    // Need the explicit alignment since we cast pointers into this buffer into struct pointers
-    // while parsing the ELF format.
-    assert(AllocStatus::Ok == alloc->aligned_alloc<8, u8>(&err_ctx, file_size, &buf));
+    // Need the explicit alignment since we cast pointers into this buffer into
+    // struct pointers while parsing the ELF format.
+    assert(AllocStatus::Ok ==
+           alloc->aligned_alloc<8, u8>(&err_ctx, file_size, &buf));
 
     u64 n_read = 0;
-    assert(sys::ReadStatus::Ok == sys::read(&err_ctx, fd, buf.ptr(), buf.len(), &n_read));
+    assert(sys::ReadStatus::Ok ==
+           sys::read(&err_ctx, fd, buf.ptr(), buf.len(), &n_read));
     assert(n_read == file_size);
 
     return buf.as_const();
@@ -306,11 +310,13 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
     assert(!fmt_overflow);
 
     u64 n_written = 0;
-    assert(sys::WriteStatus::Ok == sys::write(&err_ctx, sys::STDERR, fmt.written().ptr(),
+    assert(sys::WriteStatus::Ok == sys::write(&err_ctx, sys::STDERR,
+                                              fmt.written().ptr(),
                                               fmt.n_written(), &n_written));
     assert(n_written == fmt.n_written());
 
-    assert(page_alloc::FreeStatus::Ok == page_alloc::free(&err_ctx, mem, MEM_SIZE));
+    assert(page_alloc::FreeStatus::Ok ==
+           page_alloc::free(&err_ctx, mem, MEM_SIZE));
 }
 
 } // namespace elf

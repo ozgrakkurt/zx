@@ -12,7 +12,7 @@ enum class [[nodiscard]] OpenStatus : u8_c {
     SysOpenFail,
 };
 
-OpenStatus open(CPUContext* err_ctx, i32 *fd) {
+OpenStatus open(CPUContext *err_ctx, i32 *fd) {
     if (fd == nullptr) [[unlikely]] {
         zx_getcpucontext_(err_ctx);
         return OpenStatus::Nullptr;

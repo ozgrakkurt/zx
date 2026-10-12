@@ -19,7 +19,7 @@ struct TimeInfo {
     static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
         CPUContext err_ctx;
         __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-        
+
         if (mmap_page != nullptr) {
             sys::MMapStatus const sys_status =
                 sys::munmap(&err_ctx, (u8 *)mmap_page, MMAP_LEN);
@@ -44,7 +44,7 @@ struct TimeInfo {
         InvalidNum,
     };
 
-    static InitStatus init(CPUContext* err_ctx, TimeInfo *out) {
+    static InitStatus init(CPUContext *err_ctx, TimeInfo *out) {
         if (out == nullptr) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return InitStatus::Nullptr;
@@ -71,8 +71,8 @@ struct TimeInfo {
         assert_dev(fd != -1);
 
         sys::MMapStatus const mmap_status =
-            sys::mmap(err_ctx, nullptr, MMAP_LEN, sys::PROT_READ, sys::MAP_SHARED, fd, 0,
-                      (u8 **)&mmap_page);
+            sys::mmap(err_ctx, nullptr, MMAP_LEN, sys::PROT_READ,
+                      sys::MAP_SHARED, fd, 0, (u8 **)&mmap_page);
         if (mmap_status != sys::MMapStatus::Ok) [[unlikely]] {
             cleanup_(mmap_page, fd);
             return InitStatus::MMapErr;

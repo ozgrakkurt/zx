@@ -82,7 +82,7 @@ struct Cursor {
         return Status::Ok;
     }
 
-    Status seek(CPUContext* err_ctx, u64 offset) {
+    Status seek(CPUContext *err_ctx, u64 offset) {
         if (offset > this->m_buf.len()) [[unlikely]] {
             zx_getcpucontext_(err_ctx);
             return Status::OutOfBounds;
