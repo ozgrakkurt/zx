@@ -1052,10 +1052,12 @@ struct EhFrame {
 
     Slice<FDE> m_fd_entries;
 
-    void step_panic(Alloc *tmp_alloc, UnwindContext *ctx) const {
+    bool step_panic(Alloc *tmp_alloc, UnwindContext *ctx) const {
         u64 const rip = ctx->registers[REG_MAP_RETURN_ADDRESS];
 
-        assert(rip != 0);
+        if (rip == 0) {
+            return false;
+        }
 
         CPUContext err_ctx;
         __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
@@ -1083,7 +1085,9 @@ struct EhFrame {
                 break;
             }
         }
-        assert(fde != nullptr);
+        if (fde == nullptr) {
+            return false;
+        }
 
         RegisterState cie_state;
         __builtin_memset(&cie_state, 0, sizeof(cie_state));
@@ -1165,6 +1169,8 @@ struct EhFrame {
         }
 
         ctx->registers[REG_MAP_RSP] = cfa;
+
+        return true;
     }
 
     static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,

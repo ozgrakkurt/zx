@@ -453,7 +453,7 @@ struct DebugLine {
                 assert(SliceStatus::Ok ==
                        args.rows->written().read(&err_ctx, i, &row));
 
-                assert(row.pc == 0 || prev_pc < row.pc);
+                assert(row.pc == 0 || prev_pc <= row.pc);
 
                 prev_pc = row.pc;
             }

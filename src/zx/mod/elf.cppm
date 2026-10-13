@@ -306,7 +306,9 @@ void print_stack_trace_panic(CPUContext const *cpu_ctx) {
                          &fmt_overflow);
         }
 
-        eh_frame.step_panic(&tmp_alloc, &unwind_ctx);
+        if (!eh_frame.step_panic(&tmp_alloc, &unwind_ctx)) {
+            break;
+        }
     }
 
     assert(!fmt_overflow);
