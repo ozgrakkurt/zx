@@ -2,10 +2,7 @@ import zx;
 
 using namespace zx;
 
-static i32 open_temporary_file() {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
+static i32 open_temporary_file(Backtrace *err_bt) {
     u8 fmt_buf[64];
     Fmt fmt = Fmt::init(SliceMut<u8>::init_unsafe(fmt_buf, sizeof(fmt_buf)));
 
@@ -17,8 +14,8 @@ static i32 open_temporary_file() {
     u64 n_read = 0;
     testing::assert_with_trace(
         sys::GetRandomStatus::Ok ==
-            sys::getrandom(&err_ctx, (u8 *)&seed, sizeof(seed), 0, &n_read),
-        &err_ctx);
+            sys::getrandom(err_bt, (u8 *)&seed, sizeof(seed), 0, &n_read),
+        err_bt);
     assert(n_read == sizeof(seed));
     Xoshiro256 rand = Xoshiro256::init(seed);
     u128 uuid = uuid_v4::generate(&rand);
@@ -34,43 +31,37 @@ static i32 open_temporary_file() {
 
     i32 fd = -1;
     testing::assert_with_trace(sys::OpenStatus::Ok ==
-                                   sys::open(&err_ctx, path,
+                                   sys::open(err_bt, path,
                                              sys::O_RDWR | sys::O_CREAT,
                                              sys::S_IWUSR | sys::S_IRUSR, &fd),
-                               &err_ctx);
+                               err_bt);
     assert(fd != -1);
 
-    testing::assert_with_trace(sys::UnlinkAtStatus::Ok ==
-                                   sys::unlink_at(&err_ctx, 0, path, 0),
-                               &err_ctx);
+    testing::assert_with_trace(
+        sys::UnlinkAtStatus::Ok == sys::unlink_at(err_bt, 0, path, 0), err_bt);
 
     return fd;
 }
 
-static void test_mmap() {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
-    i32 const fd = open_temporary_file();
+static void test_mmap(Backtrace *err_bt) {
+    i32 const fd = open_temporary_file(err_bt);
 
     u64 const len = 4096;
 
-    testing::assert_with_trace(sys::FTruncateStatus::Ok ==
-                                   sys::ftruncate(&err_ctx, fd, len),
-                               &err_ctx);
+    testing::assert_with_trace(
+        sys::FTruncateStatus::Ok == sys::ftruncate(err_bt, fd, len), err_bt);
 
     u8 *addr = nullptr;
     testing::assert_with_trace(
-        sys::MMapStatus::Ok == sys::mmap(&err_ctx, nullptr, len, sys::PROT_NONE,
+        sys::MMapStatus::Ok == sys::mmap(err_bt, nullptr, len, sys::PROT_NONE,
                                          sys::MAP_SHARED, fd, 0, &addr),
-        &err_ctx);
+        err_bt);
     assert(addr != nullptr);
 
     testing::assert_with_trace(
         sys::MProtectStatus::Ok ==
-            sys::mprotect(&err_ctx, addr, len,
-                          sys::PROT_READ | sys::PROT_WRITE),
-        &err_ctx);
+            sys::mprotect(err_bt, addr, len, sys::PROT_READ | sys::PROT_WRITE),
+        err_bt);
 
     SliceMut<u8> slice = SliceMut<u8>::init_unsafe(addr, len);
     slice.write_unsafe(3069, 69);
@@ -78,20 +69,17 @@ static void test_mmap() {
     assert(slice.read_unsafe(3069) == 69);
 
     testing::assert_with_trace(
-        sys::MMapStatus::Ok == sys::munmap(&err_ctx, addr, len), &err_ctx);
+        sys::MMapStatus::Ok == sys::munmap(err_bt, addr, len), err_bt);
 }
 
-static void test_file() {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
-    i32 const fd = open_temporary_file();
+static void test_file(Backtrace *err_bt) {
+    i32 const fd = open_temporary_file(err_bt);
 
     u64 const file_size = 5000;
 
     testing::assert_with_trace(sys::FTruncateStatus::Ok ==
-                                   sys::ftruncate(&err_ctx, fd, file_size),
-                               &err_ctx);
+                                   sys::ftruncate(err_bt, fd, file_size),
+                               err_bt);
 
     constexpr u64 data_len = 1020;
 
@@ -104,15 +92,15 @@ static void test_file() {
     u64 offset = 0;
     testing::assert_with_trace(
         sys::LSeekStatus::Ok ==
-            sys::lseek(&err_ctx, fd, 2000, sys::SEEK_SET, &offset),
-        &err_ctx);
+            sys::lseek(err_bt, fd, 2000, sys::SEEK_SET, &offset),
+        err_bt);
     assert(offset == 2000);
 
     u64 n = 0;
     testing::assert_with_trace(
         sys::WriteStatus::Ok ==
-            sys::write(&err_ctx, fd, data.ptr(), data.len(), &n),
-        &err_ctx);
+            sys::write(err_bt, fd, data.ptr(), data.len(), &n),
+        err_bt);
     assert(n == data.len());
 
     u8 out_buf[data_len];
@@ -121,10 +109,9 @@ static void test_file() {
     // read from improper position, the cursor on the file is pointing to 2000 +
     // out.len() since we just did a write that advanced the cursor.
     n = 0;
-    testing::assert_with_trace(sys::ReadStatus::Ok == sys::read(&err_ctx, fd,
-                                                                out.ptr(),
-                                                                out.len(), &n),
-                               &err_ctx);
+    testing::assert_with_trace(
+        sys::ReadStatus::Ok == sys::read(err_bt, fd, out.ptr(), out.len(), &n),
+        err_bt);
     assert(n == out.len());
 
     assert(!out.equals(data));
@@ -132,15 +119,14 @@ static void test_file() {
     // seek to proper position
     testing::assert_with_trace(
         sys::LSeekStatus::Ok ==
-            sys::lseek(&err_ctx, fd, 2000, sys::SEEK_SET, &offset),
-        &err_ctx);
+            sys::lseek(err_bt, fd, 2000, sys::SEEK_SET, &offset),
+        err_bt);
     assert(offset == 2000);
 
     n = 0;
-    testing::assert_with_trace(sys::ReadStatus::Ok == sys::read(&err_ctx, fd,
-                                                                out.ptr(),
-                                                                out.len(), &n),
-                               &err_ctx);
+    testing::assert_with_trace(
+        sys::ReadStatus::Ok == sys::read(err_bt, fd, out.ptr(), out.len(), &n),
+        err_bt);
     assert(n == out.len());
 
     assert(out.equals(data));
@@ -148,10 +134,10 @@ static void test_file() {
     sys::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
     testing::assert_with_trace(sys::StatXStatus::Ok ==
-                                   sys::statx(&err_ctx, fd, (u8 const *)"",
+                                   sys::statx(err_bt, fd, (u8 const *)"",
                                               sys::AT_EMPTY_PATH,
                                               sys::STATX_MODE, &statx),
-                               &err_ctx);
+                               err_bt);
     assert(statx.stx_size == file_size);
     assert((statx.stx_mask & sys::STATX_MODE) != 0);
 
@@ -163,16 +149,16 @@ static void test_file() {
     n = 0;
     testing::assert_with_trace(
         sys::PWriteStatus::Ok ==
-            sys::pwrite(&err_ctx, fd, data.ptr(), data.len(), p_offset, &n),
-        &err_ctx);
+            sys::pwrite(err_bt, fd, data.ptr(), data.len(), p_offset, &n),
+        err_bt);
     assert(n == data.len());
 
     // read from wrong offset
     n = 0;
     testing::assert_with_trace(
         sys::PReadStatus::Ok ==
-            sys::pread(&err_ctx, fd, out.ptr(), out.len(), p_offset + 3, &n),
-        &err_ctx);
+            sys::pread(err_bt, fd, out.ptr(), out.len(), p_offset + 3, &n),
+        err_bt);
     assert(n == out.len());
 
     assert(!out.equals(data));
@@ -181,14 +167,16 @@ static void test_file() {
     n = 0;
     testing::assert_with_trace(
         sys::PReadStatus::Ok ==
-            sys::pread(&err_ctx, fd, out.ptr(), out.len(), p_offset, &n),
-        &err_ctx);
+            sys::pread(err_bt, fd, out.ptr(), out.len(), p_offset, &n),
+        err_bt);
     assert(n == out.len());
 
     assert(out.equals(data));
 }
 
 int main() {
-    test_mmap();
-    test_file();
+    Backtrace err_bt = Backtrace::init();
+
+    test_mmap(&err_bt);
+    test_file(&err_bt);
 }

@@ -113,12 +113,6 @@ struct Fmt {
         u64 const len = sub_unsafe_u64(MAX_NUM_DIGITS, pos);
         this->push_str(Slice<u8>::init_unsafe(&digits[pos], len), overflow);
     }
-
-    enum class [[nodiscard]] PrintStatus : u8_c {
-        Ok = 0,
-        ShortWrite,
-        UnexpectedErr,
-    };
 };
 
 } // namespace zx

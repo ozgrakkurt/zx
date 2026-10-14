@@ -1,41 +1,38 @@
 import zx;
 
-typedef zx::page_alloc::AllocStatus allocfn(zx::CPUContext *err_ctx,
-                                            zx::u64 size, zx::u8 **out);
+using namespace zx;
 
-static void do_test(allocfn alloc, zx::u64 size) {
-    zx::CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+typedef page_alloc::AllocStatus allocfn(Backtrace *err_bt, u64 size, u8 **out);
 
-    zx::u8 *mem = nullptr;
-    zx::testing::assert_with_trace(zx::page_alloc::AllocStatus::Ok ==
-                                       alloc(&err_ctx, size, &mem),
-                                   &err_ctx);
-    zx::assert(mem != nullptr);
+static void do_test(allocfn alloc, u64 size) {
+    Backtrace err_bt = Backtrace::init();
 
-    zx::assert(size > 0);
+    u8 *mem = nullptr;
+    testing::assert_with_trace(
+        page_alloc::AllocStatus::Ok == alloc(&err_bt, size, &mem), &err_bt);
+    assert(mem != nullptr);
 
-    zx::u8 const first = mem[0];
-    zx::u8 const last = mem[size - 1];
+    assert(size > 0);
+
+    u8 const first = mem[0];
+    u8 const last = mem[size - 1];
 
     mem[size / 2] = first + last;
 
-    zx::testing::assert_with_trace(
-        zx::page_alloc::FreeStatus::Ok ==
-            zx::page_alloc::free(&err_ctx, mem, size),
-        &err_ctx);
+    testing::assert_with_trace(page_alloc::FreeStatus::Ok ==
+                                   page_alloc::free(&err_bt, mem, size),
+                               &err_bt);
 
     // munmaping an already unmapped region doesn't fail
-    zx::testing::assert_with_trace(
-        zx::page_alloc::FreeStatus::Ok ==
-            zx::page_alloc::free(&err_ctx, mem, size),
-        &err_ctx);
+    testing::assert_with_trace(page_alloc::FreeStatus::Ok ==
+                                   page_alloc::free(&err_bt, mem, size),
+                               &err_bt);
 }
 
 int main(void) {
-    do_test(zx::page_alloc::alloc_4kb, zx::u64{1} << 16);
-    // do_test(zx::page_alloc::alloc_huge_2mb, zx::u64{1} << 21);
-    // do_test(zx::page_alloc::alloc_huge_1gb, zx::u64{1} << 30);
+    do_test(page_alloc::alloc_4kb, u64{1} << 16);
+    // do_test(page_alloc::alloc_huge_2mb, u64{1} << 21);
+    // do_test(page_alloc::alloc_huge_1gb, u64{1} << 30);
 
     return 0;
 }

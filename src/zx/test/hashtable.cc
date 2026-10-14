@@ -75,28 +75,22 @@ static void smoke_test_inner(HTable *table, u32 len) {
     }
 }
 
-static void smoke_test(Alloc *alloc, u32 len) {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
+static void smoke_test(Backtrace *err_bt, Alloc *alloc, u32 len) {
     HTable table;
     testing::assert_with_trace(HashtableInitStatus::Ok ==
-                                   HTable::init(&err_ctx, alloc, len, &table),
-                               &err_ctx);
+                                   HTable::init(err_bt, alloc, len, &table),
+                               err_bt);
 
     smoke_test_inner(&table, len);
     table.reset();
     smoke_test_inner(&table, len);
 }
 
-static void nocap_test(Alloc *alloc) {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
+static void nocap_test(Backtrace *err_bt, Alloc *alloc) {
     HTable table;
     testing::assert_with_trace(HashtableInitStatus::Ok ==
-                                   HTable::init(&err_ctx, alloc, 0, &table),
-                               &err_ctx);
+                                   HTable::init(err_bt, alloc, 0, &table),
+                               err_bt);
     assert(table.capacity_left() == 0);
 
     key_type const key = 100;
@@ -119,44 +113,40 @@ static void nocap_test(Alloc *alloc) {
     assert(entry_p == nullptr);
 }
 
-static void noalloc_test() {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
+static void noalloc_test(Backtrace *err_bt) {
     Alloc noalloc = Alloc::init(SliceMut<u8>::init_dangling());
 
     HTable table;
     assert(HashtableInitStatus::OutOfMemory ==
-           HTable::init(&err_ctx, &noalloc, 0, &table));
+           HTable::init(err_bt, &noalloc, 0, &table));
     assert(HashtableInitStatus::OutOfMemory ==
-           HTable::init(&err_ctx, &noalloc, 1, &table));
+           HTable::init(err_bt, &noalloc, 1, &table));
     assert(HashtableInitStatus::OutOfMemory ==
-           HTable::init(&err_ctx, &noalloc, 10, &table));
+           HTable::init(err_bt, &noalloc, 10, &table));
     assert(HashtableInitStatus::OutOfMemory ==
-           HTable::init(&err_ctx, &noalloc, 1000000, &table));
+           HTable::init(err_bt, &noalloc, 1000000, &table));
     assert(HashtableInitStatus::IntegerOverflow ==
-           HTable::init(&err_ctx, &noalloc, U32_MAX, &table));
+           HTable::init(err_bt, &noalloc, U32_MAX, &table));
 }
 
 int main(void) {
     constexpr u64 MEMORY_SIZE = 1 << 18;
 
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+    Backtrace err_bt = Backtrace::init();
 
     u8 *mem;
     testing::assert_with_trace(
         page_alloc::AllocStatus::Ok ==
-            page_alloc::alloc_4kb(&err_ctx, MEMORY_SIZE, &mem),
-        &err_ctx);
+            page_alloc::alloc_4kb(&err_bt, MEMORY_SIZE, &mem),
+        &err_bt);
 
-    noalloc_test();
+    noalloc_test(&err_bt);
 
     SliceMut<u8> mem_slice = SliceMut<u8>::init_unsafe(mem, MEMORY_SIZE);
 
     Alloc alloc = Alloc::init(mem_slice);
 
-    nocap_test(&alloc);
+    nocap_test(&err_bt, &alloc);
     alloc.reset();
 
     constexpr u32 lengths[] = {0,  1,  1023, 1024, 100, 1000, 13,
@@ -166,12 +156,12 @@ int main(void) {
     for (u32 i = 0; i < n_lengths; i++) {
         u32 const len = lengths[i];
         alloc.reset();
-        smoke_test(&alloc, len);
+        smoke_test(&err_bt, &alloc, len);
     }
 
     testing::assert_with_trace(page_alloc::FreeStatus::Ok ==
-                                   page_alloc::free(&err_ctx, mem, MEMORY_SIZE),
-                               &err_ctx);
+                                   page_alloc::free(&err_bt, mem, MEMORY_SIZE),
+                               &err_bt);
 
     return 0;
 }
