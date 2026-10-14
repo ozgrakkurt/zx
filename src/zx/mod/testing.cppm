@@ -1,8 +1,8 @@
 export module zx:testing;
 import :assert;
 import :elf;
-import :cpu_context;
 import :panic;
+import :backtrace;
 
 export namespace zx {
 
@@ -10,16 +10,17 @@ namespace testing {
 
 #ifdef ZX_DEBUG_INFO
 
-void assert_with_trace(bool cond, CPUContext const *ctx) {
-    (void)ctx;
-
-    assert(cond);
+void assert_with_trace(bool cond, Backtrace const *bt) {
+    if (!cond) [[unlikely]] {
+        elf::print_stack_trace_panic(bt);
+        panic();
+    }
 }
 
 #else // ifdef ZX_DEBUG_INFO
 
-void assert_with_trace(bool cond, CPUContext const *ctx) {
-    (void)ctx;
+void assert_with_trace(bool cond, Backtrace const *bt) {
+    (void)bt;
 
     assert(cond);
 }

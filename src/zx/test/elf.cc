@@ -16,6 +16,7 @@ void callme_maybe(u64 iter) {
         CPUContext cpu_ctx;
         zx_getcpucontext_(&cpu_ctx);
         // elf::print_stack_trace_panic(&cpu_ctx);
+        panic();
     } else {
         callme_maybe(iter + 1);
     }

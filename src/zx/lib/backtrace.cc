@@ -10,7 +10,7 @@ namespace zx {
 
 #ifdef ZX_DEBUG_INFO
 
-extern elf::EhFrame ZX_ELF_EH_FRAME_;
+extern "C" elf::EhFrame ZX_ELF_EH_FRAME_;
 
 void Backtrace::collect(Backtrace *bt) {
     if (bt == nullptr) {

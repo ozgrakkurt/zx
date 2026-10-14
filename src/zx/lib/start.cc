@@ -4,8 +4,8 @@ using namespace zx;
 
 #ifdef ZX_DEBUG_INFO
 
-elf::EhFrame ZX_ELF_EH_FRAME_;
-elf::DebugLine ZX_ELF_DEBUG_LINE_;
+extern "C" elf::EhFrame ZX_ELF_EH_FRAME_{};
+extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_{};
 
 static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     CPUContext err_ctx;
@@ -40,65 +40,6 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     return buf.as_const();
 }
 
-static void print_stack_trace_panic_(Backtrace const *bt) {
-    assert(bt != nullptr);
-
-    constexpr u64 FMT_SIZE = u64{1} << 14;
-    u8 fmt_mem[FMT_SIZE];
-    Fmt fmt = Fmt::init(SliceMut<u8>::init_unsafe(fmt_mem, FMT_SIZE));
-
-    bool fmt_overflow = false;
-
-    fmt.push_str(CString::init_unsafe("STACK TRACE:\n").as_slice(),
-                 &fmt_overflow);
-
-    constexpr u64 N_LINE_INFO = 8;
-    elf::DebugLine::LineInfo line_info_mem[N_LINE_INFO];
-    List<elf::DebugLine::LineInfo> line_infos =
-        List<elf::DebugLine::LineInfo>::init(
-            SliceMut<elf::DebugLine::LineInfo>::init_unsafe(line_info_mem,
-                                                            N_LINE_INFO));
-
-    for (u64 i = 0; i < Backtrace::LEN; i++) {
-        if (bt->m_data[i] == 0) {
-            break;
-        }
-        line_infos.reset();
-        elf::DebugLine::GetLineInfosStatus const gl_status =
-            ZX_ELF_DEBUG_LINE_.get_line_infos(bt->m_data[i] - 1, &line_infos);
-
-        if (gl_status == elf::DebugLine::GetLineInfosStatus::NotFound) {
-            assert(line_infos.n_written() == 0);
-            fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
-                         &fmt_overflow);
-        } else if (gl_status ==
-                   elf::DebugLine::GetLineInfosStatus::OutOfCapacity) {
-            fmt.push_str(CString::init_unsafe("-??OUT_OF_CAP\n").as_slice(),
-                         &fmt_overflow);
-        }
-
-        for (u64 j = 0; j < line_infos.n_written(); j++) {
-            elf::DebugLine::LineInfo const line_info =
-                line_infos.written().read_unsafe(j);
-            fmt.push_char('-', &fmt_overflow);
-            fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
-            fmt.push_char(':', &fmt_overflow);
-            fmt.push_u64(line_info.line_no, &fmt_overflow);
-            fmt.push_char(':', &fmt_overflow);
-            fmt.push_u64(line_info.column_no, &fmt_overflow);
-            fmt.push_char('\n', &fmt_overflow);
-        }
-    }
-
-    assert(!fmt_overflow);
-
-    u64 n_written = 0;
-    assert(sys::WriteStatus::Ok == sys::write(nullptr, sys::STDERR,
-                                              fmt.written().ptr(),
-                                              fmt.n_written(), &n_written));
-    assert(n_written == fmt.n_written());
-}
-
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
     (void)signum;
@@ -121,14 +62,14 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
         // call instruction which is what the stack trace printer wants, but
         // this case is special since RIP isn't a return address, it is the
         // exact instruction that panicked.
-        .rip = add_unsafe_u64(uctx->uc_mcontext.rip, 1),
+        .return_address = add_unsafe_u64(uctx->uc_mcontext.rip, 1),
     };
 
     Backtrace bt;
     // ignore truncation error
     (void)ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, &bt);
 
-    print_stack_trace_panic_(&bt);
+    elf::print_stack_trace_panic(&bt);
 
     // control will fall back to the instruction that raised the signal,
     // it will raise the same signal again and the default handler for that

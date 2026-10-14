@@ -11,7 +11,7 @@ extern "C" struct CPUContext {
     u64 rbp;
     u64 rbx;
     u64 rsp;
-    u64 rip;
+    u64 return_address;
 };
 
 #ifdef ZX_DEBUG_INFO

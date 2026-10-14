@@ -5,6 +5,8 @@ import :arith;
 import :slice;
 import :alloc;
 import :panic;
+import :elf_eh_frame;
+import :elf_debug_line;
 
 export namespace zx {
 
@@ -194,6 +196,74 @@ struct File {
         };
     }
 };
+
+#ifdef ZX_DEBUG_INFO
+
+extern "C" elf::EhFrame ZX_ELF_EH_FRAME_;
+extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_;
+
+void print_stack_trace_panic(Backtrace const *bt) {
+    assert(bt != nullptr);
+
+    constexpr u64 FMT_SIZE = u64{1} << 14;
+    u8 fmt_mem[FMT_SIZE];
+    Fmt fmt = Fmt::init(SliceMut<u8>::init_unsafe(fmt_mem, FMT_SIZE));
+
+    bool fmt_overflow = false;
+
+    fmt.push_str(CString::init_unsafe("STACK TRACE:\n").as_slice(),
+                 &fmt_overflow);
+
+    constexpr u64 N_LINE_INFO = 8;
+    DebugLine::LineInfo line_info_mem[N_LINE_INFO];
+    List<DebugLine::LineInfo> line_infos =
+        List<DebugLine::LineInfo>::init(
+            SliceMut<DebugLine::LineInfo>::init_unsafe(line_info_mem,
+                                                            N_LINE_INFO));
+
+    for (u64 i = 0; i < Backtrace::LEN; i++) {
+        if (bt->m_data[i] == 0) {
+            break;
+        }
+        line_infos.reset();
+        DebugLine::GetLineInfosStatus const gl_status =
+            ZX_ELF_DEBUG_LINE_.get_line_infos(bt->m_data[i] - 1, &line_infos);
+
+        if (gl_status == DebugLine::GetLineInfosStatus::NotFound) {
+            assert(line_infos.n_written() == 0);
+            fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
+                         &fmt_overflow);
+        }
+
+        for (u64 j = 0; j < line_infos.n_written(); j++) {
+            DebugLine::LineInfo const line_info =
+                line_infos.written().read_unsafe(j);
+            fmt.push_char('-', &fmt_overflow);
+            fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
+            fmt.push_char(':', &fmt_overflow);
+            fmt.push_u64(line_info.line_no, &fmt_overflow);
+            fmt.push_char(':', &fmt_overflow);
+            fmt.push_u64(line_info.column_no, &fmt_overflow);
+            fmt.push_char('\n', &fmt_overflow);
+        }
+
+        if (gl_status ==
+                   DebugLine::GetLineInfosStatus::OutOfCapacity) {
+            fmt.push_str(CString::init_unsafe("-<TRUNCATED>\n").as_slice(),
+                         &fmt_overflow);
+        }
+    }
+
+    assert(!fmt_overflow);
+
+    u64 n_written = 0;
+    assert(sys::WriteStatus::Ok == sys::write(nullptr, sys::STDERR,
+                                              fmt.written().ptr(),
+                                              fmt.n_written(), &n_written));
+    assert(n_written == fmt.n_written());
+}
+
+#endif // ifdef ZX_DEBUG_INFO
 
 } // namespace elf
 

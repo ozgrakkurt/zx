@@ -1029,7 +1029,7 @@ struct UnwindContext {
         out.registers[REG_MAP_RBP] = ctx->rbp;
         out.registers[REG_MAP_RBX] = ctx->rbx;
         out.registers[REG_MAP_RSP] = ctx->rsp;
-        out.registers[REG_MAP_RETURN_ADDRESS] = ctx->rip;
+        out.registers[REG_MAP_RETURN_ADDRESS] = ctx->return_address;
 
         return out;
     }
@@ -1059,10 +1059,11 @@ struct EhFrame {
         assert(ctx != nullptr);
         assert(state_stack->n_written() == 0);
 
-        u64 rip = ctx->registers[REG_MAP_RETURN_ADDRESS];
+        u64 const return_addr = ctx->registers[REG_MAP_RETURN_ADDRESS];
 
-        assert(rip != 0);
-        rip--;
+        assert(return_addr != 0);
+
+        u64 const rip = return_addr - 1;
 
         ctx->registers[REG_MAP_RETURN_ADDRESS] = rip;
 
