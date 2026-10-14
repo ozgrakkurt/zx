@@ -940,8 +940,9 @@ struct DebugLine {
         // We do this to collect all source locations that correspond
         // to this PC. Might be multiple because of function inlining or other
         // reasons.
-        for (; row_idx >= rows_begin; row_idx--) {
+        while (row_idx >= rows_begin) {
             Row const row = this->rows.read_unsafe(row_idx);
+
             if (row.pc != row_pc) {
                 break;
             }
@@ -952,6 +953,12 @@ struct DebugLine {
 
             assert_dev(ListPushStatus::Ok ==
                        out->push(nullptr, row_to_line_info_unsafe_(row)));
+
+            if (row_idx == 0) {
+                break;
+            } else {
+                row_idx--;
+            }
         }
 
         return GetLineInfosStatus::Ok;

@@ -130,8 +130,8 @@ extern "C" void zx_setup_() {
     tmp_alloc.reset();
 
     SliceMut<u8> signal_stack_mem;
-    assert(AllocStatus::Ok ==
-           alloc.alloc<u8>(nullptr, u64{1} << 20, &signal_stack_mem));
+    assert(AllocStatus::Ok == alloc.aligned_alloc<16, u8>(nullptr, u64{1} << 20,
+                                                          &signal_stack_mem));
 
     sys::Stack const signal_stack = sys::Stack{
         .ss_sp = signal_stack_mem.ptr(),
