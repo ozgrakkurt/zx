@@ -184,6 +184,16 @@ struct SigAction {
     SigSet mask;
 };
 
+constexpr i32 SS_ONSTACK = 1;
+constexpr i32 SS_DISABLE = 2;
+constexpr i32 SS_AUTODISARM = (i32)(1U << 31);
+
+struct Stack {
+    void *ss_sp;
+    i32 ss_flags;
+    u64 ss_size;
+};
+
 } // extern C
 
 } // namespace sys

@@ -293,6 +293,7 @@ constexpr u64 NR_GETRANDOM = 318;
 constexpr u64 NR_FTRUNCATE = 77;
 constexpr u64 NR_RT_SIGRETURN = 15;
 constexpr u64 NR_RT_SIGACTION = 13;
+constexpr u64 NR_RT_SIGALTSTACK = 131;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -1718,6 +1719,48 @@ SigActionStatus sigaction(Backtrace *err_bt, SIG signum,
     }
 
     return SigActionStatus::Ok;
+}
+
+enum class [[nodiscard]] SigAltStackStatus : u8_c {
+    Ok = 0,
+    UnexpectedErr,
+    EFault,
+    EInval,
+    ENoMem,
+    EPerm,
+};
+
+SigAltStackStatus sigaltstack(Backtrace *err_bt, Stack const *__restrict ss,
+                              Stack *__restrict old_ss) {
+    u64 const res = syscall2(NR_RT_SIGALTSTACK, (u64)ss, (u64)old_ss);
+    u64 const errno = errno_(res);
+
+    if (errno != SUCCESS) [[unlikely]] {
+        switch (errno) {
+        case EFAULT: {
+            Backtrace::collect(err_bt);
+            return SigAltStackStatus::EFault;
+        }
+        case EINVAL: {
+            Backtrace::collect(err_bt);
+            return SigAltStackStatus::EInval;
+        }
+        case ENOMEM: {
+            Backtrace::collect(err_bt);
+            return SigAltStackStatus::ENoMem;
+        }
+        case EPERM: {
+            Backtrace::collect(err_bt);
+            return SigAltStackStatus::EPerm;
+        }
+        default: {
+            Backtrace::collect(err_bt);
+            return SigAltStackStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    return SigAltStackStatus::Ok;
 }
 
 } // namespace sys

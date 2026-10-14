@@ -27,13 +27,11 @@ void Backtrace::collect(Backtrace *bt) {
 
 #else // ifdef ZX_DEBUG_INFO
 
-struct Backtrace {
-    static void collect(Backtrace *bt) {
-        if (bt == nullptr) {
-            return;
-        }
-        __builtin_memset(bt, 0, sizeof(Backtrace));
+void Backtrace::collect(Backtrace *bt) {
+    if (bt == nullptr) {
+        return;
     }
+    __builtin_memset(bt, 0, sizeof(Backtrace));
 }
 
 #endif // ifdef ZX_DEBUG_INFO

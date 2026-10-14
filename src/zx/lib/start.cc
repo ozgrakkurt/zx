@@ -129,9 +129,22 @@ extern "C" void zx_setup_() {
 
     tmp_alloc.reset();
 
+    SliceMut<u8> signal_stack_mem;
+    assert(AllocStatus::Ok ==
+           alloc.alloc<u8>(nullptr, u64{1} << 20, &signal_stack_mem));
+
+    sys::Stack const signal_stack = sys::Stack{
+        .ss_sp = signal_stack_mem.ptr(),
+        .ss_flags = 0,
+        .ss_size = signal_stack_mem.len(),
+    };
+    assert(sys::SigAltStackStatus::Ok ==
+           sys::sigaltstack(nullptr, &signal_stack, nullptr));
+
     sys::SigAction act = sys::SigAction{
         .sigaction = signal_handler,
-        .flags = sys::SA_SIGINFO | sys::SA_RESETHAND | sys::SA_NODEFER,
+        .flags = sys::SA_SIGINFO | sys::SA_RESETHAND | sys::SA_NODEFER |
+                 sys::SA_ONSTACK,
         .mask = sys::SigSet::init(),
     };
 
