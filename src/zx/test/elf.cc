@@ -8,14 +8,14 @@ void cmmb() {
     CPUContext cpu_ctx;
     zx_getcpucontext_(&cpu_ctx);
 
-    elf::print_stack_trace_panic(&cpu_ctx);
+    // elf::print_stack_trace_panic(&cpu_ctx);
 }
 
 void callme_maybe(u64 iter) {
     if (iter > 5) {
         CPUContext cpu_ctx;
         zx_getcpucontext_(&cpu_ctx);
-        elf::print_stack_trace_panic(&cpu_ctx);
+        // elf::print_stack_trace_panic(&cpu_ctx);
     } else {
         callme_maybe(iter + 1);
     }

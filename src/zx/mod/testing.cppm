@@ -11,10 +11,9 @@ namespace testing {
 #ifdef ZX_DEBUG_INFO
 
 void assert_with_trace(bool cond, CPUContext const *ctx) {
-    if (!cond) [[unlikely]] {
-        elf::print_stack_trace_panic(ctx);
-        panic();
-    }
+    (void)ctx;
+
+    assert(cond);
 }
 
 #else // ifdef ZX_DEBUG_INFO

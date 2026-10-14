@@ -420,7 +420,7 @@ struct DebugLine {
         assert(ListPushStatus::Ok == args.rows->push(&err_ctx, row));
     }
 
-    static void end_sequence_panic_(RunArgs args) {
+    static void end_sequence_panic_(RunArgs args, u64 pc_end) {
         CPUContext err_ctx;
         __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
 
@@ -453,7 +453,7 @@ struct DebugLine {
                 assert(SliceStatus::Ok ==
                        args.rows->written().read(&err_ctx, i, &row));
 
-                assert(row.pc == 0 || prev_pc <= row.pc);
+                assert(prev_pc <= row.pc);
 
                 prev_pc = row.pc;
             }
@@ -471,8 +471,9 @@ struct DebugLine {
                args.rows->written().read(&err_ctx, last_row_index, &last_row));
 
         u64 const pc_begin = begin_row.pc;
-        u64 const pc_end = add_u64(last_row.pc, 1, &overflow);
+        u64 const min_pc_end = add_u64(last_row.pc, 1, &overflow);
         assert(!overflow);
+        assert(min_pc_end <= pc_end);
 
         assert(ListPushStatus::Ok ==
                args.sequences->push(&err_ctx, Sequence{
@@ -612,7 +613,7 @@ struct DebugLine {
 
                 switch (extended_opcode) {
                 case DW_LNE_end_sequence: {
-                    end_sequence_panic_(args);
+                    end_sequence_panic_(args, state.address);
                     state = RunState::init();
                     end_sequence = true;
                     break;
@@ -891,8 +892,9 @@ struct DebugLine {
         u16 column_no;
     };
 
-    enum class [[nodiscard]] GetLineInfoStatus : u8_c {
+    enum class [[nodiscard]] GetLineInfosStatus : u8_c {
         Ok = 0,
+        OutOfCapacity,
         Nullptr,
         NotFound,
     };
@@ -905,50 +907,76 @@ struct DebugLine {
         };
     }
 
-    GetLineInfoStatus get_line_info(CPUContext *err_ctx, u64 pc,
-                                    LineInfo *out) const {
+    GetLineInfosStatus get_line_infos(u64 pc, List<LineInfo> *out) const {
         if (out == nullptr) {
-            return GetLineInfoStatus::Nullptr;
+            return GetLineInfosStatus::Nullptr;
         }
 
         assert_dev(this->sequences.len() == this->sequence_ends.len());
 
+        u64 sequence_index = 0;
+        Sequence sq;
+        bool found = false;
         for (u64 i = 0; i < this->sequences.len(); i++) {
-            Sequence const sq = this->sequences.read_unsafe(i);
-
+            sq = this->sequences.read_unsafe(i);
             if (sq.pc_begin <= pc && sq.pc_end > pc) {
-                u64 rows_begin = 0;
-                if (i != 0) {
-                    rows_begin = this->sequence_ends.read_unsafe(i - 1);
-                }
-                u64 const rows_end = this->sequence_ends.read_unsafe(i);
-
-                assert_dev(rows_end > rows_begin);
-
-                assert_dev(this->rows.read_unsafe(rows_begin).pc <= pc);
-                assert_dev(this->rows.read_unsafe(rows_begin).pc ==
-                           sq.pc_begin);
-
-                for (u64 row_idx = rows_begin;
-                     row_idx < sub_unsafe_u64(rows_end, 1); row_idx++) {
-                    Row const next_row =
-                        this->rows.read_unsafe(add_unsafe_u64(row_idx, 1));
-                    if (pc < next_row.pc) {
-                        *out = row_to_line_info_unsafe_(
-                            this->rows.read_unsafe(row_idx));
-                        return GetLineInfoStatus::Ok;
-                    }
-                }
-
-                // return last row
-                *out = row_to_line_info_unsafe_(
-                    this->rows.read_unsafe(sub_unsafe_u64(rows_end, 1)));
-                return GetLineInfoStatus::Ok;
+                sequence_index = i;
+                found = true;
+                break;
             }
         }
 
-        zx_getcpucontext_(err_ctx);
-        return GetLineInfoStatus::NotFound;
+        if (!found) {
+            return GetLineInfosStatus::NotFound;
+        }
+
+        u64 rows_begin = 0;
+        if (sequence_index != 0) {
+            rows_begin = this->sequence_ends.read_unsafe(sequence_index - 1);
+        }
+        u64 const rows_end = this->sequence_ends.read_unsafe(sequence_index);
+
+        assert_dev(rows_end > rows_begin);
+
+        assert_dev(this->rows.read_unsafe(rows_begin).pc <= pc);
+        assert_dev(this->rows.read_unsafe(rows_begin).pc == sq.pc_begin);
+
+        u64 row_idx = rows_begin;
+        found = false;
+        for (; row_idx < sub_unsafe_u64(rows_end, 1); row_idx++) {
+            Row const next_row =
+                this->rows.read_unsafe(add_unsafe_u64(row_idx, 1));
+            if (pc < next_row.pc) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            row_idx = sub_unsafe_u64(rows_end, 1);
+        }
+
+        u64 const row_pc = this->rows.read_unsafe(row_idx).pc;
+
+        // Keep going forwards while row PC is same.
+        // We do this to collect all source locations that correspond
+        // to this PC. Might be multiple because of function inlining or other
+        // reasons.
+        for (; row_idx >= rows_begin; row_idx--) {
+            Row const row = this->rows.read_unsafe(row_idx);
+            if (row.pc != row_pc) {
+                break;
+            }
+
+            if (out->is_full()) {
+                return GetLineInfosStatus::OutOfCapacity;
+            }
+
+            assert_dev(ListPushStatus::Ok ==
+                       out->push(nullptr, row_to_line_info_unsafe_(row)));
+        }
+
+        return GetLineInfosStatus::Ok;
     }
 };
 

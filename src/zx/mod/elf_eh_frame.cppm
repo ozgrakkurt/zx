@@ -9,6 +9,7 @@ import :leb128;
 import :cursor;
 import :list;
 import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -1052,24 +1053,18 @@ struct EhFrame {
 
     Slice<FDE> m_fd_entries;
 
-    bool step_panic(Alloc *tmp_alloc, UnwindContext *ctx) const {
-        u64 const rip = ctx->registers[REG_MAP_RETURN_ADDRESS];
+    void step_panic(List<RegisterState> *state_stack,
+                    UnwindContext *ctx) const {
+        assert(state_stack != nullptr);
+        assert(ctx != nullptr);
+        assert(state_stack->n_written() == 0);
 
-        if (rip == 0) {
-            return false;
-        }
+        u64 rip = ctx->registers[REG_MAP_RETURN_ADDRESS];
 
-        CPUContext err_ctx;
-        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
+        assert(rip != 0);
+        rip--;
 
-        u64 const tmp_alloc_offset = tmp_alloc->offset();
-
-        constexpr u64 state_stack_size = 16;
-        SliceMut<RegisterState> stack_slice;
-        assert(AllocStatus::Ok ==
-               tmp_alloc->alloc<RegisterState>(&err_ctx, state_stack_size,
-                                               &stack_slice));
-        List<RegisterState> stack = List<RegisterState>::init(stack_slice);
+        ctx->registers[REG_MAP_RETURN_ADDRESS] = rip;
 
         FDE const *fde = nullptr;
         for (u64 i = 0; i < this->m_fd_entries.len(); i++) {
@@ -1085,9 +1080,7 @@ struct EhFrame {
                 break;
             }
         }
-        if (fde == nullptr) {
-            return false;
-        }
+        assert(fde != nullptr);
 
         RegisterState cie_state;
         __builtin_memset(&cie_state, 0, sizeof(cie_state));
@@ -1099,7 +1092,7 @@ struct EhFrame {
             .data_alignment_factor = fde->cie->data_alignment_factor,
             .cie_state = nullptr,
             .current_state = &cie_state,
-            .stack = &stack,
+            .stack = state_stack,
         });
 
         RegisterState state = cie_state;
@@ -1111,11 +1104,8 @@ struct EhFrame {
             .data_alignment_factor = fde->cie->data_alignment_factor,
             .cie_state = &cie_state,
             .current_state = &state,
-            .stack = &stack,
+            .stack = state_stack,
         });
-
-        assert(Alloc::ResizeStatus::Ok ==
-               tmp_alloc->resize(&err_ctx, tmp_alloc_offset));
 
         // APPLY THE RULES
 
@@ -1169,8 +1159,48 @@ struct EhFrame {
         }
 
         ctx->registers[REG_MAP_RSP] = cfa;
+    }
 
-        return true;
+    enum class [[nodiscard]] BacktraceStatus : u8_c {
+        Ok = 0,
+        OutOfCapacity,
+    };
+
+    BacktraceStatus backtrace_panic(CPUContext const *cpu_ctx, Backtrace *bt) {
+        assert(cpu_ctx != nullptr);
+        assert(bt != nullptr);
+
+        constexpr u64 STATE_STACK_SIZE = 16;
+        RegisterState state_stack_mem[STATE_STACK_SIZE];
+        __builtin_memset(state_stack_mem, 0, sizeof(state_stack_mem));
+
+        List<RegisterState> state_stack =
+            List<RegisterState>::init(SliceMut<RegisterState>::init_unsafe(
+                state_stack_mem, STATE_STACK_SIZE));
+
+        UnwindContext unwind_ctx = UnwindContext::init(cpu_ctx);
+
+        u64 rip = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
+        u64 bt_offset = 0;
+        while (rip != 0) {
+            if (bt_offset == Backtrace::LEN) {
+                return BacktraceStatus::OutOfCapacity;
+            }
+            bt->m_data[bt_offset] = rip;
+            bt_offset++;
+
+            state_stack.reset();
+            step_panic(&state_stack, &unwind_ctx);
+
+            rip = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
+        }
+
+        // Fill the rest with zeroes so the end of the actual trace is apparent.
+        for (u64 i = bt_offset; i < Backtrace::LEN; i++) {
+            bt->m_data[i] = 0;
+        }
+
+        return BacktraceStatus::Ok;
     }
 
     static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
