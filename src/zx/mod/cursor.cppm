@@ -4,7 +4,7 @@ import :slice;
 import :arith;
 import :assert;
 import :leb128;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -33,9 +33,9 @@ struct Cursor {
 
     bool is_finished() const { return this->m_offset == this->m_buf.len(); }
 
-    template <typename T> Status read(CPUContext *err_ctx, T *out) {
+    template <typename T> Status read(Backtrace *err_bt, T *out) {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::Nullptr;
         }
 
@@ -43,12 +43,12 @@ struct Cursor {
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
 
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::IntegerOverflow;
         }
 
         if (end > this->m_buf.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::OutOfBounds;
         }
 
@@ -58,23 +58,23 @@ struct Cursor {
         return Status::Ok;
     }
 
-    leb128::DecodeStatus read_uleb128(CPUContext *err_ctx, u64 *out) {
-        return leb128::decode_u64(err_ctx, this->m_buf, &this->m_offset, out);
+    leb128::DecodeStatus read_uleb128(Backtrace *err_bt, u64 *out) {
+        return leb128::decode_u64(err_bt, this->m_buf, &this->m_offset, out);
     }
 
-    leb128::DecodeStatus read_sleb128(CPUContext *err_ctx, i64 *out) {
-        return leb128::decode_i64(err_ctx, this->m_buf, &this->m_offset, out);
+    leb128::DecodeStatus read_sleb128(Backtrace *err_bt, i64 *out) {
+        return leb128::decode_i64(err_bt, this->m_buf, &this->m_offset, out);
     }
 
-    Status skip(CPUContext *err_ctx, u64 len) {
+    Status skip(Backtrace *err_bt, u64 len) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, len, &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::IntegerOverflow;
         }
         if (end > this->m_buf.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::OutOfBounds;
         }
 
@@ -82,9 +82,9 @@ struct Cursor {
         return Status::Ok;
     }
 
-    Status seek(CPUContext *err_ctx, u64 offset) {
+    Status seek(Backtrace *err_bt, u64 offset) {
         if (offset > this->m_buf.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::OutOfBounds;
         }
         this->m_offset = offset;
@@ -120,16 +120,16 @@ struct WriteCursor {
         return this->m_buf.slice_unsafe(0, this->m_offset).as_const();
     }
 
-    template <typename T> Status write(CPUContext *err_ctx, T val) {
+    template <typename T> Status write(Backtrace *err_bt, T val) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::IntegerOverflow;
         }
 
         if (end > this->m_buf.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return Status::OutOfBounds;
         }
 

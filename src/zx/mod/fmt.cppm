@@ -1,9 +1,7 @@
 export module zx:fmt;
 import :def;
 import :assert;
-import :sys;
 import :slice;
-import :cpu_context;
 
 export namespace zx {
 
@@ -121,37 +119,6 @@ struct Fmt {
         ShortWrite,
         UnexpectedErr,
     };
-
-    PrintStatus print_(CPUContext *err_ctx, i32 fd) const {
-        if (this->m_offset == 0) {
-            return PrintStatus::Ok;
-        }
-
-        assert_dev(this->m_mem.len() >= this->m_offset);
-
-        u64 n_written = 0;
-        if (sys::WriteStatus::Ok != sys::write(err_ctx, fd, this->m_mem.ptr(),
-                                               this->m_offset, &n_written))
-            [[unlikely]] {
-            return PrintStatus::UnexpectedErr;
-        }
-        if (n_written < this->m_offset) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
-            return PrintStatus::ShortWrite;
-        } else if (n_written != this->m_offset) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
-            return PrintStatus::UnexpectedErr;
-        }
-        return PrintStatus::Ok;
-    }
-
-    PrintStatus print(CPUContext *err_ctx) const {
-        return this->print_(err_ctx, sys::STDOUT);
-    }
-
-    PrintStatus eprint(CPUContext *err_ctx) const {
-        return this->print_(err_ctx, sys::STDERR);
-    }
 };
 
 } // namespace zx

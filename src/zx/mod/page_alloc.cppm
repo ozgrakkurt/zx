@@ -2,15 +2,7 @@ export module zx:page_alloc;
 import :sys;
 import :def;
 import :assert;
-import :cpu_context;
-
-#ifndef __linux__
-#error "expected linux"
-#endif
-
-#ifndef __x86_64__
-#error "expected x86_64"
-#endif
+import :backtrace;
 
 export namespace zx {
 
@@ -27,17 +19,17 @@ enum class [[nodiscard]] AllocStatus : u8_c {
     InvalidInput,
 };
 
-AllocStatus alloc_(CPUContext *err_ctx, u64 size, u64 page_size,
+AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
                    i32 huge_page_flags, u8 **out) {
     if (out == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return AllocStatus::Nullptr;
     }
 
     assert(__builtin_popcountg(page_size) == 1);
 
     if (__builtin_popcountg(size) != 1 || size < page_size) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return AllocStatus::InvalidSize;
     }
 
@@ -47,7 +39,7 @@ AllocStatus alloc_(CPUContext *err_ctx, u64 size, u64 page_size,
 
     u8 *mem = nullptr;
     if (sys::MMapStatus const status =
-            sys::mmap(err_ctx, nullptr, size, prot, flags, -1, 0, &mem);
+            sys::mmap(err_bt, nullptr, size, prot, flags, -1, 0, &mem);
         sys::MMapStatus::Ok != status) [[unlikely]] {
         switch (status) {
         case sys::MMapStatus::EPerm: {
@@ -66,7 +58,7 @@ AllocStatus alloc_(CPUContext *err_ctx, u64 size, u64 page_size,
     }
 
     if (mem == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return AllocStatus::OsReturnedNullptr;
     }
 
@@ -74,17 +66,17 @@ AllocStatus alloc_(CPUContext *err_ctx, u64 size, u64 page_size,
     return AllocStatus::Ok;
 }
 
-AllocStatus alloc_4kb(CPUContext *err_ctx, u64 size, u8 **out) {
-    return alloc_(err_ctx, size, u64{1} << 12, 0, out);
+AllocStatus alloc_4kb(Backtrace *err_bt, u64 size, u8 **out) {
+    return alloc_(err_bt, size, u64{1} << 12, 0, out);
 }
 
-AllocStatus alloc_huge_2mb(CPUContext *err_ctx, u64 size, u8 **out) {
-    return alloc_(err_ctx, size, u64{1} << 21,
+AllocStatus alloc_huge_2mb(Backtrace *err_bt, u64 size, u8 **out) {
+    return alloc_(err_bt, size, u64{1} << 21,
                   sys::MAP_HUGETLB | sys::MAP_HUGE_2MB, out);
 }
 
-AllocStatus alloc_huge_1gb(CPUContext *err_ctx, u64 size, u8 **out) {
-    return alloc_(err_ctx, size, u64{1} << 30,
+AllocStatus alloc_huge_1gb(Backtrace *err_bt, u64 size, u8 **out) {
+    return alloc_(err_bt, size, u64{1} << 30,
                   sys::MAP_HUGETLB | sys::MAP_HUGE_1GB, out);
 }
 
@@ -96,18 +88,18 @@ enum class [[nodiscard]] FreeStatus : u8_c {
     UnexpectedErr,
 };
 
-FreeStatus free(CPUContext *err_ctx, u8 *mem, u64 size) {
+FreeStatus free(Backtrace *err_bt, u8 *mem, u64 size) {
     if (mem == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return FreeStatus::Nullptr;
     }
 
     if (__builtin_popcountg(size) != 1) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return FreeStatus::InvalidSize;
     }
 
-    sys::MMapStatus const status = sys::munmap(err_ctx, mem, size);
+    sys::MMapStatus const status = sys::munmap(err_bt, mem, size);
     if (sys::MMapStatus::Ok != status) {
         switch (status) {
         case sys::MMapStatus::EInval: {

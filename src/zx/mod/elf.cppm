@@ -7,6 +7,7 @@ import :alloc;
 import :panic;
 import :elf_eh_frame;
 import :elf_debug_line;
+import :sys;
 
 export namespace zx {
 
@@ -49,16 +50,13 @@ extern "C" struct ElfHeader {
 
 void parse_section_name_table_panic_(Slice<SectionHeader> headers,
                                      Slice<u8> data, SliceMut<Slice<u8>> out) {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
     assert(headers.len() == out.len());
     if (out.len() == 0) {
         return;
     }
 
     u8 starting_byte = 0xaa;
-    assert(SliceStatus::Ok == data.read(&err_ctx, 0, &starting_byte));
+    assert(SliceStatus::Ok == data.read(nullptr, 0, &starting_byte));
     assert(starting_byte == 0);
 
     u64 last_null_pos = 0;
@@ -94,21 +92,17 @@ struct File {
     static File init_panic(Alloc *alloc, Slice<u8> buf) {
         assert(alloc != nullptr);
 
-        // Dummy context to pass to fallible functions. It is otherwise unused.
-        CPUContext err_ctx;
-        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
         Slice<u8> header_bytes;
         assert(SliceStatus::Ok ==
-               buf.slice(&err_ctx, 0, sizeof(ElfHeader), &header_bytes));
+               buf.slice(nullptr, 0, sizeof(ElfHeader), &header_bytes));
 
         Slice<ElfHeader> header_list;
         assert(SliceCastStatus::Ok ==
-               header_bytes.cast<ElfHeader>(&err_ctx, &header_list));
+               header_bytes.cast<ElfHeader>(nullptr, &header_list));
         assert(header_list.len() == 1);
 
         ElfHeader const *header = nullptr;
-        assert(SliceStatus::Ok == header_list.offset(&err_ctx, 0, &header));
+        assert(SliceStatus::Ok == header_list.offset(nullptr, 0, &header));
         assert(header != nullptr);
 
         assert(header->ehsize == sizeof(ElfHeader));
@@ -120,33 +114,33 @@ struct File {
         assert(!overflow);
 
         Slice<u8> section_header_bytes;
-        assert(SliceStatus::Ok == buf.slice(&err_ctx, header->shoff,
+        assert(SliceStatus::Ok == buf.slice(nullptr, header->shoff,
                                             section_headers_nbytes,
                                             &section_header_bytes));
 
         Slice<SectionHeader> section_headers;
         assert(SliceCastStatus::Ok == section_header_bytes.cast<SectionHeader>(
-                                          &err_ctx, &section_headers));
+                                          nullptr, &section_headers));
         assert(section_headers.len() == header->shnum);
 
         Slice<u8> dummy;
         for (u64 i = 0; i < section_headers.len(); i++) {
             SectionHeader const *hdr = section_headers.offset_unsafe(i);
             assert(SliceStatus::Ok ==
-                   buf.slice(&err_ctx, hdr->offset, hdr->size, &dummy));
+                   buf.slice(nullptr, hdr->offset, hdr->size, &dummy));
         }
 
         SectionHeader const *names_header = nullptr;
-        assert(SliceStatus::Ok == section_headers.offset(&err_ctx,
+        assert(SliceStatus::Ok == section_headers.offset(nullptr,
                                                          header->shstrndx,
                                                          &names_header));
 
         SliceMut<Slice<u8>> section_names;
-        assert(AllocStatus::Ok == alloc->alloc<Slice<u8>>(
-                                      &err_ctx, header->shnum, &section_names));
+        assert(AllocStatus::Ok ==
+               alloc->alloc<Slice<u8>>(nullptr, header->shnum, &section_names));
 
         Slice<u8> section_names_data;
-        assert(SliceStatus::Ok == buf.slice(&err_ctx, names_header->offset,
+        assert(SliceStatus::Ok == buf.slice(nullptr, names_header->offset,
                                             names_header->size,
                                             &section_names_data));
 
@@ -177,18 +171,15 @@ struct File {
     }
 
     Section get_section_panic(Slice<u8> name) const {
-        CPUContext err_ctx;
-        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
         u64 const index = this->get_section_index_panic_(name);
 
         SectionHeader const *header = nullptr;
         assert(SliceStatus::Ok ==
-               this->m_section_headers.offset(&err_ctx, index, &header));
+               this->m_section_headers.offset(nullptr, index, &header));
 
         Slice<u8> body;
-        assert(SliceStatus::Ok == this->m_buf.slice(&err_ctx, header->offset,
-                                                    header->size, &body));
+        assert(SliceStatus::Ok ==
+               this->m_buf.slice(nullptr, header->offset, header->size, &body));
 
         return Section{
             .header = header,
@@ -216,10 +207,8 @@ void print_stack_trace_panic(Backtrace const *bt) {
 
     constexpr u64 N_LINE_INFO = 8;
     DebugLine::LineInfo line_info_mem[N_LINE_INFO];
-    List<DebugLine::LineInfo> line_infos =
-        List<DebugLine::LineInfo>::init(
-            SliceMut<DebugLine::LineInfo>::init_unsafe(line_info_mem,
-                                                            N_LINE_INFO));
+    List<DebugLine::LineInfo> line_infos = List<DebugLine::LineInfo>::init(
+        SliceMut<DebugLine::LineInfo>::init_unsafe(line_info_mem, N_LINE_INFO));
 
     for (u64 i = 0; i < Backtrace::LEN; i++) {
         if (bt->m_data[i] == 0) {
@@ -247,8 +236,7 @@ void print_stack_trace_panic(Backtrace const *bt) {
             fmt.push_char('\n', &fmt_overflow);
         }
 
-        if (gl_status ==
-                   DebugLine::GetLineInfosStatus::OutOfCapacity) {
+        if (gl_status == DebugLine::GetLineInfosStatus::OutOfCapacity) {
             fmt.push_str(CString::init_unsafe("-<TRUNCATED>\n").as_slice(),
                          &fmt_overflow);
         }

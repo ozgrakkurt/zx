@@ -5,7 +5,7 @@ import :vec;
 import :arith;
 import :alloc;
 import :assert;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -50,10 +50,10 @@ struct Hashtable {
     static constexpr u8 EMPTY_TAG_ = 0b11111111;
     static constexpr u32 LOAD_FACTOR_ = 80;
 
-    static HashtableInitStatus init(CPUContext *err_ctx, Alloc *alloc,
+    static HashtableInitStatus init(Backtrace *err_bt, Alloc *alloc,
                                     u32 capacity, Hashtable *table) {
         if (alloc == nullptr || table == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return HashtableInitStatus::Nullptr;
         }
 
@@ -71,17 +71,17 @@ struct Hashtable {
         u64 const metadata_size = add_u64(cap, GROUP_SIZE_, &overflow);
 
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return HashtableInitStatus::IntegerOverflow;
         }
 
         if (cap <= capacity || cap == 0 || !is_pow_two_u32(cap)) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return HashtableInitStatus::UnexpectedErr;
         }
 
         SliceMut<u8> metadata;
-        switch (alloc->alloc<u8>(err_ctx, metadata_size, &metadata)) {
+        switch (alloc->alloc<u8>(err_bt, metadata_size, &metadata)) {
         case AllocStatus::Ok: {
             break;
         }
@@ -97,7 +97,7 @@ struct Hashtable {
         metadata.fill(EMPTY_TAG_);
 
         SliceMut<T> entries;
-        switch (alloc->alloc<T>(err_ctx, cap, &entries)) {
+        switch (alloc->alloc<T>(err_bt, cap, &entries)) {
         case AllocStatus::Ok: {
             break;
         }

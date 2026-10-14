@@ -2,7 +2,7 @@ export module zx:list;
 import :def;
 import :arith;
 import :slice;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -47,10 +47,10 @@ template <typename T> struct List {
         this->m_offset = 0;
     }
 
-    ListPushStatus push(CPUContext *err_ctx, T val) {
+    ListPushStatus push(Backtrace *err_bt, T val) {
         assert_dev(this->m_offset <= this->m_slice.len());
         if (this->m_offset == this->m_slice.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return ListPushStatus::OutOfCapacity;
         }
 
@@ -59,16 +59,16 @@ template <typename T> struct List {
         return ListPushStatus::Ok;
     }
 
-    ListPopStatus pop(CPUContext *err_ctx, T *out) {
+    ListPopStatus pop(Backtrace *err_bt, T *out) {
         assert_dev(this->m_offset <= this->m_slice.len());
 
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return ListPopStatus::Nullptr;
         }
 
         if (this->m_offset == 0) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return ListPopStatus::Empty;
         }
 

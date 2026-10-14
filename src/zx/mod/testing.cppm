@@ -12,6 +12,7 @@ namespace testing {
 
 void assert_with_trace(bool cond, Backtrace const *bt) {
     if (!cond) [[unlikely]] {
+        // TODO: print header
         elf::print_stack_trace_panic(bt);
         panic();
     }

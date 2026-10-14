@@ -2,7 +2,7 @@ export module zx:slice;
 import :def;
 import :assert;
 import :arith;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -43,22 +43,22 @@ template <typename T> struct Slice {
     u64 m_len;
     T const *m_ptr;
 
-    static SliceInitStatus init(CPUContext *err_ctx, T const *ptr, u64 len,
+    static SliceInitStatus init(Backtrace *err_bt, T const *ptr, u64 len,
                                 Slice *out) {
         if (out == nullptr || ptr == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::Nullptr;
         }
 
         if (!__builtin_is_aligned(ptr, alignof(T))) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::UnalignedPtr;
         }
 
         bool overflow = false;
         mul_u64(len, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::IntegerOverflow;
         }
 
@@ -84,12 +84,12 @@ template <typename T> struct Slice {
     }
 
     template <typename U>
-    static SliceInitStatus init_from_ptr(CPUContext *err_ctx, U const *ptr,
+    static SliceInitStatus init_from_ptr(Backtrace *err_bt, U const *ptr,
                                          Slice *out) {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         if (ptr == nullptr || out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::Nullptr;
         }
 
@@ -97,7 +97,7 @@ template <typename T> struct Slice {
         bool const is_u_aligned = __builtin_is_aligned(ptr, alignof(U));
 
         if (!is_t_aligned || !is_u_aligned) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::UnalignedPtr;
         }
 
@@ -150,29 +150,29 @@ template <typename T> struct Slice {
     T const *ptr() const { return this->m_ptr; }
 
     template <typename U>
-    SliceCastStatus cast(CPUContext *err_ctx, Slice<U> *out) const {
+    SliceCastStatus cast(Backtrace *err_bt, Slice<U> *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::Nullptr;
         }
 
         bool overflow = false;
         u64 const byte_cap = mul_u64(this->m_len, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::IntegerOverflow;
         }
 
         overflow = 0;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::IntegerOverflow;
         }
 
         if (alignof(U) > alignof(T)) {
             if (!__builtin_is_aligned(this->m_ptr, alignof(U))) [[unlikely]] {
-                zx_getcpucontext_(err_ctx);
+                Backtrace::collect(err_bt);
                 return SliceCastStatus::AlignMismatch;
             }
         }
@@ -211,22 +211,22 @@ template <typename T> struct Slice {
         };
     }
 
-    SliceStatus slice(CPUContext *err_ctx, u64 offset, u64 len,
+    SliceStatus slice(Backtrace *err_bt, u64 offset, u64 len,
                       Slice *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         bool overflow = false;
         u64 const end = add_u64(offset, len, &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::IntegerOverflow;
         }
 
         if (end > this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -248,14 +248,14 @@ template <typename T> struct Slice {
         };
     }
 
-    SliceStatus slice_at(CPUContext *err_ctx, u64 offset, Slice *out) const {
+    SliceStatus slice_at(Backtrace *err_bt, u64 offset, Slice *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset > this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -279,14 +279,14 @@ template <typename T> struct Slice {
         };
     }
 
-    SliceStatus offset(CPUContext *err_ctx, u64 offset, T const **out) const {
+    SliceStatus offset(Backtrace *err_bt, u64 offset, T const **out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -300,14 +300,14 @@ template <typename T> struct Slice {
         return &this->m_ptr[offset];
     }
 
-    SliceStatus read(CPUContext *err_ctx, u64 offset, T *out) const {
+    SliceStatus read(Backtrace *err_bt, u64 offset, T *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -321,14 +321,14 @@ template <typename T> struct Slice {
         return this->m_ptr[offset];
     }
 
-    SliceStatus read_last(CPUContext *err_ctx, T *out) const {
+    SliceStatus read_last(Backtrace *err_bt, T *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (this->m_len == 0) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -345,14 +345,14 @@ template <typename T> struct Slice {
     }
 
     template <typename U>
-    SliceStatus read_unaligned(CPUContext *err_ctx, u64 offset, U *out) const {
+    SliceStatus read_unaligned(Backtrace *err_bt, u64 offset, U *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -361,12 +361,12 @@ template <typename T> struct Slice {
         u64 const byte_cap = mul_u64(item_cap, sizeof(T), &overflow);
 
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::IntegerOverflow;
         }
 
         if (byte_cap < sizeof(U)) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -447,22 +447,22 @@ template <typename T> struct SliceMut {
     u64 m_len;
     T *m_ptr;
 
-    static SliceInitStatus init(CPUContext *err_ctx, T *ptr, u64 len,
+    static SliceInitStatus init(Backtrace *err_bt, T *ptr, u64 len,
                                 SliceMut *out) {
         if (out == nullptr || ptr == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::Nullptr;
         }
 
         if (!__builtin_is_aligned(ptr, alignof(T))) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::UnalignedPtr;
         }
 
         bool overflow = false;
         mul_u64(len, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::IntegerOverflow;
         }
 
@@ -488,12 +488,12 @@ template <typename T> struct SliceMut {
     }
 
     template <typename U>
-    static SliceInitStatus init_from_ptr(CPUContext *err_ctx, U *ptr,
+    static SliceInitStatus init_from_ptr(Backtrace *err_bt, U *ptr,
                                          SliceMut *out) {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         if (ptr == nullptr || out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::Nullptr;
         }
 
@@ -501,7 +501,7 @@ template <typename T> struct SliceMut {
         bool const is_u_aligned = __builtin_is_aligned(ptr, alignof(U));
 
         if (!is_t_aligned || !is_u_aligned) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::UnalignedPtr;
         }
 
@@ -554,29 +554,29 @@ template <typename T> struct SliceMut {
     T *ptr() const { return this->m_ptr; }
 
     template <typename U>
-    SliceCastStatus cast(CPUContext *err_ctx, SliceMut<U> *out) const {
+    SliceCastStatus cast(Backtrace *err_bt, SliceMut<U> *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::Nullptr;
         }
 
         bool overflow = false;
         u64 const byte_cap = mul_u64(this->m_len, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::IntegerOverflow;
         }
 
         overflow = 0;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceCastStatus::IntegerOverflow;
         }
 
         if (alignof(U) > alignof(T)) {
             if (!__builtin_is_aligned(this->m_ptr, alignof(U))) [[unlikely]] {
-                zx_getcpucontext_(err_ctx);
+                Backtrace::collect(err_bt);
                 return SliceCastStatus::AlignMismatch;
             }
         }
@@ -615,22 +615,22 @@ template <typename T> struct SliceMut {
         };
     }
 
-    SliceStatus slice(CPUContext *err_ctx, u64 offset, u64 len,
+    SliceStatus slice(Backtrace *err_bt, u64 offset, u64 len,
                       SliceMut *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         bool overflow = false;
         u64 const end = add_u64(offset, len, &overflow);
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::IntegerOverflow;
         }
 
         if (end > this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -652,14 +652,14 @@ template <typename T> struct SliceMut {
         };
     }
 
-    SliceStatus slice_at(CPUContext *err_ctx, u64 offset, SliceMut *out) const {
+    SliceStatus slice_at(Backtrace *err_bt, u64 offset, SliceMut *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset > this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -683,14 +683,14 @@ template <typename T> struct SliceMut {
         };
     }
 
-    SliceStatus offset(CPUContext *err_ctx, u64 offset, T const **out) const {
+    SliceStatus offset(Backtrace *err_bt, u64 offset, T const **out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -704,14 +704,14 @@ template <typename T> struct SliceMut {
         return &this->m_ptr[offset];
     }
 
-    SliceStatus offset_mut(CPUContext *err_ctx, u64 offset, T **out) const {
+    SliceStatus offset_mut(Backtrace *err_bt, u64 offset, T **out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -725,14 +725,14 @@ template <typename T> struct SliceMut {
         return &this->m_ptr[offset];
     }
 
-    SliceStatus read(CPUContext *err_ctx, u64 offset, T *out) const {
+    SliceStatus read(Backtrace *err_bt, u64 offset, T *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -746,14 +746,14 @@ template <typename T> struct SliceMut {
         return this->m_ptr[offset];
     }
 
-    SliceStatus read_last(CPUContext *err_ctx, T *out) const {
+    SliceStatus read_last(Backtrace *err_bt, T *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (this->m_len == 0) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -770,14 +770,14 @@ template <typename T> struct SliceMut {
     }
 
     template <typename U>
-    SliceStatus read_unaligned(CPUContext *err_ctx, u64 offset, U *out) const {
+    SliceStatus read_unaligned(Backtrace *err_bt, u64 offset, U *out) const {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::Nullptr;
         }
 
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -786,12 +786,12 @@ template <typename T> struct SliceMut {
         u64 const byte_cap = mul_u64(item_cap, sizeof(T), &overflow);
 
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::IntegerOverflow;
         }
 
         if (byte_cap < sizeof(U)) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -874,9 +874,9 @@ template <typename T> struct SliceMut {
         };
     }
 
-    SliceStatus write(CPUContext *err_ctx, u64 offset, T val) const {
+    SliceStatus write(Backtrace *err_bt, u64 offset, T val) const {
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -891,9 +891,9 @@ template <typename T> struct SliceMut {
     }
 
     template <typename U>
-    SliceStatus write_unaligned(CPUContext *err_ctx, u64 offset, U val) const {
+    SliceStatus write_unaligned(Backtrace *err_bt, u64 offset, U val) const {
         if (offset >= this->m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -902,12 +902,12 @@ template <typename T> struct SliceMut {
         u64 const byte_cap = mul_u64(item_cap, sizeof(T), &overflow);
 
         if (overflow) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::IntegerOverflow;
         }
 
         if (byte_cap < sizeof(U)) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceStatus::OutOfBounds;
         }
 
@@ -941,14 +941,14 @@ template <typename T> struct SliceMut {
         __builtin_memset(this->m_ptr, byte, n_bytes);
     }
 
-    SliceMemcpyStatus memcpy_from(CPUContext *err_ctx, Slice<T> other) const {
+    SliceMemcpyStatus memcpy_from(Backtrace *err_bt, Slice<T> other) const {
         if (this->m_len != other.m_len) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceMemcpyStatus::SizeMismatch;
         }
 
         if (this->as_const().is_overlapping(other)) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceMemcpyStatus::Overlapping;
         }
 
@@ -975,17 +975,17 @@ template <typename T> struct SliceMut {
 struct CString {
     Slice<u8> m_slice;
 
-    static SliceInitStatus init(CPUContext *err_ctx, char const *cstr,
+    static SliceInitStatus init(Backtrace *err_bt, char const *cstr,
                                 CString *out) {
         if (out == nullptr || cstr == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return SliceInitStatus::Nullptr;
         }
 
         u64 const len = __builtin_strlen(cstr);
         Slice<u8> slice;
         SliceInitStatus const init_status =
-            Slice<u8>::init(err_ctx, (u8 const *)cstr, len, &slice);
+            Slice<u8>::init(err_bt, (u8 const *)cstr, len, &slice);
         if (init_status != SliceInitStatus::Ok) {
             return init_status;
         }

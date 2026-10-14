@@ -2,7 +2,7 @@ export module zx:leb128;
 import :def;
 import :assert;
 import :slice;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -20,24 +20,24 @@ enum class [[nodiscard]] EncodeStatus : u8_c {
     OutOfCapacity,
 };
 
-EncodeStatus encode_u64(CPUContext *err_ctx, u64 num, SliceMut<u8> out,
+EncodeStatus encode_u64(Backtrace *err_bt, u64 num, SliceMut<u8> out,
                         u64 *offset) {
     if (offset == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
     if (offs > out.len()) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
         assert_dev(offs <= out.len());
         if (offs == out.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -64,17 +64,17 @@ enum class [[nodiscard]] DecodeStatus : u8_c {
     InvalidInput,
 };
 
-DecodeStatus decode_u64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
+DecodeStatus decode_u64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
                         u64 *num) {
     if (offset == nullptr || num == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
     if (offs > input.len()) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return DecodeStatus::InvalidOffset;
     }
 
@@ -83,7 +83,7 @@ DecodeStatus decode_u64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
     for (u8 iter = 0; iter < 10; iter++) {
         assert_dev(offs <= input.len());
         if (offs == input.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
@@ -102,30 +102,30 @@ DecodeStatus decode_u64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
         }
     }
 
-    zx_getcpucontext_(err_ctx);
+    Backtrace::collect(err_bt);
     *num = 0;
     *offset = offs;
     return DecodeStatus::InvalidInput;
 }
 
-EncodeStatus encode_i64(CPUContext *err_ctx, i64 num, SliceMut<u8> out,
+EncodeStatus encode_i64(Backtrace *err_bt, i64 num, SliceMut<u8> out,
                         u64 *offset) {
     if (offset == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return EncodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
     if (offs > out.len()) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return EncodeStatus::InvalidOffset;
     }
 
     while (true) {
         assert_dev(offs <= out.len());
         if (offs == out.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             *offset = offs;
             return EncodeStatus::OutOfCapacity;
         }
@@ -146,17 +146,17 @@ EncodeStatus encode_i64(CPUContext *err_ctx, i64 num, SliceMut<u8> out,
     }
 }
 
-DecodeStatus decode_i64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
+DecodeStatus decode_i64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
                         i64 *num) {
     if (offset == nullptr || num == nullptr) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return DecodeStatus::Nullptr;
     }
 
     u64 offs = *offset;
 
     if (offs > input.len()) [[unlikely]] {
-        zx_getcpucontext_(err_ctx);
+        Backtrace::collect(err_bt);
         return DecodeStatus::InvalidOffset;
     }
 
@@ -165,7 +165,7 @@ DecodeStatus decode_i64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
     for (u8 iter = 0; iter < 10; iter++) {
         assert_dev(offs <= input.len());
         if (offs == input.len()) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             *num = 0;
             *offset = offs;
             return DecodeStatus::UnexpectedEndOfInput;
@@ -188,7 +188,7 @@ DecodeStatus decode_i64(CPUContext *err_ctx, Slice<u8> input, u64 *offset,
         }
     }
 
-    zx_getcpucontext_(err_ctx);
+    Backtrace::collect(err_bt);
     *num = 0;
     *offset = offs;
     return DecodeStatus::InvalidInput;

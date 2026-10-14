@@ -4,7 +4,7 @@ import :sys;
 import :arith;
 import :perf_event;
 import :assert;
-import :cpu_context;
+import :backtrace;
 
 export namespace zx {
 
@@ -17,18 +17,15 @@ struct TimeInfo {
     // function for cleaning up temporary resources that
     // are allocated in the `init` function.
     static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
-        CPUContext err_ctx;
-        __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
         if (mmap_page != nullptr) {
             sys::MMapStatus const sys_status =
-                sys::munmap(&err_ctx, (u8 *)mmap_page, MMAP_LEN);
+                sys::munmap(nullptr, (u8 *)mmap_page, MMAP_LEN);
             // we silently ignore error on non-dev mode here.
             // this should be ok since this call shouldn't fail.
             assert_dev(sys_status == sys::MMapStatus::Ok);
         }
         if (fd != -1) {
-            sys::CloseStatus const sys_status = sys::close(&err_ctx, fd);
+            sys::CloseStatus const sys_status = sys::close(nullptr, fd);
             // we silently ignore error on non-dev mode here.
             // this should be ok since this call shouldn't fail.
             assert_dev(sys_status == sys::CloseStatus::Ok);
@@ -44,9 +41,9 @@ struct TimeInfo {
         InvalidNum,
     };
 
-    static InitStatus init(CPUContext *err_ctx, TimeInfo *out) {
+    static InitStatus init(Backtrace *err_bt, TimeInfo *out) {
         if (out == nullptr) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             return InitStatus::Nullptr;
         }
 
@@ -63,7 +60,7 @@ struct TimeInfo {
         sys::PerfEventMmapPage *mmap_page = nullptr;
 
         sys::PerfEventOpenStatus const pe_open_status =
-            sys::perf_event_open(err_ctx, &pattr, 0, -1, -1, 0, &fd);
+            sys::perf_event_open(err_bt, &pattr, 0, -1, -1, 0, &fd);
         if (pe_open_status != sys::PerfEventOpenStatus::Ok) [[unlikely]] {
             cleanup_(mmap_page, fd);
             return InitStatus::PerfEventOpenErr;
@@ -71,7 +68,7 @@ struct TimeInfo {
         assert_dev(fd != -1);
 
         sys::MMapStatus const mmap_status =
-            sys::mmap(err_ctx, nullptr, MMAP_LEN, sys::PROT_READ,
+            sys::mmap(err_bt, nullptr, MMAP_LEN, sys::PROT_READ,
                       sys::MAP_SHARED, fd, 0, (u8 **)&mmap_page);
         if (mmap_status != sys::MMapStatus::Ok) [[unlikely]] {
             cleanup_(mmap_page, fd);
@@ -80,7 +77,7 @@ struct TimeInfo {
         assert_dev(mmap_page != nullptr);
 
         if (mmap_page->cap_user_time != 1) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             cleanup_(mmap_page, fd);
             return InitStatus::NotSupported;
         }
@@ -92,7 +89,7 @@ struct TimeInfo {
 
         // This would cause ub when we are converting cycles to nanos later.
         if (info.m_time_shift >= 128 || info.m_time_mult == 0) [[unlikely]] {
-            zx_getcpucontext_(err_ctx);
+            Backtrace::collect(err_bt);
             cleanup_(mmap_page, fd);
             return InitStatus::InvalidNum;
         }

@@ -8,18 +8,15 @@ extern "C" elf::EhFrame ZX_ELF_EH_FRAME_{};
 extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_{};
 
 static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
-    CPUContext err_ctx;
-    __builtin_memset(&err_ctx, 0, sizeof(err_ctx));
-
     i32 fd = -1;
-    assert(sys::OpenStatus::Ok == sys::open(&err_ctx,
+    assert(sys::OpenStatus::Ok == sys::open(nullptr,
                                             (u8 const *)"/proc/self/exe",
                                             sys::O_RDONLY, 0, &fd));
     assert(fd != -1);
 
     sys::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
-    assert(sys::StatXStatus::Ok == sys::statx(&err_ctx, fd, (u8 const *)"",
+    assert(sys::StatXStatus::Ok == sys::statx(nullptr, fd, (u8 const *)"",
                                               sys::AT_EMPTY_PATH,
                                               sys::STATX_SIZE, &statx));
     assert((statx.stx_mask & sys::STATX_SIZE) != 0);
@@ -30,17 +27,20 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     // Need the explicit alignment since we cast pointers into this buffer into
     // struct pointers while parsing the ELF format.
     assert(AllocStatus::Ok ==
-           alloc->aligned_alloc<8, u8>(&err_ctx, file_size, &buf));
+           alloc->aligned_alloc<8, u8>(nullptr, file_size, &buf));
 
     u64 n_read = 0;
     assert(sys::ReadStatus::Ok ==
-           sys::read(&err_ctx, fd, buf.ptr(), buf.len(), &n_read));
+           sys::read(nullptr, fd, buf.ptr(), buf.len(), &n_read));
     assert(n_read == file_size);
 
     return buf.as_const();
 }
 
 static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
+    // TODO: print info about which signal this is and we are in the signal
+    // handler
+
     (void)info;
     (void)signum;
 
