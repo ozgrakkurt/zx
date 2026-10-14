@@ -37,12 +37,30 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     return buf.as_const();
 }
 
-static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
-    // TODO: print info about which signal this is and we are in the signal
-    // handler
+static void print_panic_(char const *message) {
+    assert(message != nullptr);
 
+    u64 const len = __builtin_strlen(message);
+    u64 n_written = 0;
+    assert(sys::WriteStatus::Ok == sys::write(nullptr, sys::STDERR,
+                                              (u8 const *)message, len,
+                                              &n_written));
+    assert(n_written == len);
+}
+
+static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     (void)info;
-    (void)signum;
+
+    if (signum == (i32)sys::SIG::ILL) {
+        print_panic_("Printing stack trace for SIGILL(4) in signal handler.\n");
+    } else if (signum == (i32)sys::SIG::SEGV) {
+        print_panic_(
+            "Printing stack trace for SIGSEGV(11) in signal handler.\n");
+    } else {
+        print_panic_("Printing stack trace for signal with unexpected signum. "
+                     "THIS SHOULD NEVER HAPPEN, check how the signal handler "
+                     "is setup in start.cc\n");
+    }
 
     sys::UContext const *uctx = (sys::UContext const *)ucontext;
 
