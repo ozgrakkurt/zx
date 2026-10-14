@@ -1,8 +1,6 @@
 module zx;
 import :def;
 import :elf_eh_frame;
-import :slice;
-import :list;
 import :assert;
 import :cpu_context;
 
@@ -17,9 +15,6 @@ void Backtrace::collect(Backtrace *bt) {
         return;
     }
 
-    List<u64> data =
-        List<u64>::init(SliceMut<u64>::init_unsafe(bt->m_data, Backtrace::LEN));
-
     CPUContext cpu_ctx;
     __builtin_memset(&cpu_ctx, 0, sizeof(cpu_ctx));
     zx_getcpucontext_(&cpu_ctx);
@@ -28,12 +23,6 @@ void Backtrace::collect(Backtrace *bt) {
         ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, bt);
     // doesn't matter if it truncated
     (void)status;
-
-    assert_dev(data.n_written() <= Backtrace::LEN);
-    for (u64 i = data.n_written(); i < Backtrace::LEN; i++) {
-        // fll zeroes
-        bt->m_data[i] = 0;
-    }
 }
 
 #else // ifdef ZX_DEBUG_INFO
