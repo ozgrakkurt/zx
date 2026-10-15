@@ -216,7 +216,7 @@ void print_stack_trace_panic(Backtrace const *bt) {
         }
         line_infos.reset();
         DebugLine::GetLineInfosStatus const gl_status =
-            ZX_ELF_DEBUG_LINE_.get_line_infos(bt->m_data[i] - 1, &line_infos);
+            ZX_ELF_DEBUG_LINE_.get_line_infos(bt->m_data[i], &line_infos);
 
         if (gl_status == DebugLine::GetLineInfosStatus::NotFound) {
             assert(line_infos.n_written() == 0);

@@ -1048,8 +1048,6 @@ struct EhFrame {
 
         u64 const rip = return_addr - 1;
 
-        ctx->registers[REG_MAP_RETURN_ADDRESS] = rip;
-
         FDE const *fde = nullptr;
         for (u64 i = 0; i < this->m_fd_entries.len(); i++) {
             FDE const *candi = this->m_fd_entries.offset_unsafe(i);
@@ -1164,19 +1162,19 @@ struct EhFrame {
 
         UnwindContext unwind_ctx = UnwindContext::init(cpu_ctx);
 
-        u64 rip = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
+        u64 return_address = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
         u64 bt_offset = 0;
-        while (rip != 0) {
+        while (return_address > 0) {
             if (bt_offset == Backtrace::LEN) {
                 return BacktraceStatus::OutOfCapacity;
             }
-            bt->m_data[bt_offset] = rip;
+            bt->m_data[bt_offset] = sub_unsafe_u64(return_address, 1);
             bt_offset++;
 
             state_stack.reset();
             step_panic(&state_stack, &unwind_ctx);
 
-            rip = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
+            return_address = unwind_ctx.registers[REG_MAP_RETURN_ADDRESS];
         }
 
         // Fill the rest with zeroes so the end of the actual trace is apparent.
