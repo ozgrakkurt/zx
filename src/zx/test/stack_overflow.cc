@@ -10,10 +10,10 @@ static void handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     sys::exit_group(0);
 }
 
-void cause_stack_overflow() {
+extern "C" void zx_test_cause_stack_overflow_() {
+    // do this in ASM so the compiler doesn't break it
     asm volatile("1:\n\t"
-                 "pushq $0\n\t"
-                 "jmp 1b\n\t" ::
+                 "callq zx_test_cause_stack_overflow_\n\t" ::
                      : "memory");
 }
 
@@ -49,7 +49,7 @@ int main() {
     assert(sys::SigActionStatus::Ok ==
            sys::sigaction(nullptr, sys::SIG::SEGV, &act, nullptr));
 
-    cause_stack_overflow();
+    zx_test_cause_stack_overflow_();
 
     return 69;
 }

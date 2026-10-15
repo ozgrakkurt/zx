@@ -914,13 +914,8 @@ struct Instructions {
             }
             // GNU_args_size
             case u8{0x2e}: {
-                // skip this by consuming the argument, we don't need
-                // to record it as it has no effect on the state.
-                u64 arg_size = 0;
-                assert(leb128::DecodeStatus::Ok ==
-                       input_cursor->read_uleb128(nullptr, &arg_size));
-                (void)arg_size;
-
+                // unimplemented, seems unapplicable
+                panic();
                 break;
             }
             // GNU_negative_offset_extended
@@ -1241,9 +1236,9 @@ struct EhFrame {
             i64_to_i32(data_alignment_factor_64, &overflow);
         assert(!overflow);
 
-        u8 return_address_register = 0;
-        assert(Cursor::Status::Ok ==
-               input_cursor->read<u8>(nullptr, &return_address_register));
+        u64 return_address_register = 0;
+        assert(leb128::DecodeStatus::Ok ==
+               input_cursor->read_uleb128(nullptr, &return_address_register));
         assert(RETURN_ADDRESS_REGISTER == return_address_register);
 
         u64 aug_data_len = 0;
