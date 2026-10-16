@@ -32,3 +32,4 @@ export import :elf_eh_frame;
 export import :elf_debug_line;
 export import :hashtable;
 export import :backtrace;
+export import :fuzz;

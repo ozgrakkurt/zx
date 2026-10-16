@@ -7,6 +7,7 @@ import :rapidhash_v3;
 import :xoshiro256;
 import :fuzz;
 import :slice;
+import :backtrace;
 
 namespace zx {
 
@@ -92,7 +93,7 @@ struct FuzzCtx {
     SliceMut<bool> total_coverage;
 };
 
-static FuzzCtx fuzz_ctx_alloc(Backtrace *err_bt, Alloc *alloc) {
+static FuzzCtx fuzz_ctx_init(Backtrace *err_bt, Alloc *alloc) {
     SliceMut<u32> coverage;
     testing::assert_with_trace(
         AllocStatus::Ok ==
@@ -227,81 +228,68 @@ static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
 }
 
 void fuzz(FuzzParams params) {
-    (void)params;
-    // Xoshiro256 rand = Xoshiro256::init(0);
+    Backtrace err_bt = Backtrace::init();
 
-    // FuzzCtx ctx = fuzz_ctx_alloc(alloc);
-    // ctx.signature_dedup.fill(0);
-    // ctx.fuzz_input.fill(0);
-    // ctx.slot_sets.memset(0);
-    // ctx.total_coverage.fill(false);
+    Xoshiro256 rand = Xoshiro256::init(0);
 
-    // u64 mut_idx = 0;
+    FuzzCtx ctx = fuzz_ctx_init(&err_bt, params.alloc);
 
-    // u64 const iter_limit = cfg->iter_limit;
-    // u64 const time_limit_secs = cfg->time_limit_secs;
+    u64 mut_idx = 0;
 
-    // u64 const time_limit_ns =
-    //     mul_unsafe_u64(time_limit_secs, u64{1'000'000'000__wbu});
+    u64 const iter_limit = params.iter_limit;
 
-    // TimeInfo time_info;
-    // fuzz_assert(TimeStatus::Ok == TimeInfo::init(&time_info));
-    // Timer timer = Timer::init(time_info);
+    for (u64 iter_no = 0; iter_no < iter_limit; iter_no++) {
+        assert(mut_idx < ctx.fuzz_input.len());
 
-    // u64 iter_no = 0;
-    // while (iter_no < iter_limit && timer.elapsed() < time_limit_ns) {
-    //     fuzz_assert(mut_idx < ctx.fuzz_input.len());
+        // do a baseline run
+        FuzzResult const baseline_result = fuzz_wrapper(
+            &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one, &iter_no);
+        // select a random position to mutate
+        mut_idx = rand_mod_u64(rand.next(), baseline_result.consumed_count);
 
-    //     // do a baseline run
-    //     FuzzResult const baseline_result = fuzz_wrapper(
-    //         &ctx, U64_MAX, mut_idx, usr_ctx, fuzz_one, &iter_no);
-    //     // select a random position to mutate
-    //     mut_idx = rand_mod_u64(rand.next(),
-    //     baseline_result.consumed_count);
+        // try magic values
+        for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
+            ctx.fuzz_input.write_unsafe(mut_idx, FUZZ_MAGIC[i]);
+            fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
+                         params.fuzz_one, &iter_no);
+        }
 
-    //     // try magic values
-    //     for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
-    //         ctx.fuzz_input.write_unsafe(mut_idx, FUZZ_MAGIC[i]);
-    //         fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
-    //                         fuzz_one, &iter_no);
-    //     }
+        // try previous interesting values for this mut_idx
+        FuzzSlotSet const *slot_set = ctx.slot_sets.offset_unsafe(mut_idx);
+        for (u32 i = 0; i < slot_set->n_filled; i++) {
+            ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
+            fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
+                         params.fuzz_one, &iter_no);
+        }
 
-    //     // try previous interesting values for this mut_idx
-    //     FuzzSlotSet const *slot_set = ctx.slot_sets.offset_unsafe(mut_idx);
-    //     for (u32 i = 0; i < slot_set->n_filled; i++) {
-    //         ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
-    //         fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
-    //                         fuzz_one, &iter_no);
-    //     }
+        // try some random values in this position
+        // move on if we can't improve coverage for some number of
+        // iterations
+        // do more iterations for interesting mut_idx
+        u32 const max_stall = saturating_add_u32(slot_set->n_filled, 8);
+        u32 stall = 0;
+        while (stall < max_stall) {
+            u64 const new_val = rand.next();
+            ctx.fuzz_input.write_unsafe(mut_idx, new_val);
 
-    //     // try some random values in this position
-    //     // move on if we can't improve coverage for some number of
-    //     // iterations
-    //     // do more iterations for interesting mut_idx
-    //     u32 const max_stall = saturating_add_u32(slot_set->n_filled,
-    //     8); u32 stall = 0; while (stall < max_stall) {
-    //         u64 const new_val = rand.next();
-    //         ctx.fuzz_input.write_unsafe(mut_idx, new_val);
+            FuzzResult const result =
+                fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
+                             params.usr_ctx, params.fuzz_one, &iter_no);
+            if (result.improvement) {
+                stall = 0;
+            } else {
+                stall = saturating_add_u32(stall, 1);
+            }
+        }
 
-    //         FuzzResult const result =
-    //             fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
-    //             usr_ctx,
-    //                             fuzz_one, &iter_no);
-    //         if (result.improvement) {
-    //             stall = 0;
-    //         } else {
-    //             stall = saturating_add_u32(stall, 1);
-    //         }
-    //     }
-
-    //     if (slot_set->n_filled > 0) {
-    //         u32 const val_idx =
-    //             rand_mod_u32((u32)rand.next(), slot_set->n_filled);
-    //         ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[val_idx]);
-    //     } else {
-    //         ctx.fuzz_input.write_unsafe(mut_idx, rand.next());
-    //     }
-    // }
+        if (slot_set->n_filled > 0) {
+            u32 const val_idx =
+                rand_mod_u32((u32)rand.next(), slot_set->n_filled);
+            ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[val_idx]);
+        } else {
+            ctx.fuzz_input.write_unsafe(mut_idx, rand.next());
+        }
+    }
 }
 
 } // namespace zx
