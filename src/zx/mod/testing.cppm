@@ -37,6 +37,9 @@ void assert_with_trace(bool cond, Backtrace const *bt) {
 void assert_with_trace(bool cond, Backtrace const *bt) {
     (void)bt;
 
+    print_panic_("Testing error assertion failed. Can't print stack trace "
+                 "because debug info is disabled.");
+
     assert(cond);
 }
 

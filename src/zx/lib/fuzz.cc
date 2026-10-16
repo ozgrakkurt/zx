@@ -1,339 +1,307 @@
-import zx;
+module zx;
+import :def;
+import :arith;
+import :assert;
+import :testing;
+import :rapidhash_v3;
+import :xoshiro256;
+import :fuzz;
+import :slice;
 
-using namespace zx;
+namespace zx {
 
-// constexpr zx_u64 ZX_FUZZ_INPUT_CAP = zx_u64{1} << 14;
-// constexpr zx_u64 ZX_FUZZ_SIGNATURE_DEDUP_CAP = 4096;
-// constexpr zx_u64 ZX_FUZZ_MAGIC[] = {0, ZX_U64_MAX};
-// constexpr zx_u64 ZX_FUZZ_DEFAULT_ITER_LIMIT = zx_u64{1__wbu} << 18;
-// constexpr zx_u64 ZX_FUZZ_DEFAULT_TIME_LIMIT_SECS = 30;
-// constexpr zx_u64 ZX_FUZZ_N_MAGIC =
-//     sizeof(ZX_FUZZ_MAGIC) / sizeof(ZX_FUZZ_MAGIC[0]);
+// config {
+static constexpr u64 FUZZ_INPUT_CAP = u64{1} << 14;
+static constexpr u64 FUZZ_SIGNATURE_DEDUP_CAP = 4096;
+static constexpr u64 FUZZ_MAGIC[] = {0, U64_MAX};
+static constexpr u64 FUZZ_N_MAGIC = sizeof(FUZZ_MAGIC) / sizeof(FUZZ_MAGIC[0]);
+// } config
 
-// constexpr u64 MAGIC = {0, ZX_U64_MAX};
-// constexpr u8 N_MAGIC = sizeof(MAGIC) / sizeof(MAGIC[0]);
+static u32 *FUZZ_SAN_COV_ = nullptr;
+static u64 FUZZ_SAN_COV_LEN_ = 0;
 
-// // CONFIG
-// constexpr zx_u64 ZX_FUZZ_INPUT_CAP = zx_u64{1} << 14;
-// constexpr zx_u64 ZX_FUZZ_SIGNATURE_DEDUP_CAP = 4096;
-// constexpr zx_u64 ZX_FUZZ_MAGIC[] = {0, ZX_U64_MAX};
-// constexpr zx_u64 ZX_FUZZ_DEFAULT_ITER_LIMIT = zx_u64{1__wbu} << 18;
-// constexpr zx_u64 ZX_FUZZ_DEFAULT_TIME_LIMIT_SECS = 30;
-// constexpr zx_u64 ZX_FUZZ_N_MAGIC =
-//     sizeof(ZX_FUZZ_MAGIC) / sizeof(ZX_FUZZ_MAGIC[0]);
-// // CONFIG
+extern "C" void __sanitizer_cov_trace_pc_guard_init(u32_c *start, u32_c *stop) {
+    assert(start != nullptr);
+    assert(stop != nullptr);
 
-// static zx_u32 *ZX_FUZZ_SAN_COV_ = nullptr;
-// static zx_u64 ZX_FUZZ_SAN_COV_LEN_ = 0;
+    static_assert(sizeof(void *) == sizeof(u64));
 
-// extern "C" {
+    u64 const start_addr = (u64)start;
+    u64 const stop_addr = (u64)stop;
 
-// void __sanitizer_cov_trace_pc_guard_init(zx_u32_c *start, zx_u32_c *stop) {
-//     if (start == nullptr) {
-//         zx_panic();
-//     }
-//     if (stop == nullptr) {
-//         zx_panic();
-//     }
+    assert(stop_addr >= start_addr);
 
-//     static_assert(sizeof(void *) == sizeof(zx_u64));
+    u64 const n_bytes = sub_unsafe_u64(stop_addr, start_addr);
 
-//     zx_u64 const start_addr = (zx_u64)start;
-//     zx_u64 const stop_addr = (zx_u64)stop;
+    assert(n_bytes % sizeof(u32) == 0);
+    u64 const n_slots = div_unsafe_u64(n_bytes, sizeof(u32));
 
-//     if (stop_addr < start_addr) {
-//         zx_panic();
-//     }
-//     zx_u64 const n_bytes = zx_sub_unsafe_u64(stop_addr, start_addr);
+    assert(FUZZ_SAN_COV_ == nullptr);
+    assert(FUZZ_SAN_COV_LEN_ == 0);
 
-//     if (n_bytes % sizeof(zx_u32) != 0) {
-//         zx_panic();
-//     }
-//     zx_u64 const n_slots = zx_div_unsafe_u64(n_bytes, sizeof(zx_u32));
+    FUZZ_SAN_COV_ = (u32 *)start;
+    FUZZ_SAN_COV_LEN_ = n_slots;
+}
 
-//     if (ZX_FUZZ_SAN_COV_ != nullptr) {
-//         zx_panic();
-//     }
-//     if (ZX_FUZZ_SAN_COV_LEN_ != 0) {
-//         zx_panic();
-//     }
-//     ZX_FUZZ_SAN_COV_ = (zx_u32 *)start;
-//     ZX_FUZZ_SAN_COV_LEN_ = n_slots;
-// }
+extern "C" __attribute__((no_builtin, no_sanitize("coverage"))) void
+__sanitizer_cov_trace_pc_guard(u32_c *guard_variable) {
+    *guard_variable = (*guard_variable + 1__wbu) | u32{1};
+}
 
-// __attribute__((no_builtin, no_sanitize("coverage"))) void
-// __sanitizer_cov_trace_pc_guard(zx_u32_c *guard_variable) {
-//     *guard_variable = (*guard_variable + 1__wbu) | zx_u32{1};
-// }
+__attribute__((no_builtin, no_sanitize("coverage"))) static void
+fuzz_reset_coverage() {
+    u32 *cov = FUZZ_SAN_COV_;
+    u64 len = FUZZ_SAN_COV_LEN_;
+    for (u64 i = 0; i < len; i++) {
+        cov[i] = 0;
+    }
+}
 
-// } // extern "C"
+__attribute__((no_builtin, no_sanitize("coverage"))) static void
+fuzz_load_coverage(u32 *dst, u64 dst_len) {
+    u32 const *src = FUZZ_SAN_COV_;
+    u64 src_len = FUZZ_SAN_COV_LEN_;
+    assert(src_len == dst_len);
+    for (u64 i = 0; i < dst_len; i++) {
+        dst[i] = src[i];
+    }
+}
 
-// __attribute__((no_builtin, no_sanitize("coverage"))) static void
-// zx_fuzz_reset_coverage() {
-//     zx_u32 *cov = ZX_FUZZ_SAN_COV_;
-//     zx_u64 len = ZX_FUZZ_SAN_COV_LEN_;
-//     for (zx_u64 i = 0; i < len; i++) {
-//         cov[i] = 0;
-//     }
-// }
+constexpr u32 FUZZ_SLOT_SET_CAP_ = 512;
+struct FuzzSlotSet {
+    u64 values[FUZZ_SLOT_SET_CAP_];
+    u32 push_pos;
+    u32 n_filled;
+};
 
-// __attribute__((no_builtin, no_sanitize("coverage"))) static void
-// zx_fuzz_load_coverage(zx_u32 *dst, zx_u64 dst_len) {
-//     zx_u32 const *src = ZX_FUZZ_SAN_COV_;
-//     zx_u64 src_len = ZX_FUZZ_SAN_COV_LEN_;
-//     if (src_len != dst_len) {
-//         zx_panic();
-//     }
-//     for (zx_u64 i = 0; i < dst_len; i++) {
-//         dst[i] = src[i];
-//     }
-// }
+static void fuzz_slot_set_push(FuzzSlotSet *set, u64 value) {
+    assert(set != nullptr);
+    constexpr u64 val_cap = sizeof(set->values) / sizeof(set->values[0]);
+    static_assert(val_cap > 0);
+    u32 const idx = mod_unsafe_u32(set->push_pos, val_cap);
+    set->values[idx] = value;
+    set->push_pos = wrapping_add_u32(set->push_pos, 1);
+    set->n_filled = min_u32(wrapping_add_u32(set->n_filled, 1), val_cap);
+}
 
-// static void zx_fuzz_assert(bool cond) {
-//     if (!cond) [[unlikely]] {
-//         zx_panic();
-//     }
-// }
+struct FuzzCtx {
+    SliceMut<FuzzSlotSet> slot_sets;
+    SliceMut<u32> signature_dedup;
+    SliceMut<u64> fuzz_input;
+    SliceMut<u32> coverage;
+    SliceMut<bool> total_coverage;
+};
 
-// constexpr zx_u32 ZX_FUZZ_SLOT_SET_CAP = 512;
-// struct ZXFuzzSlotSet {
-//     zx_u64 values[ZX_FUZZ_SLOT_SET_CAP];
-//     zx_u32 push_pos;
-//     zx_u32 n_filled;
-// };
+static FuzzCtx fuzz_ctx_alloc(Backtrace *err_bt, Alloc *alloc) {
+    SliceMut<u32> coverage;
+    testing::assert_with_trace(
+        AllocStatus::Ok ==
+            alloc->alloc<u32>(err_bt, FUZZ_SAN_COV_LEN_, &coverage),
+        err_bt);
+    coverage.memset(0);
 
-// static void zx_fuzz_slot_set_push(ZXFuzzSlotSet *set, zx_u64 value) {
-//     zx_fuzz_assert(set != nullptr);
-//     constexpr zx_u64 val_cap = sizeof(set->values) / sizeof(set->values[0]);
-//     static_assert(val_cap > 0);
-//     zx_u32 const idx = zx_mod_unsafe_u32(set->push_pos, val_cap);
-//     set->values[idx] = value;
-//     set->push_pos = zx_wrapping_add_u32(set->push_pos, 1);
-//     set->n_filled = zx_min_u32(zx_wrapping_add_u32(set->n_filled, 1),
-//     val_cap);
-// }
+    SliceMut<u64> fuzz_input;
+    testing::assert_with_trace(
+        AllocStatus::Ok ==
+            alloc->alloc<u64>(err_bt, FUZZ_INPUT_CAP, &fuzz_input),
+        err_bt);
+    fuzz_input.memset(0);
 
-// struct ZXFuzzCtx {
-//     ZXSliceMut<ZXFuzzSlotSet> slot_sets;
-//     ZXSliceMut<zx_u32> signature_dedup;
-//     ZXSliceMut<zx_u64> fuzz_input;
-//     ZXSliceMut<zx_u32> coverage;
-//     ZXSliceMut<bool> total_coverage;
-// };
+    SliceMut<u32> signature_dedup;
+    testing::assert_with_trace(
+        AllocStatus::Ok == alloc->alloc<u32>(err_bt, FUZZ_SIGNATURE_DEDUP_CAP,
+                                             &signature_dedup),
+        err_bt);
+    signature_dedup.memset(0);
 
-// static ZXFuzzCtx zx_fuzz_ctx_alloc(ZXAlloc *alloc) {
-//     ZXSliceMut<zx_u32> coverage;
-//     ZXAllocStatus alloc_status =
-//         alloc->alloc<zx_u32>(ZX_FUZZ_SAN_COV_LEN_, &coverage);
-//     zx_fuzz_assert(alloc_status == ZXAllocStatus::Ok);
-//     coverage.memset(0);
+    SliceMut<FuzzSlotSet> slot_sets;
+    testing::assert_with_trace(
+        AllocStatus::Ok ==
+            alloc->alloc<FuzzSlotSet>(err_bt, FUZZ_INPUT_CAP, &slot_sets),
+        err_bt);
+    slot_sets.memset(0);
 
-//     ZXSliceMut<zx_u64> fuzz_input;
-//     alloc_status = alloc->alloc<zx_u64>(ZX_FUZZ_INPUT_CAP, &fuzz_input);
-//     zx_fuzz_assert(alloc_status == ZXAllocStatus::Ok);
-//     fuzz_input.memset(0);
+    SliceMut<bool> total_coverage;
+    testing::assert_with_trace(
+        AllocStatus::Ok ==
+            alloc->alloc<bool>(err_bt, FUZZ_SAN_COV_LEN_, &total_coverage),
+        err_bt);
+    total_coverage.memset(0);
 
-//     ZXSliceMut<zx_u32> signature_dedup;
-//     alloc_status =
-//         alloc->alloc<zx_u32>(ZX_FUZZ_SIGNATURE_DEDUP_CAP, &signature_dedup);
-//     zx_fuzz_assert(alloc_status == ZXAllocStatus::Ok);
-//     signature_dedup.memset(0);
+    return FuzzCtx{
+        .slot_sets = slot_sets,
+        .signature_dedup = signature_dedup,
+        .fuzz_input = fuzz_input,
+        .coverage = coverage,
+        .total_coverage = total_coverage,
+    };
+}
 
-//     ZXSliceMut<ZXFuzzSlotSet> slot_sets;
-//     alloc_status = alloc->alloc<ZXFuzzSlotSet>(ZX_FUZZ_INPUT_CAP,
-//     &slot_sets); zx_fuzz_assert(alloc_status == ZXAllocStatus::Ok);
-//     slot_sets.memset(0);
+static u32 fuzz_calculate_signature(Slice<u32> coverage) {
+    return (u32)rapidhash_v3::hash(coverage.cast_unsafe<u8>(), 0);
+}
 
-//     ZXSliceMut<bool> total_coverage;
-//     alloc_status = alloc->alloc<bool>(ZX_FUZZ_SAN_COV_LEN_, &total_coverage);
-//     zx_fuzz_assert(alloc_status == ZXAllocStatus::Ok);
-//     total_coverage.memset(0);
+static u64 fuzz_calculate_score(Slice<u32> coverage) {
+    u64 score = 0;
 
-//     return ZXFuzzCtx{
-//         .slot_sets = slot_sets,
-//         .signature_dedup = signature_dedup,
-//         .fuzz_input = fuzz_input,
-//         .coverage = coverage,
-//         .total_coverage = total_coverage,
-//     };
-// }
+    for (u64 i = 0; i < coverage.len(); i++) {
+        if (coverage.read_unsafe(i) > 0) {
+            score = saturating_add_u64(score, 1);
+        }
+    }
 
-// static zx_u32 zx_fuzz_calculate_signature(ZXSlice<zx_u32> coverage) {
-//     return (zx_u32)zx_rapidhash_v3(coverage.cast_unsafe<zx_u8>(), 0);
-// }
+    return score;
+}
 
-// static zx_u64 zx_fuzz_calculate_score(ZXSlice<zx_u32> coverage) {
-//     zx_u64 score = 0;
+static bool fuzz_update_total_coverage(SliceMut<bool> total_coverage,
+                                       Slice<u32> coverage) {
+    assert(total_coverage.len() == coverage.len());
 
-//     for (zx_u64 i = 0; i < coverage.len(); i++) {
-//         if (coverage.read_unsafe(i) > 0) {
-//             score = zx_saturating_add_u64(score, 1);
-//         }
-//     }
+    bool new_coverage = false;
+    for (u64 i = 0; i < total_coverage.len(); i++) {
+        if (coverage.read_unsafe(i) > 0) {
+            total_coverage.write_unsafe(i, true);
+            new_coverage = true;
+        }
+    }
 
-//     return score;
-// }
+    return new_coverage;
+}
 
-// static bool zx_fuzz_update_total_coverage(ZXSliceMut<bool> total_coverage,
-//                                           ZXSlice<zx_u32> coverage) {
-//     if (total_coverage.len() != coverage.len()) {
-//         zx_panic();
-//     }
+struct FuzzResult {
+    u64 score;
+    u64 consumed_count;
+    bool improvement;
+};
 
-//     bool new_coverage = false;
-//     for (zx_u64 i = 0; i < total_coverage.len(); i++) {
-//         if (coverage.read_unsafe(i) > 0) {
-//             total_coverage.write_unsafe(i, true);
-//             new_coverage = true;
-//         }
-//     }
+static bool fuzz_push_signature(SliceMut<u32> signature_dedup, u32 signature) {
+    if (signature_dedup.len() == 0) {
+        panic();
+    }
 
-//     return new_coverage;
-// }
+    u64 const idx = rand_mod_u64(signature, signature_dedup.len());
+    u32 const old_sig = signature_dedup.read_unsafe(idx);
+    bool const is_new = old_sig != signature;
+    signature_dedup.write_unsafe(idx, signature);
+    return is_new;
+}
 
-// struct ZXFuzzResult {
-//     zx_u64 score;
-//     zx_u64 consumed_count;
-//     bool improvement;
-// };
+static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
+                               void *usr_ctx, fuzz_one_fn fuzz_one,
+                               u64 *iter_no) {
+    FuzzInput fuzz_input = FuzzInput::init_(ctx->fuzz_input.as_const());
+    u32 *coverage = ctx->coverage.ptr();
+    u64 coverage_len = ctx->coverage.len();
+    // don't break these up
+    fuzz_reset_coverage();
+    fuzz_one(usr_ctx, &fuzz_input);
+    fuzz_load_coverage(coverage, coverage_len);
+    // don't break these up
 
-// static bool zx_fuzz_push_signature(ZXSliceMut<zx_u32> signature_dedup,
-//                                    zx_u32 signature) {
-//     if (signature_dedup.len() == 0) {
-//         zx_panic();
-//     }
+    u64 const consumed_count = fuzz_input.consumed_count_();
 
-//     zx_u64 const idx = zx_rand_mod_u64(signature, signature_dedup.len());
-//     zx_u32 const old_sig = signature_dedup.read_unsafe(idx);
-//     bool const is_new = old_sig != signature;
-//     signature_dedup.write_unsafe(idx, signature);
-//     return is_new;
-// }
+    Slice<u32> const cov = ctx->coverage.as_const();
+    bool const new_coverage =
+        fuzz_update_total_coverage(ctx->total_coverage, cov);
+    u32 const signature = fuzz_calculate_signature(cov);
+    u64 const score = fuzz_calculate_score(cov);
+    bool const sig_is_new =
+        fuzz_push_signature(ctx->signature_dedup, signature);
 
-// static ZXFuzzResult zx_fuzz_wrapper(ZXFuzzCtx *ctx, zx_u64 base_score,
-//                                     zx_u64 mut_idx, void *usr_ctx,
-//                                     zx_fuzz_one_fn fuzz_one, zx_u64 *iter_no)
-//                                     {
-//     ZXFuzzInput fuzz_input = ZXFuzzInput::init_(ctx->fuzz_input.as_const());
-//     zx_u32 *coverage = ctx->coverage.ptr();
-//     zx_u64 coverage_len = ctx->coverage.len();
-//     // don't break these up
-//     zx_fuzz_reset_coverage();
-//     fuzz_one(usr_ctx, &fuzz_input);
-//     zx_fuzz_load_coverage(coverage, coverage_len);
-//     // don't break these up
+    bool const score_improvement = score > base_score;
+    bool const improvement = sig_is_new && (new_coverage || score_improvement);
 
-//     zx_u64 const consumed_count = fuzz_input.consumed_count_();
+    if (improvement) {
+        fuzz_slot_set_push(ctx->slot_sets.offset_mut_unsafe(mut_idx),
+                           ctx->fuzz_input.read_unsafe(mut_idx));
+    }
 
-//     ZXSlice<zx_u32> const cov = ctx->coverage.as_const();
-//     bool const new_coverage =
-//         zx_fuzz_update_total_coverage(ctx->total_coverage, cov);
-//     zx_u32 const signature = zx_fuzz_calculate_signature(cov);
-//     zx_u64 const score = zx_fuzz_calculate_score(cov);
-//     bool const sig_is_new =
-//         zx_fuzz_push_signature(ctx->signature_dedup, signature);
+    assert(iter_no != nullptr);
+    *iter_no = add_unsafe_u64(*iter_no, 1);
 
-//     bool const score_improvement = score > base_score;
-//     bool const improvement = sig_is_new && (new_coverage ||
-//     score_improvement);
+    return FuzzResult{
+        .score = score,
+        .improvement = improvement,
+        .consumed_count = consumed_count,
+    };
+}
 
-//     if (improvement) {
-//         zx_fuzz_slot_set_push(ctx->slot_sets.offset_unsafe(mut_idx),
-//                               ctx->fuzz_input.read_unsafe(mut_idx));
-//     }
+void fuzz(FuzzParams params) {
+    (void)params;
+    // Xoshiro256 rand = Xoshiro256::init(0);
 
-//     zx_fuzz_assert(iter_no != nullptr);
-//     *iter_no = zx_add_unsafe_u64(*iter_no, 1);
+    // FuzzCtx ctx = fuzz_ctx_alloc(alloc);
+    // ctx.signature_dedup.fill(0);
+    // ctx.fuzz_input.fill(0);
+    // ctx.slot_sets.memset(0);
+    // ctx.total_coverage.fill(false);
 
-//     return ZXFuzzResult{
-//         .score = score,
-//         .improvement = improvement,
-//         .consumed_count = consumed_count,
-//     };
-// }
+    // u64 mut_idx = 0;
 
-// void zx_fuzz_with_cfg(ZXAlloc *alloc, void *usr_ctx, zx_fuzz_one_fn fuzz_one,
-//                       ZXFuzzConfig const *cfg) {
-//     ZXXoshiro256 rand = ZXXoshiro256::init(0);
+    // u64 const iter_limit = cfg->iter_limit;
+    // u64 const time_limit_secs = cfg->time_limit_secs;
 
-//     ZXFuzzCtx ctx = zx_fuzz_ctx_alloc(alloc);
-//     ctx.signature_dedup.fill(0);
-//     ctx.fuzz_input.fill(0);
-//     ctx.slot_sets.memset(0);
-//     ctx.total_coverage.fill(false);
+    // u64 const time_limit_ns =
+    //     mul_unsafe_u64(time_limit_secs, u64{1'000'000'000__wbu});
 
-//     zx_u64 mut_idx = 0;
+    // TimeInfo time_info;
+    // fuzz_assert(TimeStatus::Ok == TimeInfo::init(&time_info));
+    // Timer timer = Timer::init(time_info);
 
-//     zx_u64 const iter_limit = cfg->iter_limit;
-//     zx_u64 const time_limit_secs = cfg->time_limit_secs;
+    // u64 iter_no = 0;
+    // while (iter_no < iter_limit && timer.elapsed() < time_limit_ns) {
+    //     fuzz_assert(mut_idx < ctx.fuzz_input.len());
 
-//     zx_u64 const time_limit_ns =
-//         zx_mul_unsafe_u64(time_limit_secs, zx_u64{1'000'000'000__wbu});
+    //     // do a baseline run
+    //     FuzzResult const baseline_result = fuzz_wrapper(
+    //         &ctx, U64_MAX, mut_idx, usr_ctx, fuzz_one, &iter_no);
+    //     // select a random position to mutate
+    //     mut_idx = rand_mod_u64(rand.next(),
+    //     baseline_result.consumed_count);
 
-//     ZXTimeInfo time_info;
-//     zx_fuzz_assert(ZXTimeStatus::Ok == ZXTimeInfo::init(&time_info));
-//     ZXTimer timer = ZXTimer::init(time_info);
+    //     // try magic values
+    //     for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
+    //         ctx.fuzz_input.write_unsafe(mut_idx, FUZZ_MAGIC[i]);
+    //         fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
+    //                         fuzz_one, &iter_no);
+    //     }
 
-//     zx_u64 iter_no = 0;
-//     while (iter_no < iter_limit && timer.elapsed() < time_limit_ns) {
-//         zx_fuzz_assert(mut_idx < ctx.fuzz_input.len());
+    //     // try previous interesting values for this mut_idx
+    //     FuzzSlotSet const *slot_set = ctx.slot_sets.offset_unsafe(mut_idx);
+    //     for (u32 i = 0; i < slot_set->n_filled; i++) {
+    //         ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
+    //         fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
+    //                         fuzz_one, &iter_no);
+    //     }
 
-//         // do a baseline run
-//         ZXFuzzResult const baseline_result = zx_fuzz_wrapper(
-//             &ctx, ZX_U64_MAX, mut_idx, usr_ctx, fuzz_one, &iter_no);
-//         // select a random position to mutate
-//         mut_idx = zx_rand_mod_u64(rand.next(),
-//         baseline_result.consumed_count);
+    //     // try some random values in this position
+    //     // move on if we can't improve coverage for some number of
+    //     // iterations
+    //     // do more iterations for interesting mut_idx
+    //     u32 const max_stall = saturating_add_u32(slot_set->n_filled,
+    //     8); u32 stall = 0; while (stall < max_stall) {
+    //         u64 const new_val = rand.next();
+    //         ctx.fuzz_input.write_unsafe(mut_idx, new_val);
 
-//         // try magic values
-//         for (zx_u64 i = 0; i < ZX_FUZZ_N_MAGIC; i++) {
-//             ctx.fuzz_input.write_unsafe(mut_idx, ZX_FUZZ_MAGIC[i]);
-//             zx_fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
-//                             fuzz_one, &iter_no);
-//         }
+    //         FuzzResult const result =
+    //             fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
+    //             usr_ctx,
+    //                             fuzz_one, &iter_no);
+    //         if (result.improvement) {
+    //             stall = 0;
+    //         } else {
+    //             stall = saturating_add_u32(stall, 1);
+    //         }
+    //     }
 
-//         // try previous interesting values for this mut_idx
-//         ZXFuzzSlotSet const *slot_set = ctx.slot_sets.offset_unsafe(mut_idx);
-//         for (zx_u32 i = 0; i < slot_set->n_filled; i++) {
-//             ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
-//             zx_fuzz_wrapper(&ctx, baseline_result.score, mut_idx, usr_ctx,
-//                             fuzz_one, &iter_no);
-//         }
+    //     if (slot_set->n_filled > 0) {
+    //         u32 const val_idx =
+    //             rand_mod_u32((u32)rand.next(), slot_set->n_filled);
+    //         ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[val_idx]);
+    //     } else {
+    //         ctx.fuzz_input.write_unsafe(mut_idx, rand.next());
+    //     }
+    // }
+}
 
-//         // try some random values in this position
-//         // move on if we can't improve coverage for some number of
-//         // iterations
-//         // do more iterations for interesting mut_idx
-//         zx_u32 const max_stall = zx_saturating_add_u32(slot_set->n_filled,
-//         8); zx_u32 stall = 0; while (stall < max_stall) {
-//             zx_u64 const new_val = rand.next();
-//             ctx.fuzz_input.write_unsafe(mut_idx, new_val);
-
-//             ZXFuzzResult const result =
-//                 zx_fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
-//                 usr_ctx,
-//                                 fuzz_one, &iter_no);
-//             if (result.improvement) {
-//                 stall = 0;
-//             } else {
-//                 stall = zx_saturating_add_u32(stall, 1);
-//             }
-//         }
-
-//         if (slot_set->n_filled > 0) {
-//             zx_u32 const val_idx =
-//                 zx_rand_mod_u32((zx_u32)rand.next(), slot_set->n_filled);
-//             ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[val_idx]);
-//         } else {
-//             ctx.fuzz_input.write_unsafe(mut_idx, rand.next());
-//         }
-//     }
-// }
-
-// void zx_fuzz(ZXAlloc *alloc, void *usr_ctx, zx_fuzz_one_fn fuzz_one) {
-//     ZXFuzzConfig const config = ZXFuzzConfig{
-//         .time_limit_secs = ZX_FUZZ_DEFAULT_TIME_LIMIT_SECS,
-//         .iter_limit = ZX_FUZZ_DEFAULT_ITER_LIMIT,
-//     };
-//     zx_fuzz_with_cfg(alloc, usr_ctx, fuzz_one, &config);
-// }
+} // namespace zx
