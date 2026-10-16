@@ -314,16 +314,78 @@ static void test_cast_static() {
     }
 }
 
-static void test_aligned_init_dangling() {
+static void test_aligned_init_dangling(Backtrace *err_bt) {
+    // UNSAFE
+
+    // immut
     {
-        Slice<u8> slice = Slice<u8>::template aligned_init_dangling<128>();
+        Slice<u8> slice = Slice<u8>::aligned_init_dangling_unsafe(128);
+        assert(slice.ptr() != nullptr);
         assert((u64)slice.ptr() % 128 == 0);
         assert(slice.len() == 0);
     }
 
-    SliceMut<u8> slice = SliceMut<u8>::template aligned_init_dangling<128>();
-    assert((u64)slice.ptr() % 128 == 0);
-    assert(slice.len() == 0);
+    // mut
+    {
+        SliceMut<u8> slice = SliceMut<u8>::aligned_init_dangling_unsafe(128);
+        assert(slice.ptr() != nullptr);
+        assert((u64)slice.ptr() % 128 == 0);
+        assert(slice.len() == 0);
+    }
+
+    // REGULAR
+
+    // immut
+    {
+        // valid
+        Slice<u8> slice;
+        testing::assert_with_trace(
+            SliceAlignedInitStatus::Ok ==
+                Slice<u8>::aligned_init_dangling(err_bt, 128, &slice),
+            err_bt);
+        assert(slice.ptr() != nullptr);
+        assert((u64)slice.ptr() % 128 == 0);
+        assert(slice.len() == 0);
+
+        // too big alignment
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               Slice<u8>::aligned_init_dangling(nullptr, 256, &slice));
+
+        // too small alignment
+        Slice<u32> slice32;
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               Slice<u32>::aligned_init_dangling(nullptr, 2, &slice32));
+
+        // non power of two alignment
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               Slice<u8>::aligned_init_dangling(nullptr, 69, &slice));
+    }
+
+    // mut
+    {
+        // valid
+        SliceMut<u8> slice;
+        testing::assert_with_trace(
+            SliceAlignedInitStatus::Ok ==
+                SliceMut<u8>::aligned_init_dangling(err_bt, 128, &slice),
+            err_bt);
+        assert(slice.ptr() != nullptr);
+        assert((u64)slice.ptr() % 128 == 0);
+        assert(slice.len() == 0);
+
+        // too big alignment
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               SliceMut<u8>::aligned_init_dangling(nullptr, 256, &slice));
+
+        // too small alignment
+        SliceMut<u32> slice32;
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               SliceMut<u32>::aligned_init_dangling(nullptr, 2, &slice32));
+
+        // non power of two alignment
+        assert(SliceAlignedInitStatus::InvalidAlign ==
+               SliceMut<u8>::aligned_init_dangling(nullptr, 69, &slice));
+    }
 }
 
 static void test_is_overlapping() {
@@ -511,7 +573,7 @@ int main(void) {
     test_from_ptr(&err_bt);
     test_from_ptr_unsafe();
     test_is_overlapping();
-    test_aligned_init_dangling();
+    test_aligned_init_dangling(&err_bt);
     test_cast_static();
     test_slicing(&err_bt);
     test_read_access(&err_bt);

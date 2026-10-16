@@ -27,7 +27,7 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     // Need the explicit alignment since we cast pointers into this buffer into
     // struct pointers while parsing the ELF format.
     assert(AllocStatus::Ok ==
-           alloc->aligned_alloc<8, u8>(nullptr, file_size, &buf));
+           alloc->aligned_alloc<u8>(nullptr, 8, file_size, &buf));
 
     u64 n_read = 0;
     assert(sys::ReadStatus::Ok ==
@@ -130,8 +130,8 @@ extern "C" void zx_setup_() {
     tmp_alloc.reset();
 
     SliceMut<u8> signal_stack_mem;
-    assert(AllocStatus::Ok == alloc.aligned_alloc<16, u8>(nullptr, u64{1} << 20,
-                                                          &signal_stack_mem));
+    assert(AllocStatus::Ok == alloc.aligned_alloc<u8>(nullptr, 16, u64{1} << 20,
+                                                      &signal_stack_mem));
 
     sys::Stack const signal_stack = sys::Stack{
         .ss_sp = signal_stack_mem.ptr(),

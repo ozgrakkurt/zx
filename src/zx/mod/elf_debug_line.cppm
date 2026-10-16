@@ -938,8 +938,7 @@ struct DebugLine {
 
         // Keep going forwards while row PC is same.
         // We do this to collect all source locations that correspond
-        // to this PC. Might be multiple because of function inlining or other
-        // reasons.
+        // to this PC.
         while (row_idx >= rows_begin) {
             Row const row = this->rows.read_unsafe(row_idx);
 

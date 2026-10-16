@@ -28,8 +28,8 @@ int main() {
     Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, MEM_SIZE));
 
     SliceMut<u8> signal_stack_mem;
-    assert(AllocStatus::Ok == alloc.aligned_alloc<16, u8>(nullptr, u64{1} << 20,
-                                                          &signal_stack_mem));
+    assert(AllocStatus::Ok == alloc.aligned_alloc<u8>(nullptr, 16, u64{1} << 20,
+                                                      &signal_stack_mem));
 
     sys::Stack const signal_stack = sys::Stack{
         .ss_sp = signal_stack_mem.ptr(),

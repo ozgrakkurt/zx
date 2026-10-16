@@ -12,6 +12,7 @@ enum class [[nodiscard]] AllocStatus : u8_c {
     IntegerOverflow,
     OutOfMemory,
     Nullptr,
+    InvalidAlign,
 };
 
 struct Alloc {
@@ -69,11 +70,23 @@ struct Alloc {
 
     u64 offset() const { return this->m_offset; }
 
-    template <u16 ALIGN, typename T>
-    AllocStatus aligned_alloc(Backtrace *err_bt, u64 len, SliceMut<T> *out) {
-        static_assert(ALIGN >= alignof(T));
-        static_assert(ALIGN <= 128);
-        static_assert(is_pow_two_u16(ALIGN));
+    template <typename T>
+    AllocStatus aligned_alloc(Backtrace *err_bt, u16 align, u64 len,
+                              SliceMut<T> *out) {
+        if (!is_pow_two_u16(align)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::InvalidAlign;
+        }
+
+        if (align > 128) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::InvalidAlign;
+        }
+
+        if (align < alignof(T)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::InvalidAlign;
+        }
 
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
@@ -81,7 +94,7 @@ struct Alloc {
         }
 
         if (len == 0) {
-            *out = SliceMut<T>::template aligned_init_dangling<ALIGN>();
+            *out = SliceMut<T>::aligned_init_dangling_unsafe(align);
             return AllocStatus::Ok;
         }
 
@@ -91,7 +104,7 @@ struct Alloc {
         bool overflow = false;
 
         u64 const mem_pos = add_u64((u64)mem.ptr(), offset, &overflow);
-        u64 const mem_aligned = align_up_u64(mem_pos, ALIGN, &overflow);
+        u64 const mem_aligned = align_up_u64(mem_pos, align, &overflow);
         u64 const padding = sub_u64(mem_aligned, mem_pos, &overflow);
 
         u64 const size = mul_u64(len, sizeof(T), &overflow);
@@ -125,7 +138,7 @@ struct Alloc {
 
     template <typename T>
     AllocStatus alloc(Backtrace *err_bt, u64 len, SliceMut<T> *out) {
-        return this->aligned_alloc<alignof(T), T>(err_bt, len, out);
+        return this->aligned_alloc<T>(err_bt, alignof(T), len, out);
     }
 
     template <typename T> AllocStatus create(Backtrace *err_bt, T **out) {

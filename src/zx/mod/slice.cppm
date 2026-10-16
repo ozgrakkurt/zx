@@ -39,6 +39,12 @@ enum class [[nodiscard]] SliceMemcpyStatus : u8_c {
     Overlapping,
 };
 
+enum class [[nodiscard]] SliceAlignedInitStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    InvalidAlign,
+};
+
 template <typename T> struct Slice {
     u64 m_len;
     T const *m_ptr;
@@ -134,13 +140,42 @@ template <typename T> struct Slice {
         };
     }
 
-    template <u16 ALIGN> static Slice aligned_init_dangling() {
-        static_assert(is_pow_two_u16(ALIGN));
-        static_assert(ALIGN >= alignof(T));
-        static_assert(ALIGN > 0);
+    static SliceAlignedInitStatus aligned_init_dangling(Backtrace *err_bt,
+                                                        u16 align, Slice *out) {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::Nullptr;
+        }
+
+        if (!is_pow_two_u16(align)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        if (align > 128) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        if (align < alignof(T)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        *out = Slice{
+            .m_ptr = (T const *)u64{align},
+            .m_len = 0,
+        };
+        return SliceAlignedInitStatus::Ok;
+    }
+
+    static Slice aligned_init_dangling_unsafe(u16 align) {
+        assert_dev(is_pow_two_u16(align));
+        assert_dev(align <= 128);
+        assert_dev(align >= alignof(T));
 
         return Slice{
-            .m_ptr = (T const *)u64{ALIGN},
+            .m_ptr = (T const *)u64{align},
             .m_len = 0,
         };
     }
@@ -538,13 +573,42 @@ template <typename T> struct SliceMut {
         };
     }
 
-    template <u16 ALIGN> static SliceMut aligned_init_dangling() {
-        static_assert(is_pow_two_u16(ALIGN));
-        static_assert(ALIGN >= alignof(T));
-        static_assert(ALIGN > 0);
+    static SliceAlignedInitStatus
+    aligned_init_dangling(Backtrace *err_bt, u16 align, SliceMut *out) {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::Nullptr;
+        }
+
+        if (!is_pow_two_u16(align)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        if (align > 128) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        if (align < alignof(T)) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceAlignedInitStatus::InvalidAlign;
+        }
+
+        *out = SliceMut{
+            .m_ptr = (T *)u64{align},
+            .m_len = 0,
+        };
+        return SliceAlignedInitStatus::Ok;
+    }
+
+    static SliceMut aligned_init_dangling_unsafe(u16 align) {
+        assert_dev(is_pow_two_u16(align));
+        assert_dev(align <= 128);
+        assert_dev(align >= alignof(T));
 
         return SliceMut{
-            .m_ptr = (T *)u64{ALIGN},
+            .m_ptr = (T *)u64{align},
             .m_len = 0,
         };
     }
