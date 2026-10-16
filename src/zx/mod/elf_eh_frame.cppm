@@ -1168,7 +1168,7 @@ struct EhFrame {
             if (bt_offset == Backtrace::LEN) {
                 return BacktraceStatus::OutOfCapacity;
             }
-            bt->m_data[bt_offset] = sub_unsafe_u64(return_address, 1);
+            bt->program_counters[bt_offset] = sub_unsafe_u64(return_address, 1);
             bt_offset++;
 
             state_stack.reset();
@@ -1179,7 +1179,7 @@ struct EhFrame {
 
         // Fill the rest with zeroes so the end of the actual trace is apparent.
         for (u64 i = bt_offset; i < Backtrace::LEN; i++) {
-            bt->m_data[i] = 0;
+            bt->program_counters[i] = 0;
         }
 
         return BacktraceStatus::Ok;

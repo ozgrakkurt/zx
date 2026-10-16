@@ -211,12 +211,14 @@ void print_stack_trace_panic(Backtrace const *bt) {
         SliceMut<DebugLine::LineInfo>::init_unsafe(line_info_mem, N_LINE_INFO));
 
     for (u64 i = 0; i < Backtrace::LEN; i++) {
-        if (bt->m_data[i] == 0) {
+        u64 const pc = bt->program_counters[i];
+
+        if (pc == 0) {
             break;
         }
         line_infos.reset();
         DebugLine::GetLineInfosStatus const gl_status =
-            ZX_ELF_DEBUG_LINE_.get_line_infos(bt->m_data[i], &line_infos);
+            ZX_ELF_DEBUG_LINE_.get_line_infos(pc, &line_infos);
 
         if (gl_status == DebugLine::GetLineInfosStatus::NotFound) {
             assert(line_infos.n_written() == 0);
