@@ -95,7 +95,28 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     // the correspoding error code.
 }
 
-i32_c main(i32_c argc, i8_c **argv, i8_c **envp) {}
+struct ZXStartSetupResult_ {
+    elf::EhFrame eh_frame;
+    elf::DebugLine debug_line;
+};
+
+static ZXStartSetupResult_ setup_() {
+
+    return ZXStartSetupResult_{
+        .eh_frame = eh_frame,
+        .debug_line = debug_line,
+    };
+}
+
+i32_c main(i32_c argc, i8_c **argv, i8_c **envp) {
+    // TODO: setup cli_args and env
+
+    zx::entry(cli_args, env);
+
+    return 0;
+}
+
+#endif // ifdef ZX_DEBUG_INFO
 
 extern "C" void zx_setup_() {
     constexpr u64 MEM_SIZE = u64{1} << 25;
@@ -155,12 +176,6 @@ extern "C" void zx_setup_() {
     assert(sys::SigActionStatus::Ok ==
            sys::sigaction(nullptr, sys::SIG::SEGV, &act, nullptr));
 }
-
-#else // ifdef ZX_DEBUG_INFO
-
-extern "C" void zx_setup_() {}
-
-#endif
 
 __asm__(
     ".text\n"

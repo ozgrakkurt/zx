@@ -190,7 +190,10 @@ struct File {
 
 #ifdef ZX_DEBUG_INFO
 
-void print_stack_trace_panic(DebugLine const *debug_line, Backtrace const *bt) {
+// this is implemented in start.cc
+extern "C" DebugLine ZX_ELF_DEBUG_LINE_;
+
+void print_stack_trace_panic(Backtrace const *bt) {
     assert(bt != nullptr);
 
     constexpr u64 FMT_SIZE = u64{1} << 14;
@@ -215,12 +218,26 @@ void print_stack_trace_panic(DebugLine const *debug_line, Backtrace const *bt) {
         }
         line_infos.reset();
         DebugLine::GetLineInfosStatus const gl_status =
-            debug_line_->get_line_infos(pc, &line_infos);
+            ZX_ELF_DEBUG_LINE_.get_line_infos(pc, &line_infos);
 
-        if (gl_status == DebugLine::GetLineInfosStatus::NotFound) {
+        switch (gl_status) {
+        case DebugLine::GetLineInfosStatus::Ok: {
+            break;
+        }
+        case DebugLine::GetLineInfosStatus::OutOfCapacity: {
+            // don't matter if it truncated, it will be obvious from seeing the
+            // trace as it won't contain `main`.
+            break;
+        }
+        case DebugLine::GetLineInfosStatus::NotFound: {
             assert(line_infos.n_written() == 0);
             fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
                          &fmt_overflow);
+            break;
+        }
+        default: {
+            panic();
+        }
         }
 
         for (u64 j = 0; j < line_infos.n_written(); j++) {
@@ -236,11 +253,6 @@ void print_stack_trace_panic(DebugLine const *debug_line, Backtrace const *bt) {
             fmt.push_char(':', &fmt_overflow);
             fmt.push_u64(line_info.column_no, &fmt_overflow);
             fmt.push_char('\n', &fmt_overflow);
-        }
-
-        if (gl_status == DebugLine::GetLineInfosStatus::OutOfCapacity) {
-            fmt.push_str(CString::init_unsafe("<TRUNCATED>\n").as_slice(),
-                         &fmt_overflow);
         }
     }
 
