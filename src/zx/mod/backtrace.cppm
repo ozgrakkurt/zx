@@ -7,12 +7,8 @@ struct Backtrace {
     static constexpr u8 LEN = 32;
 
     u64 program_counters[LEN];
-
-    static Backtrace init() {
-        Backtrace out;
-        __builtin_memset(&out, 0, sizeof(out));
-        return out;
-    }
+    void *eh_frame_;
+    void *debug_line_;
 
     static void collect(Backtrace *bt);
 };

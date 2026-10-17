@@ -95,6 +95,8 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     // the correspoding error code.
 }
 
+i32_c main(i32_c argc, i8_c **argv, i8_c **envp) {}
+
 extern "C" void zx_setup_() {
     constexpr u64 MEM_SIZE = u64{1} << 25;
     u8 *mem = nullptr;
@@ -160,25 +162,35 @@ extern "C" void zx_setup_() {}
 
 #endif
 
-__asm__(".text\n"
-        ".type _start, @function\n"
-        ".global _start\n"
-        "_start:\n\t"
-        ".cfi_startproc\n\t"
-        // stop eh_frame based unwinder from going past this function frame
-        // since there is nothing above.
-        ".cfi_undefined %rip\n\t"
-        "xorq %rbp, %rbp\n\t"
-        "popq %rdi\n\t"
-        "movq %rsp, %rsi\n\t"
-        "andq $-16, %rsp\n\t"
-        "pushq %rdi\n\t"
-        "pushq %rsi\n\t"
-        "callq zx_setup_\n\t"
-        "popq %rsi\n\t"
-        "popq %rdi\n\t"
-        "callq main\n\t"
-        "movq %rax, %rdi\n\t"
-        "movq $60, %rax\n\t"
-        "syscall\n\t"
-        ".cfi_endproc\n\t");
+__asm__(
+    ".text\n"
+    ".type _start, @function\n"
+    ".global _start\n"
+    "_start:\n\t"
+    ".cfi_startproc\n\t"
+    // stop eh_frame based unwinder from going past this function frame
+    // since there is nothing above.
+    ".cfi_undefined %rip\n\t"
+    // mark the first frame by setting rbp to 0
+    "xorq %rbp, %rbp\n\t"
+    // argc
+    "movq (%rsp), %rdi\n\t"
+    // argv
+    "leaq 8(%rsp), %rsi\n\t"
+    // envp
+    "leaq 16(%rsp, %rdi, 8), %rdx\n\t"
+    // align the stack
+    "andq $-16, %rsp\n\t"
+    // call main function to actually execute the program
+    "callq main\n\t"
+    // mov return code of main to syscall argument
+    "movq %rax, %rdi\n\t"
+    // syscall code for exit_group is 231
+    "movq $231, %rax\n\t"
+    // call exit_group with the single argument set to the return code of main
+    "syscall\n\t"
+    // should never be reached but ..
+    "ud2\n\t"
+    ".size _start, .-_start\n\t"
+    // mark function boundary for eh_frame debug info
+    ".cfi_endproc\n\t");

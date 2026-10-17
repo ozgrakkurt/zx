@@ -190,10 +190,7 @@ struct File {
 
 #ifdef ZX_DEBUG_INFO
 
-extern "C" elf::EhFrame ZX_ELF_EH_FRAME_;
-extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_;
-
-void print_stack_trace_panic(Backtrace const *bt) {
+void print_stack_trace_panic(DebugLine const *debug_line, Backtrace const *bt) {
     assert(bt != nullptr);
 
     constexpr u64 FMT_SIZE = u64{1} << 14;
@@ -218,7 +215,7 @@ void print_stack_trace_panic(Backtrace const *bt) {
         }
         line_infos.reset();
         DebugLine::GetLineInfosStatus const gl_status =
-            ZX_ELF_DEBUG_LINE_.get_line_infos(pc, &line_infos);
+            debug_line_->get_line_infos(pc, &line_infos);
 
         if (gl_status == DebugLine::GetLineInfosStatus::NotFound) {
             assert(line_infos.n_written() == 0);
@@ -230,6 +227,9 @@ void print_stack_trace_panic(Backtrace const *bt) {
             DebugLine::LineInfo const line_info =
                 line_infos.written().read_unsafe(j);
             fmt.push_char('-', &fmt_overflow);
+            if (line_infos.n_written() > 1) {
+                fmt.push_char('-', &fmt_overflow);
+            }
             fmt.push_str(line_info.file_path.as_slice(), &fmt_overflow);
             fmt.push_char(':', &fmt_overflow);
             fmt.push_u64(line_info.line_no, &fmt_overflow);
@@ -239,7 +239,7 @@ void print_stack_trace_panic(Backtrace const *bt) {
         }
 
         if (gl_status == DebugLine::GetLineInfosStatus::OutOfCapacity) {
-            fmt.push_str(CString::init_unsafe("-<TRUNCATED>\n").as_slice(),
+            fmt.push_str(CString::init_unsafe("<TRUNCATED>\n").as_slice(),
                          &fmt_overflow);
         }
     }
