@@ -9,8 +9,6 @@ export namespace zx {
 
 namespace testing {
 
-#ifdef ZX_DEBUG_INFO
-
 void print_panic_(char const *message) {
     assert(message != nullptr);
 
@@ -21,6 +19,8 @@ void print_panic_(char const *message) {
                                               &n_written));
     assert(n_written == len);
 }
+
+#ifdef ZX_DEBUG_INFO
 
 void assert_with_trace(bool cond, Backtrace const *bt) {
     if (!cond) [[unlikely]] {

@@ -4,6 +4,14 @@ using namespace zx;
 
 #ifdef ZX_DEBUG_INFO
 
+// The curlies are to indicate that these are actual definitions are the
+// variables and not just declarations.
+//
+// We don't run global constructors since we don't use constructors at all in
+// this codebase.
+//
+// These values are expected to be just 0 initialized at the point of program
+// entry into _start.
 extern "C" elf::EhFrame ZX_ELF_EH_FRAME_{};
 extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_{};
 
@@ -95,39 +103,15 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     // the correspoding error code.
 }
 
-struct ZXStartSetupResult_ {
-    elf::EhFrame eh_frame;
-    elf::DebugLine debug_line;
-};
-
-static ZXStartSetupResult_ setup_() {
-
-    return ZXStartSetupResult_{
-        .eh_frame = eh_frame,
-        .debug_line = debug_line,
-    };
-}
-
-i32_c main(i32_c argc, i8_c **argv, i8_c **envp) {
-    // TODO: setup cli_args and env
-
-    zx::entry(cli_args, env);
-
-    return 0;
-}
-
-#endif // ifdef ZX_DEBUG_INFO
-
-extern "C" void zx_setup_() {
+extern "C" void zx_setup_debug_info_() {
     constexpr u64 MEM_SIZE = u64{1} << 25;
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
            page_alloc::alloc_4kb(nullptr, MEM_SIZE, &mem));
     assert(mem != nullptr);
 
-    constexpr u64 ALLOC_SIZE = u64{1} << 22;
-    static_assert(MEM_SIZE > ALLOC_SIZE);
-    constexpr u64 TMP_ALLOC_SIZE = MEM_SIZE - ALLOC_SIZE;
+    constexpr u64 ALLOC_SIZE = MEM_SIZE / 2;
+    constexpr u64 TMP_ALLOC_SIZE = MEM_SIZE / 2;
 
     Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, ALLOC_SIZE));
     Alloc tmp_alloc = Alloc::init(
@@ -177,6 +161,12 @@ extern "C" void zx_setup_() {
            sys::sigaction(nullptr, sys::SIG::SEGV, &act, nullptr));
 }
 
+#else // ifdef ZX_DEBUG_INFO
+
+extern "C" void zx_setup_debug_info_() {}
+
+#endif // ifdef ZX_DEBUG_INFO
+
 __asm__(
     ".text\n"
     ".type _start, @function\n"
@@ -189,13 +179,19 @@ __asm__(
     // mark the first frame by setting rbp to 0
     "xorq %rbp, %rbp\n\t"
     // argc
-    "movq (%rsp), %rdi\n\t"
+    "movq (%rsp), %r15\n\t"
     // argv
-    "leaq 8(%rsp), %rsi\n\t"
+    "leaq 8(%rsp), %r14\n\t"
     // envp
-    "leaq 16(%rsp, %rdi, 8), %rdx\n\t"
+    "leaq 16(%rsp, %rdi, 8), %r13\n\t"
     // align the stack
     "andq $-16, %rsp\n\t"
+    // call debug info setup function
+    "callq zx_setup_debug_info_\n\t"
+    // restore saved argc, argv and envp
+    "movq %r15, %rdi\n\t"
+    "movq %r14, %rsi\n\t"
+    "movq %r13, %rdx\n\t"
     // call main function to actually execute the program
     "callq main\n\t"
     // mov return code of main to syscall argument

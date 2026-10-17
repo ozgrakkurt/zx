@@ -8,6 +8,12 @@ struct Backtrace {
 
     u64 program_counters[LEN];
 
+    static Backtrace init() {
+        Backtrace bt;
+        __builtin_memset(&bt, 0, sizeof(Backtrace));
+        return bt;
+    }
+
     static void collect(Backtrace *bt);
 };
 
