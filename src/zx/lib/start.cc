@@ -183,9 +183,7 @@ __asm__(
     // argv
     "leaq 8(%rsp), %r14\n\t"
     // envp
-    "leaq 16(%rsp, %rdi, 8), %r13\n\t"
-    // align the stack
-    "andq $-16, %rsp\n\t"
+    "leaq 16(%rsp, %r15, 8), %r13\n\t"
     // call debug info setup function
     "callq zx_setup_debug_info_\n\t"
     // restore saved argc, argv and envp
@@ -195,13 +193,13 @@ __asm__(
     // call main function to actually execute the program
     "callq main\n\t"
     // mov return code of main to syscall argument
-    "movq %rax, %rdi\n\t"
+    "movl %eax, %edi\n\t"
     // syscall code for exit_group is 231
     "movq $231, %rax\n\t"
     // call exit_group with the single argument set to the return code of main
     "syscall\n\t"
     // should never be reached but ..
     "ud2\n\t"
-    ".size _start, .-_start\n\t"
     // mark function boundary for eh_frame debug info
-    ".cfi_endproc\n\t");
+    ".cfi_endproc\n\t"
+    ".size _start, .-_start\n\t");
