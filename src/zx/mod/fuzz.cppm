@@ -18,14 +18,14 @@ struct FuzzInput {
         };
     }
 
-    inline u64 next() {
+    u64 next() {
         u64 const offset = this->m_consumed_count;
         this->m_consumed_count = add_unsafe_u64(offset, 1);
         assert(this->m_input.len() > offset);
         return this->m_input.read_unsafe(offset);
     }
 
-    inline u64 consumed_count_() const { return this->m_consumed_count; }
+    u64 consumed_count_() const { return this->m_consumed_count; }
 };
 
 typedef void (*fuzz_one_fn)(void *usr_ctx, FuzzInput *fuzz_input);
