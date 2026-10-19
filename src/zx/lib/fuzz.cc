@@ -247,7 +247,7 @@ void fuzz(FuzzParams params) {
     u64 const iter_limit = 10;
 #endif
 
-    for (u64 iter_no = 0; iter_no < iter_limit; iter_no++) {
+    for (u64 iter_no = 0; iter_no < iter_limit;) {
         assert(mut_idx < ctx.fuzz_input.len());
 
         // do a baseline run

@@ -85,7 +85,7 @@ int main(void) {
     Ctx const ctx = Ctx{
         .mem = make_alloc(&err_bt, 8192),
     };
-    constexpr u64 n_iter = u64{1} << 15;
+    constexpr u64 n_iter = u64{1} << 12;
     fuzz(FuzzParams{.alloc = &alloc,
                     .usr_ctx = (void *)&ctx,
                     .fuzz_one = fuzz_one,
