@@ -19,9 +19,11 @@ struct RefMap {
     SliceMut<KeyVal> m_entries;
     u32 m_offset;
 
-    static RefMap init(Backtrace* err_bt, Alloc *alloc, u32 capacity) {
+    static RefMap init(Backtrace *err_bt, Alloc *alloc, u32 capacity) {
         SliceMut<KeyVal> entries;
-        testing::assert_with_trace(AllocStatus::Ok == alloc->alloc<KeyVal>(err_bt, capacity, &entries), err_bt);
+        testing::assert_with_trace(
+            AllocStatus::Ok == alloc->alloc<KeyVal>(err_bt, capacity, &entries),
+            err_bt);
         return RefMap{
             .m_entries = entries,
             .m_offset = 0,
@@ -103,23 +105,26 @@ using HTable = Hashtable<KeyVal, void const *, keys_eql>;
 
 static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
     assert(usr_ctx != nullptr);
-    Ctx ctx = *(Ctx*)usr_ctx;
+    Ctx ctx = *(Ctx *)usr_ctx;
 
     Alloc *alloc = ctx.alloc;
     alloc->reset();
 
-    Backtrace* err_bt = ctx.err_bt;
+    Backtrace *err_bt = ctx.err_bt;
 
     constexpr u32 max_capacity = 128;
-    u32 const capacity = u64_to_u32_unsafe(
-        mod_unsafe_u64(fuzz_input->next(), max_capacity));
+    u32 const capacity =
+        u64_to_u32_unsafe(mod_unsafe_u64(fuzz_input->next(), max_capacity));
 
     constexpr u32 max_n_ops = max_capacity * 4;
     u32 const n_ops =
         u64_to_u32_unsafe(mod_unsafe_u64(fuzz_input->next(), max_n_ops));
 
     HTable table;
-    testing::assert_with_trace(HashtableInitStatus::Ok == HTable::init(err_bt, alloc, capacity, &table), err_bt);
+    testing::assert_with_trace(
+        HashtableInitStatus::Ok ==
+            HTable::init(err_bt, alloc, capacity, &table),
+        err_bt);
 
     RefMap map = RefMap::init(err_bt, alloc, capacity);
 
@@ -130,8 +135,7 @@ static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
         assert(table.capacity() == map.capacity());
         assert(table.n_occupied() == map.len());
 
-        u8 const op =
-            u64_to_u8_unsafe(mod_unsafe_u64(fuzz_input->next(), 4));
+        u8 const op = u64_to_u8_unsafe(mod_unsafe_u64(fuzz_input->next(), 4));
         u64 const seed = fuzz_input->next();
         Xoshiro256 key_rand = Xoshiro256::init(seed);
         switch (op) {
@@ -271,8 +275,11 @@ int main(void) {
     Backtrace err_bt = Backtrace::init();
 
     constexpr u64 MEM_CAP = u64{1} << 28;
-    u8* mem = nullptr;
-    testing::assert_with_trace(page_alloc::AllocStatus::Ok == page_alloc::alloc_4kb(&err_bt, MEM_CAP, &mem), &err_bt);
+    u8 *mem = nullptr;
+    testing::assert_with_trace(
+        page_alloc::AllocStatus::Ok ==
+            page_alloc::alloc_4kb(&err_bt, MEM_CAP, &mem),
+        &err_bt);
 
     Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, MEM_CAP));
 
@@ -280,13 +287,17 @@ int main(void) {
     static_assert(FUZZ_MEM_CAP < MEM_CAP);
 
     SliceMut<u8> fuzz_mem;
-    testing::assert_with_trace(AllocStatus::Ok == alloc.alloc<u8>(&err_bt, FUZZ_MEM_CAP, &fuzz_mem), &err_bt);
+    testing::assert_with_trace(
+        AllocStatus::Ok == alloc.alloc<u8>(&err_bt, FUZZ_MEM_CAP, &fuzz_mem),
+        &err_bt);
 
     Alloc fuzz_alloc = Alloc::init(fuzz_mem);
 
     u64 const op_mem_cap = sub_unsafe_u64(MEM_CAP, FUZZ_MEM_CAP);
     SliceMut<u8> op_mem;
-    testing::assert_with_trace(AllocStatus::Ok == alloc.alloc<u8>(&err_bt, op_mem_cap, &op_mem), &err_bt);
+    testing::assert_with_trace(
+        AllocStatus::Ok == alloc.alloc<u8>(&err_bt, op_mem_cap, &op_mem),
+        &err_bt);
 
     Alloc op_alloc = Alloc::init(op_mem);
     Ctx ctx = Ctx{
