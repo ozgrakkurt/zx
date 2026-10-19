@@ -236,7 +236,16 @@ void fuzz(FuzzParams params) {
 
     u64 mut_idx = 0;
 
+#ifdef ZX_FUZZ
+    // do the real number of iterations if fuzzing is explicitly
+    // enabled.
     u64 const iter_limit = params.iter_limit;
+#else
+    // just do some iterations starting from random input if
+    // fuzzing isn't explicitly enabled.
+    rand.fill(ctx.fuzz_input.cast_static<u8>());
+    u64 const iter_limit = 10;
+#endif
 
     for (u64 iter_no = 0; iter_no < iter_limit; iter_no++) {
         assert(mut_idx < ctx.fuzz_input.len());
