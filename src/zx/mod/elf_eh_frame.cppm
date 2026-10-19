@@ -1280,9 +1280,12 @@ struct EhFrame {
         u64 const pc_begin = decode_pcrel_panic_(
             section_addr, pc_begin_field_offset, pc_begin_encoded);
 
-        u32 pc_range = 0;
+        i32 pc_range_i32 = 0;
         assert(Cursor::Status::Ok ==
-               input_cursor->read<u32>(nullptr, &pc_range));
+               input_cursor->read<i32>(nullptr, &pc_range_i32));
+        bool overflow = false;
+        u32 const pc_range = i32_to_u32(pc_range_i32, &overflow);
+        assert(!overflow);
 
         u64 aug_data_len = 0;
         assert(leb128::DecodeStatus::Ok ==
