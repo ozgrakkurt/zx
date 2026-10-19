@@ -63,7 +63,7 @@ template <typename T> struct Slab {
         }
 
         for (u32 i = 0; i < capacity; i++) {
-            Entry_ *ptr = entries.offset_unsafe(i);
+            Entry_ *ptr = entries.offset_mut_unsafe(i);
 #ifdef ZX_DEV
             __builtin_memset(&ptr->val_, 0xaa, sizeof(T));
 #endif
@@ -148,7 +148,7 @@ template <typename T> struct Slab {
             return SlabAccessStatus::OutOfBounds;
         }
 
-        Entry_ *entry = this->m_entries.offset_unsafe(key_idx);
+        Entry_ *entry = this->m_entries.offset_mut_unsafe(key_idx);
         if (!entry->is_occupied_) {
             Backtrace::collect(err_bt);
             return SlabAccessStatus::NotFound;
@@ -179,7 +179,7 @@ template <typename T> struct Slab {
             return SlabAccessStatus::OutOfBounds;
         }
 
-        Entry_ *entry = this->m_entries.offset_unsafe(key_idx);
+        Entry_ *entry = this->m_entries.offset_mut_unsafe(key_idx);
         if (!entry->is_occupied_) {
             Backtrace::collect(err_bt);
             *out = nullptr;
