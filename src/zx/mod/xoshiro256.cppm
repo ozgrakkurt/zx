@@ -100,6 +100,13 @@ struct Xoshiro256 {
             os.memcpy_from_unsafe(ws);
         }
     }
+
+    template <typename T>
+    T random() {
+        T out;
+        this->fill(SliceMut<u8>::init_from_ptr_unsafe(&out));
+        return out;
+    }
 };
 
 } // namespace zx
