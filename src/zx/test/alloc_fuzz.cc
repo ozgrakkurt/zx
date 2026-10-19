@@ -50,19 +50,22 @@ static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
     }
 }
 
-static SliceMut<u8> make_alloc(u64 capacity) {
+static SliceMut<u8> make_alloc(Backtrace *err_bt, u64 capacity) {
     assert(is_pow_two_u64(capacity));
     assert(capacity >= 4096);
 
-    SliceMut<u8> alloc;
-    PageAllocStatus alloc_status =
-        page_alloc_4kb(mul_unsafe_u64(capacity, 2), &alloc);
-    assert(alloc_status == PageAllocStatus::Ok);
-    SysStatus sys_status =
-        sys_mprotect(alloc.slice_at_unsafe(capacity), SYS_PROT_NONE);
-    assert(sys_status == SysStatus::Ok);
+    u64 const mem_size = mul_unsafe_u64(capacity, 2);
+    u8 *mem = nullptr;
+    page_alloc::AllocStatus const alloc_status =
+        page_alloc::alloc_4kb(err_bt, mem_size, &mem);
+    testing::assert_with_trace(alloc_status == page_alloc::AllocStatus::Ok,
+                               err_bt);
 
-    SliceMut<u8> ret = alloc.slice_unsafe(0, capacity);
+    sys::MProtectStatus sys_status =
+        sys::mprotect(err_bt, &mem[capacity], capacity, sys::PROT_NONE);
+    testing::assert_with_trace(sys_status == sys::MProtectStatus::Ok, err_bt);
+
+    SliceMut<u8> ret = SliceMut<u8>::init_unsafe(mem, capacity);
     ret.memset(0);
 
     return ret;
@@ -72,16 +75,20 @@ int main(void) {
     Backtrace err_bt = Backtrace::init();
 
     constexpr u64 fuzz_mem_cap = u64{1} << 27;
-    SliceMut<u8> fuzz_mem;
+    u8 *fuzz_mem = nullptr;
     testing::assert_with_trace(
         page_alloc::AllocStatus::Ok ==
-            page_alloc_4kb(&err_bt, fuzz_mem_cap, &fuzz_mem),
+            page_alloc::alloc_4kb(&err_bt, fuzz_mem_cap, &fuzz_mem),
         &err_bt);
-    Alloc alloc = Alloc::init(fuzz_mem);
+    Alloc alloc =
+        Alloc::init(SliceMut<u8>::init_unsafe(fuzz_mem, fuzz_mem_cap));
     Ctx const ctx = Ctx{
-        .mem = make_alloc(8192),
+        .mem = make_alloc(&err_bt, 8192),
     };
     constexpr u64 n_iter = u64{1} << 15;
-    fuzz(&alloc, (void *)&ctx, fuzz_one, n_iter);
+    fuzz(FuzzParams{.alloc = &alloc,
+                    .usr_ctx = (void *)&ctx,
+                    .fuzz_one = fuzz_one,
+                    .iter_limit = n_iter});
     return 0;
 }
