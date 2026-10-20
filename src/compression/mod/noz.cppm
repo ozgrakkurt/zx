@@ -11,8 +11,10 @@ enum class [[nodiscard]] CompressBoundStatus : zx::u8_c {
     IntegerOverflow,
 };
 
-CompressBoundStatus compress_bound(zx::u64 input_size, zx::u64 *bound) {
-    if (bound == nullptr) {
+CompressBoundStatus compress_bound(zx::Backtrace *err_bt, zx::u64 input_size,
+                                   zx::u64 *bound) {
+    if (bound == nullptr) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return CompressBoundStatus::Nullptr;
     }
 
@@ -27,7 +29,8 @@ CompressBoundStatus compress_bound(zx::u64 input_size, zx::u64 *bound) {
 
     *bound = zx::add_u64(header_size, data_size, &overflow);
 
-    if (overflow) {
+    if (overflow) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return CompressBoundStatus::IntegerOverflow;
     }
 
@@ -42,22 +45,26 @@ enum class [[nodiscard]] CompressStatus : zx::u8_c {
     OutputTooShort,
 };
 
-CompressStatus compress(zx::Slice<zx::u8> input, zx::SliceMut<zx::u8> output,
-                        zx::u64 *n_written) {
-    if (n_written == nullptr) {
+CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
+                        zx::SliceMut<zx::u8> output, zx::u64 *n_written) {
+    if (n_written == nullptr) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return CompressStatus::Nullptr;
     }
 
-    if (input.is_overlapping(output.as_const())) {
+    if (input.is_overlapping(output.as_const())) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return CompressStatus::InputOutputOverlap;
     }
 
     zx::u64 bound = zx::U64_MAX;
-    if (CompressBoundStatus::Ok != compress_bound(input.len(), &bound)) {
+    if (CompressBoundStatus::Ok != compress_bound(err_bt, input.len(), &bound))
+        [[unlikely]] {
         return CompressStatus::BoundFail;
     }
 
-    if (output.len() < bound) {
+    if (output.len() < bound) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return CompressStatus::OutputTooShort;
     }
 
@@ -128,15 +135,15 @@ enum class [[nodiscard]] DecompressStatus : zx::u8_c {
     InputTooShort,
 };
 
-DecompressStatus decompress(zx::Slice<zx::u8> input,
+DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
                             zx::SliceMut<zx::u8> output, zx::u64 *n_read) {
-    if (n_read == nullptr) {
-        *n_read = 0;
+    if (n_read == nullptr) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return DecompressStatus::Nullptr;
     }
 
-    if (input.is_overlapping(output.as_const())) {
-        *n_read = 0;
+    if (input.is_overlapping(output.as_const())) [[unlikely]] {
+        zx::Backtrace::collect(err_bt);
         return DecompressStatus::InputOutputOverlap;
     }
 
@@ -151,8 +158,8 @@ DecompressStatus decompress(zx::Slice<zx::u8> input,
          out_offset = zx::add_unsafe_u64(out_offset, 64)) {
         zx::u64 const control_end =
             zx::add_unsafe_u64(in_offset, sizeof(zx::u64));
-        if (control_end > input.len()) {
-            *n_read = 0;
+        if (control_end > input.len()) [[unlikely]] {
+            zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
@@ -161,8 +168,8 @@ DecompressStatus decompress(zx::Slice<zx::u8> input,
 
         zx::u64 const step_end =
             zx::add_unsafe_u64(control_end, zx::popcount_u64(control));
-        if (step_end > input.len()) {
-            *n_read = 0;
+        if (step_end > input.len()) [[unlikely]] {
+            zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
@@ -181,8 +188,8 @@ DecompressStatus decompress(zx::Slice<zx::u8> input,
     if (remainder > 0) {
         zx::u64 const control_end =
             zx::add_unsafe_u64(in_offset, sizeof(zx::u64));
-        if (control_end > input.len()) {
-            *n_read = 0;
+        if (control_end > input.len()) [[unlikely]] {
+            zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
@@ -191,8 +198,8 @@ DecompressStatus decompress(zx::Slice<zx::u8> input,
 
         zx::u64 const step_end =
             zx::add_unsafe_u64(control_end, zx::popcount_u64(control));
-        if (step_end > input.len()) {
-            *n_read = 0;
+        if (step_end > input.len()) [[unlikely]] {
+            zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
