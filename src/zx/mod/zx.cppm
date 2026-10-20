@@ -34,3 +34,4 @@ export import :hashtable;
 export import :backtrace;
 export import :fuzz;
 export import :slab;
+export import :queue;
