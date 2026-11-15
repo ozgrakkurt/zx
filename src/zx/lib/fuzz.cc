@@ -1,13 +1,4 @@
 module zx;
-import :def;
-import :arith;
-import :assert;
-import :testing;
-import :rapidhash_v3;
-import :xoshiro256;
-import :fuzz;
-import :slice;
-import :backtrace;
 
 namespace zx {
 

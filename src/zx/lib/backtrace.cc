@@ -1,11 +1,4 @@
 module zx;
-import :def;
-import :elf_eh_frame;
-import :assert;
-import :cpu_context;
-import :assert;
-import :sys;
-import :panic;
 
 namespace zx {
 
