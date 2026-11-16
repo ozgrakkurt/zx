@@ -244,6 +244,9 @@ void fuzz(FuzzParams params) {
         if (timer.elapsed() >= FUZZ_TIME_LIMIT_NANOS) {
             break;
         }
+#else
+        (void)timer;
+        (void)FUZZ_TIME_LIMIT_NANOS;
 #endif
         assert(mut_idx < ctx.fuzz_input.len());
 
