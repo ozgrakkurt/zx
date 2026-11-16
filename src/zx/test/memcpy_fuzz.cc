@@ -87,10 +87,10 @@ int main(void) {
     Ctx const ctx = Ctx{
         .mem = make_guarded_alloc(&err_bt, 4096),
     };
-    constexpr u64 n_iter = u64{1} << 12;
-    fuzz(FuzzParams{.alloc = &alloc,
-                    .usr_ctx = (void *)&ctx,
-                    .fuzz_one = fuzz_one,
-                    .iter_limit = n_iter});
+    fuzz(FuzzParams{
+        .alloc = &alloc,
+        .usr_ctx = (void *)&ctx,
+        .fuzz_one = fuzz_one,
+    });
     return 0;
 }

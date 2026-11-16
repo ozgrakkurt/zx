@@ -133,7 +133,6 @@ int main(void) {
         .alloc = &alloc,
         .usr_ctx = (void *)&ctx,
         .fuzz_one = fuzz_one,
-        .iter_limit = zx::u64{1} << 12,
     });
 
     return 0;

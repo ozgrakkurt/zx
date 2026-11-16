@@ -40,7 +40,6 @@ struct FuzzParams {
     Alloc *alloc;
     void *usr_ctx;
     fuzz_one_fn fuzz_one;
-    u64 iter_limit;
 };
 
 void fuzz(FuzzParams params);

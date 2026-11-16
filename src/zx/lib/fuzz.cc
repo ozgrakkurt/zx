@@ -7,6 +7,8 @@ static constexpr u64 FUZZ_INPUT_CAP = u64{1} << 12;
 static constexpr u64 FUZZ_SIGNATURE_DEDUP_CAP = 4096;
 static constexpr u64 FUZZ_MAGIC[] = {0, U64_MAX};
 static constexpr u64 FUZZ_N_MAGIC = sizeof(FUZZ_MAGIC) / sizeof(FUZZ_MAGIC[0]);
+static constexpr u64 FUZZ_TIME_LIMIT_NANOS =
+    u64{20} * 1000__wbu * 1000__wbu * 1000__wbu;
 // } config
 
 static u32 *FUZZ_SAN_COV_ = nullptr;
@@ -179,8 +181,7 @@ static bool fuzz_push_signature(SliceMut<u32> signature_dedup, u32 signature) {
 }
 
 static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
-                               void *usr_ctx, fuzz_one_fn fuzz_one,
-                               u64 *iter_no) {
+                               void *usr_ctx, fuzz_one_fn fuzz_one) {
     FuzzInput fuzz_input = FuzzInput::init_(ctx->fuzz_input.as_const());
     u32 *coverage = ctx->coverage.ptr();
     u64 coverage_len = ctx->coverage.len();
@@ -208,9 +209,6 @@ static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
                            ctx->fuzz_input.read_unsafe(mut_idx));
     }
 
-    assert(iter_no != nullptr);
-    *iter_no = add_unsafe_u64(*iter_no, 1);
-
     return FuzzResult{
         .score = score,
         .improvement = improvement,
@@ -219,6 +217,13 @@ static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
 }
 
 void fuzz(FuzzParams params) {
+#ifndef ZX_FUZZ
+    // don't do anything if fuzzing isn't enabled.
+    // we still want to compile the code so it doesn't rot while fuzz
+    // tests aren't explicitly run.
+    return;
+#endif
+
     Backtrace err_bt = Backtrace::init();
 
     Xoshiro256 rand = Xoshiro256::init(0);
@@ -227,23 +232,24 @@ void fuzz(FuzzParams params) {
 
     u64 mut_idx = 0;
 
-#ifdef ZX_FUZZ
-    // do the real number of iterations if fuzzing is explicitly
-    // enabled.
-    u64 const iter_limit = params.iter_limit;
-#else
-    // just do some iterations starting from random input if
-    // fuzzing isn't explicitly enabled.
-    rand.fill(ctx.fuzz_input.cast_static<u8>());
-    u64 const iter_limit = 10;
-#endif
+    TimeInfo time_info;
+    testing::assert_with_trace(TimeInfo::InitStatus::Ok ==
+                                   TimeInfo::init(&err_bt, &time_info),
+                               &err_bt);
 
-    for (u64 iter_no = 0; iter_no < iter_limit;) {
+    Timer timer = Timer::init(time_info);
+
+    while (true) {
+#ifndef ZX_FUZZ_UNLIMITED
+        if (timer.elapsed() >= FUZZ_TIME_LIMIT_NANOS) {
+            break;
+        }
+#endif
         assert(mut_idx < ctx.fuzz_input.len());
 
         // do a baseline run
         FuzzResult const baseline_result = fuzz_wrapper(
-            &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one, &iter_no);
+            &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one);
         // select a random position to mutate
         mut_idx = rand_mod_u64(rand.next(), baseline_result.consumed_count);
 
@@ -251,7 +257,7 @@ void fuzz(FuzzParams params) {
         for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
             ctx.fuzz_input.write_unsafe(mut_idx, FUZZ_MAGIC[i]);
             fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
-                         params.fuzz_one, &iter_no);
+                         params.fuzz_one);
         }
 
         // try previous interesting values for this mut_idx
@@ -259,7 +265,7 @@ void fuzz(FuzzParams params) {
         for (u32 i = 0; i < slot_set->n_filled; i++) {
             ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
             fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
-                         params.fuzz_one, &iter_no);
+                         params.fuzz_one);
         }
 
         // try some random values in this position
@@ -274,7 +280,7 @@ void fuzz(FuzzParams params) {
 
             FuzzResult const result =
                 fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
-                             params.usr_ctx, params.fuzz_one, &iter_no);
+                             params.usr_ctx, params.fuzz_one);
             if (result.improvement) {
                 stall = 0;
             } else {

@@ -294,10 +294,8 @@ int main(void) {
         .alloc = &alloc,
         .err_bt = &err_bt,
     };
-    constexpr u64 n_iter = u64{1} << 12;
-    fuzz(FuzzParams{.alloc = &fuzz_alloc,
-                    .usr_ctx = (void *)&ctx,
-                    .fuzz_one = fuzz_one,
-                    .iter_limit = n_iter});
+    fuzz(FuzzParams{
+        .alloc = &fuzz_alloc, .usr_ctx = (void *)&ctx, .fuzz_one = fuzz_one});
+
     return 0;
 }
