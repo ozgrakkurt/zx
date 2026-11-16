@@ -35,7 +35,7 @@ AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
 
     i32 const prot = sys::PROT_READ | sys::PROT_WRITE;
     i32 const flags = sys::MAP_PRIVATE | sys::MAP_ANONYMOUS |
-                      sys::MAP_POPULATE | huge_page_flags;
+                      sys::MAP_POPULATE | sys::MAP_LOCKED | huge_page_flags;
 
     u8 *mem = nullptr;
     if (sys::MMapStatus const status =

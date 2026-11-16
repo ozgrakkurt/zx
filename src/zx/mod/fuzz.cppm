@@ -7,6 +7,12 @@ import :alloc;
 
 export namespace zx {
 
+// Amount of memory that the fuzzing engine requies.
+//
+// This is generally the amount of capacity that the fuzzing engine
+// expects from FuzzParams.alloc.
+constexpr u64 FUZZ_MEM_CAP = u64{1} << 22;
+
 struct FuzzInput {
     Slice<u64> m_input;
     u64 m_consumed_count;

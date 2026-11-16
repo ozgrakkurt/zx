@@ -3,7 +3,7 @@ module zx;
 namespace zx {
 
 // config {
-static constexpr u64 FUZZ_INPUT_CAP = u64{1} << 14;
+static constexpr u64 FUZZ_INPUT_CAP = u64{1} << 12;
 static constexpr u64 FUZZ_SIGNATURE_DEDUP_CAP = 4096;
 static constexpr u64 FUZZ_MAGIC[] = {0, U64_MAX};
 static constexpr u64 FUZZ_N_MAGIC = sizeof(FUZZ_MAGIC) / sizeof(FUZZ_MAGIC[0]);
@@ -59,7 +59,7 @@ fuzz_load_coverage(u32 *dst, u64 dst_len) {
     }
 }
 
-constexpr u32 FUZZ_SLOT_SET_CAP_ = 512;
+constexpr u32 FUZZ_SLOT_SET_CAP_ = 64;
 struct FuzzSlotSet {
     u64 values[FUZZ_SLOT_SET_CAP_];
     u32 push_pos;

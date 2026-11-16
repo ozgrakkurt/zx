@@ -66,8 +66,21 @@ static void fuzz_one(void *usr_ctx, zx::FuzzInput *fuzz_input) {
     (void)noz::decompress(nullptr, compressed.as_const(), output, &n_read);
 }
 
-static zx::SliceMut<zx::u8> make_alloc(zx::Backtrace *err_bt,
-                                       zx::u64 capacity) {
+zx::Alloc make_alloc(zx::Backtrace *err_bt, zx::u64 size) {
+    zx::u8 *mem = nullptr;
+    zx::testing::assert_with_trace(
+        zx::page_alloc::AllocStatus::Ok ==
+            zx::page_alloc::alloc_4kb(err_bt, size, &mem),
+        err_bt);
+
+    zx::Alloc alloc =
+        zx::Alloc::init(zx::SliceMut<zx::u8>::init_unsafe(mem, size));
+
+    return alloc;
+}
+
+static zx::SliceMut<zx::u8> make_guarded_alloc(zx::Backtrace *err_bt,
+                                               zx::u64 capacity) {
     zx::assert(zx::is_pow_two_u64(capacity));
     zx::assert(capacity >= 4096);
 
@@ -92,19 +105,11 @@ static zx::SliceMut<zx::u8> make_alloc(zx::Backtrace *err_bt,
 int main(void) {
     zx::Backtrace err_bt = zx::Backtrace::init();
 
-    constexpr zx::u64 fuzz_mem_cap = zx::u64{1} << 27;
-    zx::u8 *fuzz_mem = nullptr;
-    zx::testing::assert_with_trace(
-        zx::page_alloc::AllocStatus::Ok ==
-            zx::page_alloc::alloc_4kb(&err_bt, fuzz_mem_cap, &fuzz_mem),
-        &err_bt);
-
-    zx::Alloc alloc = zx::Alloc::init(
-        zx::SliceMut<zx::u8>::init_unsafe(fuzz_mem, fuzz_mem_cap));
+    zx::Alloc alloc = make_alloc(&err_bt, zx::FUZZ_MEM_CAP);
 
     Ctx const ctx = Ctx{
-        .output = make_alloc(&err_bt, 4096),
-        .compressed = make_alloc(&err_bt, 8192),
+        .output = make_guarded_alloc(&err_bt, 4096),
+        .compressed = make_guarded_alloc(&err_bt, 8192),
     };
 
     zx::fuzz(zx::FuzzParams{

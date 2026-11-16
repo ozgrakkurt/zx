@@ -37,7 +37,18 @@ __attribute__((no_builtin)) static void fuzz_one(void *usr_ctx,
     assert(slen == expected);
 }
 
-static SliceMut<u8> make_alloc(Backtrace *err_bt, u64 capacity) {
+Alloc make_alloc(Backtrace *err_bt, u64 size) {
+    u8 *mem = nullptr;
+    testing::assert_with_trace(page_alloc::AllocStatus::Ok ==
+                                   page_alloc::alloc_4kb(err_bt, size, &mem),
+                               err_bt);
+
+    Alloc alloc = Alloc::init(SliceMut<u8>::init_unsafe(mem, size));
+
+    return alloc;
+}
+
+static SliceMut<u8> make_guarded_alloc(Backtrace *err_bt, u64 capacity) {
     assert(is_pow_two_u64(capacity));
     assert(capacity >= 4096);
 
@@ -61,16 +72,9 @@ static SliceMut<u8> make_alloc(Backtrace *err_bt, u64 capacity) {
 int main(void) {
     Backtrace err_bt = Backtrace::init();
 
-    constexpr u64 fuzz_mem_cap = u64{1} << 27;
-    u8 *fuzz_mem = nullptr;
-    testing::assert_with_trace(
-        page_alloc::AllocStatus::Ok ==
-            page_alloc::alloc_4kb(&err_bt, fuzz_mem_cap, &fuzz_mem),
-        &err_bt);
-    Alloc alloc =
-        Alloc::init(SliceMut<u8>::init_unsafe(fuzz_mem, fuzz_mem_cap));
+    Alloc alloc = make_alloc(&err_bt, FUZZ_MEM_CAP);
     Ctx const ctx = Ctx{
-        .mem = make_alloc(&err_bt, 4096),
+        .mem = make_guarded_alloc(&err_bt, 4096),
     };
     constexpr u64 n_iter = u64{1} << 12;
     fuzz(FuzzParams{.alloc = &alloc,
