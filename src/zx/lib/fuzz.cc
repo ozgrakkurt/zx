@@ -224,6 +224,9 @@ void fuzz(FuzzParams params) {
     return;
 #endif
 
+    assert(FUZZ_SAN_COV_LEN_ != 0);
+    assert(FUZZ_SAN_COV_ != nullptr);
+
     Backtrace err_bt = Backtrace::init();
 
     Xoshiro256 rand = Xoshiro256::init(0);
