@@ -229,7 +229,8 @@ void fuzz(FuzzParams params) {
         FuzzResult const baseline_result = fuzz_wrapper(
             &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one);
         // select a random position to mutate
-        mut_idx = rand_mod_u64(rand.next(), baseline_result.consumed_count);
+        mut_idx =
+            rand_mulshift_mod_u64(rand.next(), baseline_result.consumed_count);
 
         // try magic values
         for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
@@ -265,14 +266,16 @@ void fuzz(FuzzParams params) {
                 stall = saturating_add_u32(stall, 1);
             }
 
+#ifndef ZX_FUZZ_UNLIMITED
             if (timer.elapsed() >= FUZZ_TIME_LIMIT_NANOS) {
                 break;
             }
+#endif
         }
 
         if (slot_set->n_filled > 0) {
             u32 const val_idx =
-                rand_mod_u32((u32)rand.next(), slot_set->n_filled);
+                rand_mulshift_mod_u32((u32)rand.next(), slot_set->n_filled);
             ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[val_idx]);
         } else {
             ctx.fuzz_input.write_unsafe(mut_idx, rand.next());

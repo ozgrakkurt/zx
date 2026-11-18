@@ -17,14 +17,14 @@ static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
     SliceMut<u8> allocs[allocs_cap];
     __builtin_memset(allocs, 0, sizeof(allocs));
 
-    u64 const n_allocs = rand_mod_u64(fuzz_input->next(), allocs_cap);
+    u64 const n_allocs = rand_mulshift_mod_u64(fuzz_input->next(), allocs_cap);
 
     u64 num_allocs = 0;
     for (u64 i = 0; i < n_allocs; i++) {
-        u64 const len = rand_mod_u64(fuzz_input->next(),
-                                     add_unsafe_u64(alloc.capacity_left(), 1));
+        u64 const len = rand_mulshift_mod_u64(
+            fuzz_input->next(), add_unsafe_u64(alloc.capacity_left(), 1));
         u8 const align_kind =
-            u64_to_u8_unsafe(rand_mod_u64(fuzz_input->next(), 8));
+            u64_to_u8_unsafe(rand_mulshift_mod_u64(fuzz_input->next(), 8));
         u16 const align = shl_unsafe_u16(1, align_kind);
         SliceMut<u8> slice;
         AllocStatus const status =

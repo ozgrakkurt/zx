@@ -12,6 +12,13 @@ int main(void) {
     zx::assert(69 == zx::wrapping_add_u32(65, 4));
     zx::assert(69 == zx::wrapping_add_u64(65, 4));
 
+    zx::assert(zx::I8_MIN == zx::wrapping_add_i8(zx::I8_MAX, 1));
+    zx::assert(zx::I16_MIN == zx::wrapping_add_i16(zx::I16_MAX, 1));
+    zx::assert(zx::I32_MIN == zx::wrapping_add_i32(zx::I32_MAX, 1));
+    zx::assert(zx::I64_MIN == zx::wrapping_add_i64(zx::I64_MAX, 1));
+
+    zx::assert(-69 == zx::wrapping_add_i8(-65, -4));
+
     // wrapping sub
     zx::assert(1 == zx::wrapping_sub_u8(0, zx::U8_MAX));
     zx::assert(1 == zx::wrapping_sub_u16(0, zx::U16_MAX));
@@ -22,6 +29,13 @@ int main(void) {
     zx::assert(61 == zx::wrapping_sub_u16(65, 4));
     zx::assert(61 == zx::wrapping_sub_u32(65, 4));
     zx::assert(61 == zx::wrapping_sub_u64(65, 4));
+
+    zx::assert(zx::I8_MAX == zx::wrapping_sub_i8(zx::I8_MIN, 1));
+    zx::assert(zx::I16_MAX == zx::wrapping_sub_i16(zx::I16_MIN, 1));
+    zx::assert(zx::I32_MAX == zx::wrapping_sub_i32(zx::I32_MIN, 1));
+    zx::assert(zx::I64_MAX == zx::wrapping_sub_i64(zx::I64_MIN, 1));
+
+    zx::assert(-61 == zx::wrapping_sub_i8(-65, -4));
 
     // wrapping mul
     zx::assert(zx::U8_MAX - 2__wbu == zx::wrapping_mul_u8(zx::U8_MAX, 3));
@@ -44,11 +58,43 @@ int main(void) {
     zx::assert(2 == zx::saturating_add_u32(1, 1));
     zx::assert(2 == zx::saturating_add_u64(1, 1));
 
+    zx::assert(zx::I8_MAX == zx::saturating_add_i8(zx::I8_MAX, 1));
+    zx::assert(zx::I16_MAX == zx::saturating_add_i16(zx::I16_MAX, 1));
+    zx::assert(zx::I32_MAX == zx::saturating_add_i32(zx::I32_MAX, 1));
+    zx::assert(zx::I64_MAX == zx::saturating_add_i64(zx::I64_MAX, 1));
+
+    zx::assert(zx::I8_MIN == zx::saturating_add_i8(zx::I8_MIN, -1));
+    zx::assert(zx::I16_MIN == zx::saturating_add_i16(zx::I16_MIN, -1));
+    zx::assert(zx::I32_MIN == zx::saturating_add_i32(zx::I32_MIN, -1));
+    zx::assert(zx::I64_MIN == zx::saturating_add_i64(zx::I64_MIN, -1));
+
     // saturating sub
     zx::assert(0 == zx::saturating_sub_u8(1, 2));
     zx::assert(0 == zx::saturating_sub_u16(1, 2));
     zx::assert(0 == zx::saturating_sub_u32(1, 2));
     zx::assert(0 == zx::saturating_sub_u64(1, 2));
+
+    zx::assert(zx::I8_MIN == zx::saturating_sub_i8(zx::I8_MIN, 1));
+    zx::assert(zx::I16_MIN == zx::saturating_sub_i16(zx::I16_MIN, 1));
+    zx::assert(zx::I32_MIN == zx::saturating_sub_i32(zx::I32_MIN, 1));
+    zx::assert(zx::I64_MIN == zx::saturating_sub_i64(zx::I64_MIN, 1));
+
+    zx::assert(zx::I8_MAX == zx::saturating_sub_i8(zx::I8_MAX, -1));
+    zx::assert(zx::I16_MAX == zx::saturating_sub_i16(zx::I16_MAX, -1));
+    zx::assert(zx::I32_MAX == zx::saturating_sub_i32(zx::I32_MAX, -1));
+    zx::assert(zx::I64_MAX == zx::saturating_sub_i64(zx::I64_MAX, -1));
+
+    // saturating mul
+    zx::assert(zx::U8_MAX == zx::saturating_mul_u8(16, 16));
+    zx::assert(zx::U16_MAX == zx::saturating_mul_u16(256, 256));
+    zx::assert(zx::U32_MAX == zx::saturating_mul_u32(65536, 65536));
+    zx::assert(zx::U64_MAX ==
+               zx::saturating_mul_u64(4294967296__wbu, 4294967296__wbu));
+
+    zx::assert(240 == zx::saturating_mul_u8(16, 15));
+    zx::assert(69 == zx::saturating_mul_u8(69, 1));
+    zx::assert(0 == zx::saturating_mul_u8(69, 0));
+    zx::assert(69 == zx::saturating_mul_u64(69, 1));
 
     // add one over
     bool overflow = false;
@@ -176,6 +222,132 @@ int main(void) {
 
     zx::assert(zx::U64_MAX - 1__wbu == zx::mul_unsafe_u64(zx::U64_MAX / 2, 2));
 
+    // signed checked add overflow
+    overflow = false;
+    zx::add_i8(zx::I8_MAX, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i16(zx::I16_MAX, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i32(zx::I32_MAX, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i64(zx::I64_MAX, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i8(zx::I8_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i16(zx::I16_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i32(zx::I32_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::add_i64(zx::I64_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    // signed checked add no overflow
+    overflow = false;
+    zx::assert(zx::I8_MAX == zx::add_i8(zx::I8_MAX, 0, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::I8_MIN == zx::add_i8(zx::I8_MIN, 0, &overflow));
+    zx::assert(!overflow);
+
+    // signed checked sub overflow
+    overflow = false;
+    zx::sub_i8(zx::I8_MAX, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i16(zx::I16_MAX, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i32(zx::I32_MAX, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i64(zx::I64_MAX, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i8(zx::I8_MIN, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i16(zx::I16_MIN, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i32(zx::I32_MIN, 1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::sub_i64(zx::I64_MIN, 1, &overflow);
+    zx::assert(overflow);
+
+    // signed checked sub no overflow
+    overflow = false;
+    zx::assert(zx::I8_MIN == zx::sub_i8(zx::I8_MIN, 0, &overflow));
+    zx::assert(!overflow);
+
+    // signed checked mul overflow
+    overflow = false;
+    zx::mul_i8(zx::I8_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i16(zx::I16_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i32(zx::I32_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i64(zx::I64_MIN, -1, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i8(zx::I8_MAX, 2, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i16(zx::I16_MAX, 2, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i32(zx::I32_MAX, 2, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::mul_i64(zx::I64_MAX, 2, &overflow);
+    zx::assert(overflow);
+
+    // signed checked mul no overflow
+    overflow = false;
+    zx::assert(zx::I8_MIN == zx::mul_i8(zx::I8_MIN, 1, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(69 == zx::mul_i8(69, 1, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(-69 == zx::mul_i64(-69, 1, &overflow));
+    zx::assert(!overflow);
+
     // div zero
     overflow = false;
     zx::div_u8(69, 0, &overflow);
@@ -259,6 +431,34 @@ int main(void) {
     zx::assert(!overflow);
 
     zx::assert(69__wbu == zx::mod_unsafe_u64(69, 113));
+
+    // rand_mulshift_mod, result is always in [0, b) for b != 0. it is a
+    // multiply-shift so it stays total for b == 0 and returns 0.
+    zx::assert(0 == zx::rand_mulshift_mod_u32(69, 0));
+    zx::assert(0 == zx::rand_mulshift_mod_u64(69, 0));
+
+    zx::assert(0 == zx::rand_mulshift_mod_u32(69, 1));
+    zx::assert(0 == zx::rand_mulshift_mod_u64(69, 1));
+
+    // exact multiply-shift values
+    zx::assert(0 == zx::rand_mulshift_mod_u32(0, 69));
+    zx::assert(1 == zx::rand_mulshift_mod_u32(zx::U32_MAX, 2));
+    zx::assert(0xFFFFFFFE__wbu ==
+               zx::rand_mulshift_mod_u32(zx::U32_MAX, zx::U32_MAX));
+    zx::assert(1 == zx::rand_mulshift_mod_u64(zx::U64_MAX, 2));
+
+    // range sweep
+    for (zx::u32 a = 0; a < 300; a++) {
+        for (zx::u32 b = 1; b < 300; b++) {
+            zx::assert(zx::rand_mulshift_mod_u32(a, b) < b);
+        }
+    }
+
+    for (zx::u64 a = 0; a < 64; a++) {
+        for (zx::u64 b = 1; b < 64; b++) {
+            zx::assert(zx::rand_mulshift_mod_u64(a, b) < b);
+        }
+    }
 
     // div_ceil div by zero
     overflow = false;
@@ -501,6 +701,27 @@ int main(void) {
 
     zx::assert(69 == zx::max_u64(31, 69));
     zx::assert(69 == zx::max_u64(69, 31));
+
+    zx::assert(zx::I8_MIN == zx::min_i8(zx::I8_MIN, zx::I8_MAX));
+    zx::assert(zx::I8_MIN == zx::min_i8(zx::I8_MAX, zx::I8_MIN));
+    zx::assert(zx::I16_MIN == zx::min_i16(zx::I16_MIN, zx::I16_MAX));
+    zx::assert(zx::I16_MIN == zx::min_i16(zx::I16_MAX, zx::I16_MIN));
+    zx::assert(zx::I32_MIN == zx::min_i32(zx::I32_MIN, zx::I32_MAX));
+    zx::assert(zx::I32_MIN == zx::min_i32(zx::I32_MAX, zx::I32_MIN));
+    zx::assert(zx::I64_MIN == zx::min_i64(zx::I64_MIN, zx::I64_MAX));
+    zx::assert(zx::I64_MIN == zx::min_i64(zx::I64_MAX, zx::I64_MIN));
+
+    zx::assert(-31 == zx::min_i8(-31, 69));
+    zx::assert(-31 == zx::min_i64(69, -31));
+
+    zx::assert(zx::I8_MAX == zx::max_i8(zx::I8_MIN, zx::I8_MAX));
+    zx::assert(zx::I8_MAX == zx::max_i8(zx::I8_MAX, zx::I8_MIN));
+    zx::assert(zx::I16_MAX == zx::max_i16(zx::I16_MIN, zx::I16_MAX));
+    zx::assert(zx::I16_MAX == zx::max_i16(zx::I16_MAX, zx::I16_MIN));
+    zx::assert(zx::I32_MAX == zx::max_i32(zx::I32_MIN, zx::I32_MAX));
+    zx::assert(zx::I32_MAX == zx::max_i32(zx::I32_MAX, zx::I32_MIN));
+    zx::assert(zx::I64_MAX == zx::max_i64(zx::I64_MIN, zx::I64_MAX));
+    zx::assert(zx::I64_MAX == zx::max_i64(zx::I64_MAX, zx::I64_MIN));
 
     // shr UB
     bool fail = false;

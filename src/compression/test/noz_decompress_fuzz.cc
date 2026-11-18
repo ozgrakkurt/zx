@@ -15,12 +15,12 @@ static void fuzz_one(void *usr_ctx, zx::FuzzInput *fuzz_input) {
     Ctx const *ctx = (Ctx const *)usr_ctx;
 
     zx::u64 const compressed_len =
-        zx::rand_mod_u64(fuzz_input->next(), ctx->compressed.len());
+        zx::rand_mulshift_mod_u64(fuzz_input->next(), ctx->compressed.len());
     zx::u64 const compressed_offset =
         zx::sub_unsafe_u64(ctx->compressed.len(), compressed_len);
 
     zx::u64 const output_len =
-        zx::rand_mod_u64(fuzz_input->next(), ctx->output.len());
+        zx::rand_mulshift_mod_u64(fuzz_input->next(), ctx->output.len());
     zx::u64 const output_offset =
         zx::sub_unsafe_u64(ctx->output.len(), output_len);
 
@@ -35,7 +35,7 @@ static void fuzz_one(void *usr_ctx, zx::FuzzInput *fuzz_input) {
     for (zx::u64 n_iter = 0; offset < compressed.len() && n_iter < 100;
          n_iter++) {
         zx::u64 const diff = zx::sub_unsafe_u64(compressed.len(), offset);
-        zx::u64 const len = zx::rand_mod_u64(fuzz_input->next(), diff);
+        zx::u64 const len = zx::rand_mulshift_mod_u64(fuzz_input->next(), diff);
         zx::SliceMut<zx::u8> const slice = compressed.slice_unsafe(offset, len);
 
         zx::u64 const data_kind = fuzz_input->next() % 3;

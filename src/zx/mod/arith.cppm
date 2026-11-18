@@ -520,12 +520,22 @@ u64 mod_unsafe_u64(u64 a, u64 b) {
     return a % b;
 }
 
-u32 rand_mod_u32(u32 a, u32 b) {
+// This maps random number `a` to another random number which is `[0, b)`.
+// The result is uniform only if the `a` is uniform.
+//
+// This function is intended to be used as a faster alternative to doing modulo
+// on random numbers.
+u32 rand_mulshift_mod_u32(u32 a, u32 b) {
     u64 const mul = u64{a} * u64{b};
     return (u32)(mul >> 32);
 }
 
-u64 rand_mod_u64(u64 a, u64 b) {
+// This maps random number `a` to another random number which is `[0, b)`
+// The result is uniform only if the `a` is uniform.
+//
+// This function is intended to be used as a faster alternative to doing modulo
+// on random numbers.
+u64 rand_mulshift_mod_u64(u64 a, u64 b) {
     u128 const mul = u128{a} * u128{b};
     return (u64)(mul >> 64);
 }
@@ -1303,13 +1313,13 @@ u64 align_up_unsafe_u64(u64 val, u64 align) {
 }
 
 u64 align_down_u64(u64 val, u64 align, bool *failure) {
-    *failure |= !is_pow_two_u64(align) || (align == 0);
+    *failure |= !is_pow_two_u64(align);
     return val & ~(align - 1);
 }
 
 u64 align_down_unsafe_u64(u64 val, u64 align) {
     assert_dev(is_pow_two_u64(align));
-    return val & ~sub_unsafe_u64(align, 1);
+    return val & ~(align - 1);
 }
 
 } // namespace zx

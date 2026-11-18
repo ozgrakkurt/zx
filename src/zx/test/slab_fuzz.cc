@@ -40,7 +40,8 @@ static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
 
         u8 const op = u64_to_u8_unsafe(mod_unsafe_u64(fuzz_input->next(), 3));
         bool const rand_key = n_slab_keys == 0 || (fuzz_input->next() & 1) == 1;
-        u32 const key_idx = rand_mod_u32((u32)fuzz_input->next(), n_slab_keys);
+        u32 const key_idx =
+            rand_mulshift_mod_u32((u32)fuzz_input->next(), n_slab_keys);
         u32 const key = (rand_key) ? (u32)fuzz_input->next()
                                    : slab_keys.read_unsafe(key_idx);
         switch (op) {
