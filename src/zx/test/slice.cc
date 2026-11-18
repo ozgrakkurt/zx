@@ -331,6 +331,280 @@ static void test_cast_static() {
     }
 }
 
+static void test_cast_truncate(Backtrace *err_bt) {
+    // immut: exact division is unaffected
+    {
+        u32 data = 69;
+        Slice<u32> slice = Slice<u32>::init_unsafe(&data, 1);
+        Slice<u8> slice8;
+        SliceCastStatus status = slice.cast_truncate<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 4);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: truncating cast drops the trailing byte
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        Slice<u8> slice = Slice<u8>::init_unsafe(data, 3);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast_truncate<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: truncating unsafe cast
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        Slice<u8> slice = Slice<u8>::init_unsafe(data, 3);
+        Slice<u16> slice16 = slice.cast_truncate_unsafe<u16>();
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: truncating cast drops the trailing byte
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(data, 3);
+        SliceMut<u16> slice16;
+        SliceCastStatus status = slice.cast_truncate<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: truncating unsafe cast
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(data, 3);
+        SliceMut<u16> slice16 = slice.cast_truncate_unsafe<u16>();
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: null out is rejected
+    {
+        u32 data = 69;
+        Slice<u32> slice = Slice<u32>::init_unsafe(&data, 1);
+        assert(SliceCastStatus::Nullptr ==
+               slice.cast_truncate<u8>(err_bt, nullptr));
+    }
+
+    // immut: misaligned ptr is rejected when casting to a wider type
+    {
+        alignas(2) u8 data[4] = {1, 2, 3, 4};
+        Slice<u8> slice = Slice<u8>::init_unsafe(&data[1], 2);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast_truncate<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::AlignMismatch,
+                                   err_bt);
+    }
+
+    // immut: zero len dangling cast is ok
+    {
+        Slice<u16> slice = Slice<u16>::init_dangling();
+        Slice<u8> slice8;
+        SliceCastStatus status = slice.cast_truncate<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: null out is rejected
+    {
+        u32 data = 69;
+        SliceMut<u32> slice = SliceMut<u32>::init_unsafe(&data, 1);
+        assert(SliceCastStatus::Nullptr ==
+               slice.cast_truncate<u8>(err_bt, nullptr));
+    }
+
+    // mut: misaligned ptr is rejected when casting to a wider type
+    {
+        alignas(2) u8 data[4] = {1, 2, 3, 4};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(&data[1], 2);
+        SliceMut<u16> slice16;
+        SliceCastStatus status = slice.cast_truncate<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::AlignMismatch,
+                                   err_bt);
+    }
+
+    // mut: zero len dangling cast is ok
+    {
+        SliceMut<u16> slice = SliceMut<u16>::init_dangling();
+        SliceMut<u8> slice8;
+        SliceCastStatus status = slice.cast_truncate<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+}
+
+static void test_cast(Backtrace *err_bt) {
+    // immut: exact division succeeds
+    {
+        u32 data = 69;
+        Slice<u32> slice = Slice<u32>::init_unsafe(&data, 1);
+        Slice<u8> slice8;
+        SliceCastStatus status = slice.cast<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 4);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: casting to a wider type is allowed when it does not truncate
+    {
+        alignas(2) u8 data[2] = {1, 2};
+        Slice<u8> slice = Slice<u8>::init_unsafe(data, 2);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: null out is rejected
+    {
+        u32 data = 69;
+        Slice<u32> slice = Slice<u32>::init_unsafe(&data, 1);
+        assert(SliceCastStatus::Nullptr == slice.cast<u8>(err_bt, nullptr));
+    }
+
+    // immut: truncating cast is rejected
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        Slice<u8> slice = Slice<u8>::init_unsafe(data, 3);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Truncation,
+                                   err_bt);
+    }
+
+    // immut: unsafe exact division
+    {
+        u32 data = 69;
+        Slice<u32> slice = Slice<u32>::init_unsafe(&data, 1);
+        Slice<u8> slice8 = slice.cast_unsafe<u8>();
+        assert(slice8.len() == 4);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: unsafe cast to a wider type with exact division
+    {
+        alignas(2) u8 data[2] = {1, 2};
+        Slice<u8> slice = Slice<u8>::init_unsafe(data, 2);
+        Slice<u16> slice16 = slice.cast_unsafe<u16>();
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: exact division succeeds
+    {
+        u32 data = 69;
+        SliceMut<u32> slice = SliceMut<u32>::init_unsafe(&data, 1);
+        SliceMut<u8> slice8;
+        SliceCastStatus status = slice.cast<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 4);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: truncating cast is rejected
+    {
+        alignas(2) u8 data[3] = {1, 2, 3};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(data, 3);
+        SliceMut<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Truncation,
+                                   err_bt);
+    }
+
+    // mut: unsafe exact division
+    {
+        u32 data = 69;
+        SliceMut<u32> slice = SliceMut<u32>::init_unsafe(&data, 1);
+        SliceMut<u8> slice8 = slice.cast_unsafe<u8>();
+        assert(slice8.len() == 4);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: unsafe cast to a wider type with exact division
+    {
+        alignas(2) u8 data[2] = {1, 2};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(data, 2);
+        SliceMut<u16> slice16 = slice.cast_unsafe<u16>();
+        assert(slice16.len() == 1);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: misaligned ptr is rejected when casting to a wider type
+    {
+        alignas(2) u8 data[4] = {1, 2, 3, 4};
+        Slice<u8> slice = Slice<u8>::init_unsafe(&data[1], 2);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::AlignMismatch,
+                                   err_bt);
+    }
+
+    // immut: zero len dangling cast is ok
+    {
+        Slice<u16> slice = Slice<u16>::init_dangling();
+        Slice<u8> slice8;
+        SliceCastStatus status = slice.cast<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+
+    // immut: zero len cast to a wider type still checks alignment
+    {
+        Slice<u8> slice = Slice<u8>::init_dangling();
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::AlignMismatch,
+                                   err_bt);
+    }
+
+    // immut: zero len cast to a wider type is ok when the dangling ptr is
+    // aligned
+    {
+        Slice<u8> slice = Slice<u8>::aligned_init_dangling_unsafe(2);
+        Slice<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice16.len() == 0);
+        assert((u64)slice16.ptr() == (u64)slice.ptr());
+    }
+
+    // mut: null out is rejected
+    {
+        u32 data = 69;
+        SliceMut<u32> slice = SliceMut<u32>::init_unsafe(&data, 1);
+        assert(SliceCastStatus::Nullptr == slice.cast<u8>(err_bt, nullptr));
+    }
+
+    // mut: misaligned ptr is rejected when casting to a wider type
+    {
+        alignas(2) u8 data[4] = {1, 2, 3, 4};
+        SliceMut<u8> slice = SliceMut<u8>::init_unsafe(&data[1], 2);
+        SliceMut<u16> slice16;
+        SliceCastStatus status = slice.cast<u16>(err_bt, &slice16);
+        testing::assert_with_trace(status == SliceCastStatus::AlignMismatch,
+                                   err_bt);
+    }
+
+    // mut: zero len dangling cast is ok
+    {
+        SliceMut<u16> slice = SliceMut<u16>::init_dangling();
+        SliceMut<u8> slice8;
+        SliceCastStatus status = slice.cast<u8>(err_bt, &slice8);
+        testing::assert_with_trace(status == SliceCastStatus::Ok, err_bt);
+        assert(slice8.len() == 0);
+        assert((u64)slice8.ptr() == (u64)slice.ptr());
+    }
+}
+
 static void test_aligned_init_dangling(Backtrace *err_bt) {
     // UNSAFE
 
@@ -479,11 +753,11 @@ static void test_immut(Backtrace *err_bt) {
     assert((u64)&data[3] == (u64)pp);
 
     Slice<u16> sli16;
-    SliceCastStatus cast_status = sli.cast<u16>(err_bt, &sli16);
+    SliceCastStatus cast_status = sli.cast_truncate<u16>(err_bt, &sli16);
     testing::assert_with_trace(cast_status == SliceCastStatus::Ok, err_bt);
     assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
 
-    Slice<u8> sli8 = sli.cast_unsafe<u8>();
+    Slice<u8> sli8 = sli.cast_truncate_unsafe<u8>();
     assert(sli8.len() == mul_unsafe_u64(sli.len(), 4));
 
     Slice<u32> slisli = sli.slice_unsafe(0, sli.len() / 2);
@@ -491,16 +765,16 @@ static void test_immut(Backtrace *err_bt) {
 
     assert(sli8.read_unaligned_unsafe<u32>(0) == sli.read_unsafe(0));
 
-    assert(sli8.equals(sli.cast_unsafe<u8>()));
+    assert(sli8.equals(sli.cast_truncate_unsafe<u8>()));
 
-    assert(sli8.is_overlapping(sli.cast_unsafe<u8>()));
+    assert(sli8.is_overlapping(sli.cast_truncate_unsafe<u8>()));
 
     Slice<u8> dangler = Slice<u8>::init_dangling();
     assert(!sli8.is_overlapping(dangler));
 
     assert(dangler.compare(sli8) == Comparison::Less);
     assert(sli8.compare(dangler) == Comparison::Greater);
-    assert(sli8.compare(sli.cast_unsafe<u8>()) == Comparison::Equal);
+    assert(sli8.compare(sli.cast_truncate_unsafe<u8>()) == Comparison::Equal);
 }
 
 static void test_mut(Backtrace *err_bt) {
@@ -532,11 +806,11 @@ static void test_mut(Backtrace *err_bt) {
     assert((u64)&data[3] == (u64)pp);
 
     SliceMut<u16> sli16;
-    SliceCastStatus cast_status = sli.cast<u16>(err_bt, &sli16);
+    SliceCastStatus cast_status = sli.cast_truncate<u16>(err_bt, &sli16);
     testing::assert_with_trace(cast_status == SliceCastStatus::Ok, err_bt);
     assert(sli16.len() == mul_unsafe_u64(sli.len(), 2));
 
-    SliceMut<u8> sli8 = sli.cast_unsafe<u8>();
+    SliceMut<u8> sli8 = sli.cast_truncate_unsafe<u8>();
     assert(sli8.len() == mul_unsafe_u64(sli.len(), 4));
 
     SliceMut<u32> slisli = sli.slice_unsafe(0, sli.len() / 2);
@@ -545,16 +819,17 @@ static void test_mut(Backtrace *err_bt) {
     assert(sli8.as_const().read_unaligned_unsafe<u32>(0) ==
            sli.as_const().read_unsafe(0));
 
-    assert(sli8.as_const().equals(sli.cast_unsafe<u8>().as_const()));
+    assert(sli8.as_const().equals(sli.cast_truncate_unsafe<u8>().as_const()));
 
-    assert(sli8.as_const().is_overlapping(sli.cast_unsafe<u8>().as_const()));
+    assert(sli8.as_const().is_overlapping(
+        sli.cast_truncate_unsafe<u8>().as_const()));
 
     SliceMut<u8> dangler = SliceMut<u8>::init_dangling();
     assert(!sli8.as_const().is_overlapping(dangler.as_const()));
 
     assert(dangler.as_const().compare(sli8.as_const()) == Comparison::Less);
     assert(sli8.as_const().compare(dangler.as_const()) == Comparison::Greater);
-    assert(sli8.as_const().compare(sli.cast_unsafe<u8>().as_const()) ==
+    assert(sli8.as_const().compare(sli.cast_truncate_unsafe<u8>().as_const()) ==
            Comparison::Equal);
 }
 
@@ -592,6 +867,8 @@ int main(void) {
     test_is_overlapping();
     test_aligned_init_dangling(&err_bt);
     test_cast_static();
+    test_cast_truncate(&err_bt);
+    test_cast(&err_bt);
     test_slicing(&err_bt);
     test_read_access(&err_bt);
     test_write_access(&err_bt);

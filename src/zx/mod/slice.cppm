@@ -18,6 +18,7 @@ enum class [[nodiscard]] SliceCastStatus : u8_c {
     Nullptr,
     IntegerOverflow,
     AlignMismatch,
+    Truncation,
 };
 
 enum class [[nodiscard]] SliceStatus : u8_c {
@@ -185,7 +186,7 @@ template <typename T> struct Slice {
     T const *ptr() const { return this->m_ptr; }
 
     template <typename U>
-    SliceCastStatus cast(Backtrace *err_bt, Slice<U> *out) const {
+    SliceCastStatus cast_truncate(Backtrace *err_bt, Slice<U> *out) const {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return SliceCastStatus::Nullptr;
@@ -198,7 +199,7 @@ template <typename T> struct Slice {
             return SliceCastStatus::IntegerOverflow;
         }
 
-        overflow = 0;
+        overflow = false;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) [[unlikely]] {
             Backtrace::collect(err_bt);
@@ -219,9 +220,70 @@ template <typename T> struct Slice {
         return SliceCastStatus::Ok;
     }
 
+    template <typename U>
+    SliceCastStatus cast(Backtrace *err_bt, Slice<U> *out) const {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::Nullptr;
+        }
+
+        bool overflow = false;
+        u64 const byte_cap = mul_u64(this->m_len, sizeof(T), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+
+        overflow = false;
+        u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+
+        overflow = false;
+        u64 const rem = mod_u64(byte_cap, sizeof(U), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+        if (rem != 0) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::Truncation;
+        }
+
+        if (alignof(U) > alignof(T)) {
+            if (!__builtin_is_aligned(this->m_ptr, alignof(U))) [[unlikely]] {
+                Backtrace::collect(err_bt);
+                return SliceCastStatus::AlignMismatch;
+            }
+        }
+
+        *out = Slice<U>{
+            .m_ptr = (U const *)this->m_ptr,
+            .m_len = new_len,
+        };
+        return SliceCastStatus::Ok;
+    }
+
+    template <typename U> Slice<U> cast_truncate_unsafe() const {
+        u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
+        u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
+
+        if (alignof(U) > alignof(T)) {
+            assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
+        }
+
+        return Slice<U>{
+            .m_ptr = (U const *)this->m_ptr,
+            .m_len = new_len,
+        };
+    }
+
     template <typename U> Slice<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
+        assert_dev(mod_unsafe_u64(byte_cap, sizeof(U)) == 0);
 
         if (alignof(U) > alignof(T)) {
             assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
@@ -618,7 +680,7 @@ template <typename T> struct SliceMut {
     T *ptr() const { return this->m_ptr; }
 
     template <typename U>
-    SliceCastStatus cast(Backtrace *err_bt, SliceMut<U> *out) const {
+    SliceCastStatus cast_truncate(Backtrace *err_bt, SliceMut<U> *out) const {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return SliceCastStatus::Nullptr;
@@ -631,7 +693,7 @@ template <typename T> struct SliceMut {
             return SliceCastStatus::IntegerOverflow;
         }
 
-        overflow = 0;
+        overflow = false;
         u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
         if (overflow) [[unlikely]] {
             Backtrace::collect(err_bt);
@@ -652,9 +714,70 @@ template <typename T> struct SliceMut {
         return SliceCastStatus::Ok;
     }
 
+    template <typename U>
+    SliceCastStatus cast(Backtrace *err_bt, SliceMut<U> *out) const {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::Nullptr;
+        }
+
+        bool overflow = false;
+        u64 const byte_cap = mul_u64(this->m_len, sizeof(T), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+
+        overflow = false;
+        u64 const new_len = div_u64(byte_cap, sizeof(U), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+
+        overflow = false;
+        u64 const rem = mod_u64(byte_cap, sizeof(U), &overflow);
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::IntegerOverflow;
+        }
+        if (rem != 0) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceCastStatus::Truncation;
+        }
+
+        if (alignof(U) > alignof(T)) {
+            if (!__builtin_is_aligned(this->m_ptr, alignof(U))) [[unlikely]] {
+                Backtrace::collect(err_bt);
+                return SliceCastStatus::AlignMismatch;
+            }
+        }
+
+        *out = SliceMut<U>{
+            .m_ptr = (U *)this->m_ptr,
+            .m_len = new_len,
+        };
+        return SliceCastStatus::Ok;
+    }
+
+    template <typename U> SliceMut<U> cast_truncate_unsafe() const {
+        u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
+        u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
+
+        if (alignof(U) > alignof(T)) {
+            assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
+        }
+
+        return SliceMut<U>{
+            .m_ptr = (U *)this->m_ptr,
+            .m_len = new_len,
+        };
+    }
+
     template <typename U> SliceMut<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
+        assert_dev(mod_unsafe_u64(byte_cap, sizeof(U)) == 0);
 
         if (alignof(U) > alignof(T)) {
             assert_dev(__builtin_is_aligned(this->m_ptr, alignof(U)));
