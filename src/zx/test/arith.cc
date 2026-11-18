@@ -260,22 +260,58 @@ int main(void) {
 
     zx::assert(69__wbu == zx::mod_unsafe_u64(69, 113));
 
-    // div_ceil overflow
+    // div_ceil div by zero
     overflow = false;
-    zx::div_ceil_u8(zx::U8_MAX, 3, &overflow);
+    zx::div_ceil_u8(69, 0, &overflow);
     zx::assert(overflow);
 
+    // div_ceil b == 1
     overflow = false;
-    zx::div_ceil_u16(zx::U16_MAX, 3, &overflow);
-    zx::assert(overflow);
+    zx::assert(zx::U8_MAX == zx::div_ceil_u8(zx::U8_MAX, 1, &overflow));
+    zx::assert(!overflow);
+
+    // div_ceil, a is an exact multiple of b at the top of the range. the true
+    // result fits so the overflow flag must not be set.
+    overflow = false;
+    zx::assert(85 == zx::div_ceil_u8(zx::U8_MAX, 3, &overflow));
+    zx::assert(!overflow);
 
     overflow = false;
-    zx::div_ceil_u32(zx::U32_MAX, 3, &overflow);
-    zx::assert(overflow);
+    zx::assert(21845 == zx::div_ceil_u16(zx::U16_MAX, 3, &overflow));
+    zx::assert(!overflow);
 
     overflow = false;
-    zx::div_ceil_u64(zx::U64_MAX, 3, &overflow);
-    zx::assert(overflow);
+    zx::assert(1431655765 == zx::div_ceil_u32(zx::U32_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(6148914691236517205__wbu ==
+               zx::div_ceil_u64(zx::U64_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    // div_ceil, the intermediate a + b would overflow but the true result
+    // fits. the flag must not be set and the value must be exact.
+    overflow = false;
+    zx::assert(128 == zx::div_ceil_u8(zx::U8_MAX, 2, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(32768 == zx::div_ceil_u16(zx::U16_MAX, 2, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(0x80000000__wbu == zx::div_ceil_u32(zx::U32_MAX, 2, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(0x8000000000000000__wbu ==
+               zx::div_ceil_u64(zx::U64_MAX, 2, &overflow));
+    zx::assert(!overflow);
+
+    // unsafe variants, no intermediate wrapping
+    zx::assert(128 == zx::div_ceil_unsafe_u8(zx::U8_MAX, 2));
+    zx::assert(0x8000000000000000__wbu ==
+               zx::div_ceil_unsafe_u64(zx::U64_MAX, 2));
 
     // div_ceil no overflow
     overflow = false;
@@ -310,21 +346,65 @@ int main(void) {
     zx::assert(2 == zx::div_ceil_u64(4, 3, &overflow));
     zx::assert(!overflow);
 
-    // next_mult overflow
+    // next_mult div by zero
     overflow = false;
-    zx::next_multiple_of_u8(zx::U8_MAX, 3, &overflow);
+    zx::next_multiple_of_u8(69, 0, &overflow);
+    zx::assert(overflow);
+
+    // next_multiple_of, a is already a multiple of b at the top of the
+    // range. the result is a itself so the overflow flag must not be set.
+    overflow = false;
+    zx::assert(zx::U8_MAX == zx::next_multiple_of_u8(zx::U8_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::U16_MAX ==
+               zx::next_multiple_of_u16(zx::U16_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::U32_MAX ==
+               zx::next_multiple_of_u32(zx::U32_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::U64_MAX ==
+               zx::next_multiple_of_u64(zx::U64_MAX, 3, &overflow));
+    zx::assert(!overflow);
+
+    // next_multiple_of, a is already a multiple of b even though the
+    // intermediate a + b would overflow. the result is a itself, flag must not
+    // be set.
+    overflow = false;
+    zx::assert(252 == zx::next_multiple_of_u8(252, 4, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(65532 == zx::next_multiple_of_u16(65532, 4, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert((zx::U32_MAX - 3__wbu) ==
+               zx::next_multiple_of_u32(zx::U32_MAX - 3__wbu, 4, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert((zx::U64_MAX - 3__wbu) ==
+               zx::next_multiple_of_u64(zx::U64_MAX - 3__wbu, 4, &overflow));
+    zx::assert(!overflow);
+
+    // unsafe variants, no intermediate wrapping
+    zx::assert(252 == zx::next_multiple_of_unsafe_u8(252, 4));
+    zx::assert((zx::U64_MAX - 3__wbu) ==
+               zx::next_multiple_of_unsafe_u64(zx::U64_MAX - 3__wbu, 4));
+
+    // next_mult genuine overflow, the next multiple of b doesn't fit the type
+    overflow = false;
+    zx::next_multiple_of_u8(255, 4, &overflow);
     zx::assert(overflow);
 
     overflow = false;
-    zx::next_multiple_of_u16(zx::U16_MAX, 3, &overflow);
-    zx::assert(overflow);
-
-    overflow = false;
-    zx::next_multiple_of_u32(zx::U32_MAX, 3, &overflow);
-    zx::assert(overflow);
-
-    overflow = false;
-    zx::next_multiple_of_u64(zx::U64_MAX, 3, &overflow);
+    zx::next_multiple_of_u64(zx::U64_MAX - 2__wbu, 4, &overflow);
     zx::assert(overflow);
 
     // next_mult no overflow
@@ -351,6 +431,50 @@ int main(void) {
     zx::assert(!overflow);
 
     zx::assert(3 == zx::next_multiple_of_unsafe_u64(1, 3));
+
+    // align_up
+    overflow = false;
+    zx::assert(8 == zx::align_up_u64(5, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(0 == zx::align_up_u64(0, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(8 == zx::align_up_u64(8, 8, &overflow));
+    zx::assert(!overflow);
+
+    // align_up, val is already aligned at the top of the range. the result is
+    // val itself so the overflow flag must not be set.
+    overflow = false;
+    zx::assert((zx::U64_MAX - 7__wbu) ==
+               zx::align_up_u64(zx::U64_MAX - 7__wbu, 8, &overflow));
+    zx::assert(!overflow);
+
+    // align_up genuine overflow, the next multiple of 8 doesn't fit
+    overflow = false;
+    zx::align_up_u64(zx::U64_MAX - 6__wbu, 8, &overflow);
+    zx::assert(overflow);
+
+    // align_up invalid alignment, must set the flag
+    overflow = false;
+    zx::align_up_u64(69, 3, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::align_up_u64(69, 0, &overflow);
+    zx::assert(overflow);
+
+    // align_down
+    overflow = false;
+    zx::assert((zx::U64_MAX - 7__wbu) ==
+               zx::align_down_u64(zx::U64_MAX, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(0 == zx::align_down_u64(7, 8, &overflow));
+    zx::assert(!overflow);
 
     // min
     zx::assert(31 == zx::min_u8(31, 69));

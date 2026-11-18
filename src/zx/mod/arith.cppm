@@ -531,107 +531,103 @@ u64 rand_mod_u64(u64 a, u64 b) {
 }
 
 u8 div_ceil_u8(u8 a, u8 b, bool *fail) {
-    u8 const c = add_u8(a, b, fail);
-    u8 const d = sub_u8(c, 1, fail);
-    return div_u8(d, b, fail);
+    if (b == 0) [[unlikely]] {
+        *fail = true;
+        return 0;
+    }
+    u8 const q = a / b;
+    u8 const r = a % b;
+    return q + ((r != 0) ? u8{1} : u8{0});
 }
 
 u16 div_ceil_u16(u16 a, u16 b, bool *fail) {
-    u16 const c = add_u16(a, b, fail);
-    u16 const d = sub_u16(c, 1, fail);
-    return div_u16(d, b, fail);
+    if (b == 0) [[unlikely]] {
+        *fail = true;
+        return 0;
+    }
+    u16 const q = a / b;
+    u16 const r = a % b;
+    return q + ((r != 0) ? u16{1} : u16{0});
 }
 
 u32 div_ceil_u32(u32 a, u32 b, bool *fail) {
-    u32 const c = add_u32(a, b, fail);
-    u32 const d = sub_u32(c, 1, fail);
-    return div_u32(d, b, fail);
+    if (b == 0) [[unlikely]] {
+        *fail = true;
+        return 0;
+    }
+    u32 const q = a / b;
+    u32 const r = a % b;
+    return q + ((r != 0) ? u32{1} : u32{0});
 }
 
 u64 div_ceil_u64(u64 a, u64 b, bool *fail) {
-    u64 const c = add_u64(a, b, fail);
-    u64 const d = sub_u64(c, 1, fail);
-    return div_u64(d, b, fail);
+    if (b == 0) [[unlikely]] {
+        *fail = true;
+        return 0;
+    }
+    u64 const q = a / b;
+    u64 const r = a % b;
+    return q + ((r != 0) ? u64{1} : u64{0});
 }
 
 u8 div_ceil_unsafe_u8(u8 a, u8 b) {
-    u8 const c = add_unsafe_u8(a, b);
-    u8 const d = sub_unsafe_u8(c, 1);
-    return div_unsafe_u8(d, b);
+    assert_dev(b != 0);
+    u8 const q = a / b;
+    u8 const r = a % b;
+    return q + ((r != 0) ? u8{1} : u8{0});
 }
 
 u16 div_ceil_unsafe_u16(u16 a, u16 b) {
-    u16 const c = add_unsafe_u16(a, b);
-    u16 const d = sub_unsafe_u16(c, 1);
-    return div_unsafe_u16(d, b);
+    assert_dev(b != 0);
+    u16 const q = a / b;
+    u16 const r = a % b;
+    return q + ((r != 0) ? u16{1} : u16{0});
 }
 
 u32 div_ceil_unsafe_u32(u32 a, u32 b) {
-    u32 const c = add_unsafe_u32(a, b);
-    u32 const d = sub_unsafe_u32(c, 1);
-    return div_unsafe_u32(d, b);
+    assert_dev(b != 0);
+    u32 const q = a / b;
+    u32 const r = a % b;
+    return q + ((r != 0) ? u32{1} : u32{0});
 }
 
 u64 div_ceil_unsafe_u64(u64 a, u64 b) {
-    u64 const c = add_unsafe_u64(a, b);
-    u64 const d = sub_unsafe_u64(c, 1);
-    return div_unsafe_u64(d, b);
+    assert_dev(b != 0);
+    u64 const q = a / b;
+    u64 const r = a % b;
+    return q + ((r != 0) ? u64{1} : u64{0});
 }
 
 u8 next_multiple_of_u8(u8 a, u8 b, bool *fail) {
-    u8 const c = add_u8(a, b, fail);
-    u8 const d = sub_u8(c, 1, fail);
-    u8 const e = div_u8(d, b, fail);
-    return mul_u8(e, b, fail);
+    return mul_u8(div_ceil_u8(a, b, fail), b, fail);
 }
 
 u16 next_multiple_of_u16(u16 a, u16 b, bool *fail) {
-    u16 const c = add_u16(a, b, fail);
-    u16 const d = sub_u16(c, 1, fail);
-    u16 const e = div_u16(d, b, fail);
-    return mul_u16(e, b, fail);
+    return mul_u16(div_ceil_u16(a, b, fail), b, fail);
 }
 
 u32 next_multiple_of_u32(u32 a, u32 b, bool *fail) {
-    u32 const c = add_u32(a, b, fail);
-    u32 const d = sub_u32(c, 1, fail);
-    u32 const e = div_u32(d, b, fail);
-    return mul_u32(e, b, fail);
+    return mul_u32(div_ceil_u32(a, b, fail), b, fail);
 }
 
 u64 next_multiple_of_u64(u64 a, u64 b, bool *fail) {
-    u64 const c = add_u64(a, b, fail);
-    u64 const d = sub_u64(c, 1, fail);
-    u64 const e = div_u64(d, b, fail);
-    return mul_u64(e, b, fail);
+    return mul_u64(div_ceil_u64(a, b, fail), b, fail);
 }
 
 u8 next_multiple_of_unsafe_u8(u8 a, u8 b) {
-    u8 const c = add_unsafe_u8(a, b);
-    u8 const d = sub_unsafe_u8(c, 1);
-    u8 const e = div_unsafe_u8(d, b);
-    return mul_unsafe_u8(e, b);
+    return mul_unsafe_u8(div_ceil_unsafe_u8(a, b), b);
 }
 
 u16 next_multiple_of_unsafe_u16(u16 a, u16 b) {
-    u16 const c = add_unsafe_u16(a, b);
-    u16 const d = sub_unsafe_u16(c, 1);
-    u16 const e = div_unsafe_u16(d, b);
-    return mul_unsafe_u16(e, b);
+    return mul_unsafe_u16(div_ceil_unsafe_u16(a, b), b);
 }
 
 u32 next_multiple_of_unsafe_u32(u32 a, u32 b) {
-    u32 const c = add_unsafe_u32(a, b);
-    u32 const d = sub_unsafe_u32(c, 1);
-    u32 const e = div_unsafe_u32(d, b);
-    return mul_unsafe_u32(e, b);
+    return mul_unsafe_u32(div_ceil_unsafe_u32(a, b), b);
 }
 
 u64 next_multiple_of_unsafe_u64(u64 a, u64 b) {
-    u64 const c = add_unsafe_u64(a, b);
-    u64 const d = sub_unsafe_u64(c, 1);
-    u64 const e = div_unsafe_u64(d, b);
-    return mul_unsafe_u64(e, b);
+    return mul_unsafe_u64(div_ceil_unsafe_u64(a, b), b);
 }
 
 u8 min_u8(u8 a, u8 b) { return (a > b) ? b : a; }
@@ -1291,8 +1287,19 @@ i64 u64_to_i64_unsafe(u64 a) {
 }
 
 u64 align_up_u64(u64 val, u64 align, bool *failure) {
-    *failure |= !is_pow_two_u64(align) || (align == 0);
-    return (add_u64(val, align, failure) - 1) & ~(align - 1);
+    bool const pow_two = is_pow_two_u64(align);
+    if (!pow_two) [[unlikely]] {
+        *failure = true;
+        return 0;
+    }
+    u64 const rem = val & (align - 1);
+    return (rem == 0) ? val : add_u64(val, align - rem, failure);
+}
+
+u64 align_up_unsafe_u64(u64 val, u64 align) {
+    assert_dev(is_pow_two_u64(align));
+    u64 const rem = val & (align - 1);
+    return (rem == 0) ? val : add_unsafe_u64(val, sub_unsafe_u64(align, rem));
 }
 
 u64 align_down_u64(u64 val, u64 align, bool *failure) {
@@ -1300,39 +1307,9 @@ u64 align_down_u64(u64 val, u64 align, bool *failure) {
     return val & ~(align - 1);
 }
 
-template <typename T> T align_up_g(T val, u64 align, bool *failure) {
-    static_assert(sizeof(T) == 8);
-    static_assert(alignof(T) == 8);
-    return (T)align_up_u64((u64)val, align, failure);
-}
-
-template <typename T> T align_down_g(T val, u64 align, bool *failure) {
-    static_assert(sizeof(T) == 8);
-    static_assert(alignof(T) == 8);
-    return (T)align_down_u64((u64)val, align, failure);
-}
-
-u64 align_up_unsafe_u64(u64 val, u64 align) {
-    assert_dev(is_pow_two_u64(align));
-    return sub_unsafe_u64(add_unsafe_u64(val, align), 1) &
-           ~sub_unsafe_u64(align, 1);
-}
-
 u64 align_down_unsafe_u64(u64 val, u64 align) {
     assert_dev(is_pow_two_u64(align));
     return val & ~sub_unsafe_u64(align, 1);
-}
-
-template <typename T> T align_up_unsafe_g(T val, u64 align) {
-    static_assert(sizeof(T) == 8);
-    static_assert(alignof(T) == 8);
-    return (T)align_up_unsafe_u64((u64)val, align);
-}
-
-template <typename T> T align_down_unsafe_g(T val, u64 align) {
-    static_assert(sizeof(T) == 8);
-    static_assert(alignof(T) == 8);
-    return (T)align_down_unsafe_u64((u64)val, align);
 }
 
 } // namespace zx

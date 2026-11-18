@@ -561,12 +561,12 @@ constexpr u32 IORING_CQE_BUFFER_SHIFT = 16;
 /*
  * Magic offsets for the application to mmap the data it needs
  */
-constexpr u32 IORING_OFF_SQ_RING = 0ULL;
-constexpr u32 IORING_OFF_CQ_RING = 0x8000000ULL;
-constexpr u32 IORING_OFF_SQES = 0x10000000ULL;
-constexpr u32 IORING_OFF_PBUF_RING = 0x80000000ULL;
-constexpr u32 IORING_OFF_PBUF_SHIFT = 16;
-constexpr u32 IORING_OFF_MMAP_MASK = 0xf8000000ULL;
+constexpr u64 IORING_OFF_SQ_RING = 0ULL;
+constexpr u64 IORING_OFF_CQ_RING = 0x8000000ULL;
+constexpr u64 IORING_OFF_SQES = 0x10000000ULL;
+constexpr u64 IORING_OFF_PBUF_RING = 0x80000000ULL;
+constexpr u64 IORING_OFF_PBUF_SHIFT = 16;
+constexpr u64 IORING_OFF_MMAP_MASK = 0xf8000000ULL;
 
 /*
  * Filled with the offset for mmap(2)
@@ -1012,8 +1012,8 @@ struct IoUringZcRxCqe {
 };
 
 /* The bit from which area id is encoded into offsets */
-constexpr u32 IORING_ZCRX_AREA_SHIFT = 48;
-constexpr u32 IORING_ZCRX_AREA_MASK =
+constexpr u64 IORING_ZCRX_AREA_SHIFT = 48;
+constexpr u64 IORING_ZCRX_AREA_MASK =
     (~(((u64)1 << IORING_ZCRX_AREA_SHIFT) - 1));
 
 struct IoUringZcRxOffsets {
