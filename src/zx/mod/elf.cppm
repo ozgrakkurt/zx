@@ -13,6 +13,8 @@ export namespace zx {
 
 namespace elf {
 
+constexpr u32 SHT_NOBITS = 0x8__wbu;
+
 // this is supposed to be equal to what might be commonly named Elf64_Shdr
 extern "C" struct SectionHeader {
     u32 name;      /* Section name, index in string tbl */
@@ -126,6 +128,11 @@ struct File {
         Slice<u8> dummy;
         for (u64 i = 0; i < section_headers.len(); i++) {
             SectionHeader const *hdr = section_headers.offset_unsafe(i);
+
+            if (hdr->type == SHT_NOBITS) {
+                continue;
+            }
+
             assert(SliceStatus::Ok ==
                    buf.slice(nullptr, hdr->offset, hdr->size, &dummy));
         }
@@ -176,6 +183,13 @@ struct File {
         SectionHeader const *header = nullptr;
         assert(SliceStatus::Ok ==
                this->m_section_headers.offset(nullptr, index, &header));
+
+        if (header->type == SHT_NOBITS) {
+            return Section{
+                .header = header,
+                .body = Slice<u8>::init_dangling(),
+            };
+        }
 
         Slice<u8> body;
         assert(SliceStatus::Ok ==

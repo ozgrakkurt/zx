@@ -171,6 +171,28 @@ static void test_read_with_overflow(Backtrace *err_bt) {
            leb128::decode_i64(err_bt, buf.as_const(), &offset, &inum));
 }
 
+static void test_terminating_overlong(Backtrace *err_bt) {
+    // Ten-byte LEB128 value whose tenth byte terminates but has high bits
+    // set. This does not fit in u64/i64 and must be rejected. Nine leading
+    // zero-payload continuation bytes followed by 0x02 encodes 2^64.
+    u8 buf_buf[] = {
+        0x80__wbu, 0x80__wbu, 0x80__wbu, 0x80__wbu, 0x80__wbu,
+        0x80__wbu, 0x80__wbu, 0x80__wbu, 0x80__wbu, 0x02__wbu,
+    };
+
+    Slice<u8> buf = Slice<u8>::init_unsafe(buf_buf, sizeof(buf_buf));
+
+    u64 offset = 0;
+    u64 num = 0;
+    assert(leb128::DecodeStatus::InvalidInput ==
+           leb128::decode_u64(err_bt, buf, &offset, &num));
+
+    offset = 0;
+    i64 inum = 0;
+    assert(leb128::DecodeStatus::InvalidInput ==
+           leb128::decode_i64(err_bt, buf, &offset, &inum));
+}
+
 int main(void) {
     Backtrace err_bt = Backtrace::init();
 
@@ -178,6 +200,7 @@ int main(void) {
     test_signed(&err_bt);
     test_limits(&err_bt);
     test_read_with_overflow(&err_bt);
+    test_terminating_overlong(&err_bt);
     test_roundtrip(&err_bt);
 
     return 0;

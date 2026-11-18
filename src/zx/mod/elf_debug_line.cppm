@@ -153,8 +153,8 @@ struct DebugLine {
                 u32 offset = 0;
                 assert(Cursor::Status::Ok ==
                        input->read<u32>(nullptr, &offset));
-                u8 const *start = debug_line_str.offset_unsafe(offset);
                 assert(offset < debug_line_str.len());
+                u8 const *start = debug_line_str.offset_unsafe(offset);
                 u64 const len = strnlen_panic_(
                     start, sub_unsafe_u64(debug_line_str.len(), offset));
 
@@ -277,8 +277,8 @@ struct DebugLine {
                     }
                 }
 
-                u8 const *start = debug_line_str.offset_unsafe(offset);
                 assert(offset < debug_line_str.len());
+                u8 const *start = debug_line_str.offset_unsafe(offset);
                 u64 const len = strnlen_panic_(
                     start, sub_unsafe_u64(debug_line_str.len(), offset));
 
