@@ -38,7 +38,9 @@ static i32 open_temporary_file(Backtrace *err_bt) {
     assert(fd != -1);
 
     testing::assert_with_trace(
-        sys::UnlinkAtStatus::Ok == sys::unlink_at(err_bt, 0, path, 0), err_bt);
+        sys::UnlinkAtStatus::Ok ==
+            sys::unlink_at(err_bt, sys::AT_FDCWD, path, 0),
+        err_bt);
 
     return fd;
 }

@@ -238,6 +238,23 @@ static void test_read_access_impl(Backtrace *err_bt) {
     val = slice.read_unsafe(3);
     assert(val == 4);
 
+    // READ_LAST
+    val = 69;
+    testing::assert_with_trace(SliceStatus::Ok == slice.read_last(err_bt, &val),
+                               err_bt);
+    assert(val == 5);
+
+    // null out
+    assert(SliceStatus::Nullptr == slice.read_last(err_bt, nullptr));
+
+    // empty slice
+    S<u16> const empty = S<u16>::init_unsafe(data, 0);
+    assert(SliceStatus::OutOfBounds == empty.read_last(err_bt, &val));
+
+    // READ_LAST_UNSAFE
+    val = slice.read_last_unsafe();
+    assert(val == 5);
+
     // READ_UNALIGNED
     u64 expected;
     __builtin_memcpy(&expected, &data[1], sizeof(u64));

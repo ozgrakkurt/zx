@@ -29,7 +29,7 @@ struct Fmt {
 
     u64 capacity() const {
         assert_dev(this->m_mem.len() >= this->m_offset);
-        return this->m_mem.len();
+        return this->m_mem.len() - this->m_offset;
     }
 
     u64 capacity_left() const {

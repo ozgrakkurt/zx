@@ -14,7 +14,6 @@ struct Cursor {
         Nullptr,
         IntegerOverflow,
         OutOfBounds,
-        UnexpectedErr,
     };
 
     Slice<u8> m_buf;
@@ -97,7 +96,6 @@ struct WriteCursor {
         Ok = 0,
         IntegerOverflow,
         OutOfBounds,
-        UnexpectedErr,
     };
 
     SliceMut<u8> m_buf;

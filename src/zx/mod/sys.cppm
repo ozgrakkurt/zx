@@ -88,6 +88,7 @@ constexpr i32 AT_SYMLINK_NOFOLLOW = 0x100;
 constexpr i32 AT_STATX_SYNC_AS_STAT = 0x0000;
 constexpr i32 AT_STATX_FORCE_SYNC = 0x2000;
 constexpr i32 AT_STATX_DONT_SYNC = 0x4000;
+constexpr i32 AT_FDCWD = -100;
 
 // These are already defined in statx.cppm so comment them out here
 // echo '#define _GNU_SOURCE 1
@@ -417,6 +418,7 @@ enum class [[nodiscard]] WriteStatus : u8_c {
 WriteStatus write(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
                   u64 *n_written) {
     if (n_written == nullptr || buf == nullptr) [[unlikely]] {
+        Backtrace::collect(err_bt);
         return WriteStatus::Nullptr;
     }
 
@@ -1669,7 +1671,6 @@ __attribute__((naked, noreturn)) void sigreturn_() {
 
 enum class [[nodiscard]] SigActionStatus : u8_c {
     Ok = 0,
-    SigInfoFlagNotAllowed,
     UnexpectedErr,
     EFault,
     EInval,

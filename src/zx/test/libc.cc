@@ -32,11 +32,6 @@ __attribute__((no_builtin)) static void check_memset(u8 *dst, u64 len) {
 
 __attribute__((no_builtin)) static void check_memcmp(u8 *left, u8 *right,
                                                      u64 len) {
-    // this should have a fuzz test
-    // diff pos first, last, middle. put some diffs after the first diff too
-    // (after 5 chars?). lt, gt, eq
-    //
-
     for (u64 i = 0; i < len; i++) {
         left[i] = (u8)i;
         right[i] = (u8)i;
