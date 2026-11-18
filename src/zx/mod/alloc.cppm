@@ -73,6 +73,11 @@ struct Alloc {
     template <typename T>
     AllocStatus aligned_alloc(Backtrace *err_bt, u16 align, u64 len,
                               SliceMut<T> *out) {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::Nullptr;
+        }
+
         if (!is_pow_two_u16(align)) [[unlikely]] {
             Backtrace::collect(err_bt);
             return AllocStatus::InvalidAlign;
@@ -86,11 +91,6 @@ struct Alloc {
         if (align < alignof(T)) [[unlikely]] {
             Backtrace::collect(err_bt);
             return AllocStatus::InvalidAlign;
-        }
-
-        if (out == nullptr) [[unlikely]] {
-            Backtrace::collect(err_bt);
-            return AllocStatus::Nullptr;
         }
 
         if (len == 0) {
