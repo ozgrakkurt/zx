@@ -521,7 +521,8 @@ u64 mod_unsafe_u64(u64 a, u64 b) {
 }
 
 // This maps random number `a` to another random number which is `[0, b)`.
-// The result is uniform only if the `a` is uniform.
+// The result is as uniform as modulo only if the `a` is uniform.
+// Result is 0 if `b` is 0.
 //
 // This function is intended to be used as a faster alternative to doing modulo
 // on random numbers.
@@ -531,7 +532,8 @@ u32 rand_mulshift_mod_u32(u32 a, u32 b) {
 }
 
 // This maps random number `a` to another random number which is `[0, b)`
-// The result is uniform only if the `a` is uniform.
+// The result is as uniform as modulo only if the `a` is uniform.
+// Result is 0 if `b` is 0.
 //
 // This function is intended to be used as a faster alternative to doing modulo
 // on random numbers.

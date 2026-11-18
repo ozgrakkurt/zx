@@ -95,6 +95,7 @@ struct TimeInfo {
         }
 
         *out = info;
+        cleanup_(mmap_page, fd);
         return InitStatus::Ok;
     }
 

@@ -58,9 +58,10 @@ struct Hashtable {
         }
 
         bool overflow = false;
-        u32 cap = next_pow_two_u32(
-            div_u32(mul_u32(capacity, 100, &overflow), LOAD_FACTOR_, &overflow),
-            &overflow);
+        u32 cap =
+            next_pow_two_u32(div_ceil_u32(mul_u32(capacity, 100, &overflow),
+                                          LOAD_FACTOR_, &overflow),
+                             &overflow);
         cap = max_u32(GROUP_SIZE_, cap);
 
         u32 const cap_mask = sub_u32(cap, 1, &overflow);

@@ -41,7 +41,7 @@ struct Xoshiro256 {
         for (u8 i = 0; i < 4; i++) {
             state += PHI;
             u64 z = state;
-            z = (z ^ (z >> 30)) * (u64){0xbf58476d1ce4e5ba},
+            z = (z ^ (z >> 30)) * (u64){0xbf58476d1ce4e5b9};
             z = (z ^ (z >> 27)) * (u64){0x94d049bb133111eb};
             z = z ^ (z >> 31);
             rand.s[i] = z;

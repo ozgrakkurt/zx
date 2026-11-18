@@ -9,21 +9,21 @@ namespace sys {
 
 // echo '#define _GNU_SOURCE 1
 //   #include <signal.h>' | gcc -E -dM -xc - | grep -i "SA_"
-constexpr i32 SA_SIGINFO = 4;
-constexpr i32 SA_ONSTACK = (i32)0x08000000__wbu;
-constexpr i32 SA_NODEFER = (i32)0x40000000__wbu;
-constexpr i32 SA_RESETHAND = (i32)0x80000000__wbu;
-constexpr i32 SA_NOCLDSTOP = 1;
-constexpr i32 SA_STACK = SA_ONSTACK;
-constexpr i32 SA_ONESHOT = SA_RESETHAND;
-constexpr i32 SA_RESTART = (i32)0x10000000__wbu;
-constexpr i32 SA_INTERRUPT = (i32)0x20000000__wbu;
-constexpr i32 SA_NOMASK = SA_NODEFER;
-constexpr i32 SA_NOCLDWAIT = 2;
+constexpr u64 SA_SIGINFO = 4;
+constexpr u64 SA_ONSTACK = 0x08000000__wbu;
+constexpr u64 SA_NODEFER = 0x40000000__wbu;
+constexpr u64 SA_RESETHAND = 0x80000000__wbu;
+constexpr u64 SA_NOCLDSTOP = 1;
+constexpr u64 SA_STACK = SA_ONSTACK;
+constexpr u64 SA_ONESHOT = SA_RESETHAND;
+constexpr u64 SA_RESTART = 0x10000000__wbu;
+constexpr u64 SA_INTERRUPT = 0x20000000__wbu;
+constexpr u64 SA_NOMASK = SA_NODEFER;
+constexpr u64 SA_NOCLDWAIT = 2;
 
 // echo '#include <asm/signal.h>' | gcc -E -dM -xc - 2>/dev/null | grep -i
 // 'SA_RESTORER'
-constexpr i32 SA_RESTORER = (i32)0x04000000__wbu;
+constexpr u64 SA_RESTORER = 0x04000000__wbu;
 
 extern "C" {
 
@@ -175,16 +175,18 @@ struct SigSet {
     }
 };
 
+// echo '#include <asm/signal.h>' | gcc -E -xc - | grep -A6 'struct sigaction'
 struct SigAction_ {
     SigHandler sa_sigaction;
-    i32 sa_flags;
+    u64 sa_flags;
     void (*sa_restorer)(void);
     SigSet sa_mask;
 };
+static_assert(sizeof(SigAction_) == 32);
 
 struct SigAction {
     SigHandler sigaction;
-    i32 flags;
+    u64 flags;
     SigSet mask;
 };
 

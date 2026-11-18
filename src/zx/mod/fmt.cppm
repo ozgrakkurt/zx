@@ -27,10 +27,7 @@ struct Fmt {
         return this->m_mem.slice_unsafe(0, this->m_offset).as_const();
     }
 
-    u64 capacity() const {
-        assert_dev(this->m_mem.len() >= this->m_offset);
-        return this->m_mem.len() - this->m_offset;
-    }
+    u64 capacity() const { return this->m_mem.len(); }
 
     u64 capacity_left() const {
         return sub_unsafe_u64(this->m_mem.len(), this->m_offset);

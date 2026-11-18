@@ -26,8 +26,6 @@ AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
         return AllocStatus::Nullptr;
     }
 
-    assert(__builtin_popcountg(page_size) == 1);
-
     if (__builtin_popcountg(size) != 1 || size < page_size) [[unlikely]] {
         Backtrace::collect(err_bt);
         return AllocStatus::InvalidSize;

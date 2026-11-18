@@ -57,8 +57,6 @@ constexpr u8 DW_MACRO_define_strp = 0x05;
 constexpr u8 DW_MACRO_undef_strp = 0x06;
 constexpr u8 DW_MACRO_import = 0x07;
 
-// 0x08, 0x09, 0x0a are reserved in DWARF5.
-
 constexpr u8 DW_MACRO_define_strx = 0x0b;
 constexpr u8 DW_MACRO_undef_strx = 0x0c;
 constexpr u8 DW_MACRO_define_sup4 = 0x0d;
@@ -594,6 +592,7 @@ struct DebugLine {
 
                 u64 const exit_offset =
                     add_u64(args.input->offset(), len, &overflow);
+                assert(!overflow);
 
                 u8 extended_opcode = 0;
                 assert(Cursor::Status::Ok ==

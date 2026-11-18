@@ -66,6 +66,8 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
            sys::read(nullptr, fd, buf.ptr(), buf.len(), &n_read));
     assert(n_read == file_size);
 
+    assert(sys::CloseStatus::Ok == sys::close(nullptr, fd));
+
     return buf.as_const();
 }
 

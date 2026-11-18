@@ -465,6 +465,18 @@ int main(void) {
     zx::div_ceil_u8(69, 0, &overflow);
     zx::assert(overflow);
 
+    overflow = false;
+    zx::div_ceil_u16(69, 0, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::div_ceil_u32(69, 0, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::div_ceil_u64(69, 0, &overflow);
+    zx::assert(overflow);
+
     // div_ceil b == 1
     overflow = false;
     zx::assert(zx::U8_MAX == zx::div_ceil_u8(zx::U8_MAX, 1, &overflow));
@@ -549,6 +561,18 @@ int main(void) {
     // next_mult div by zero
     overflow = false;
     zx::next_multiple_of_u8(69, 0, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::next_multiple_of_u16(69, 0, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::next_multiple_of_u32(69, 0, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::next_multiple_of_u64(69, 0, &overflow);
     zx::assert(overflow);
 
     // next_multiple_of, a is already a multiple of b at the top of the
@@ -675,6 +699,33 @@ int main(void) {
     overflow = false;
     zx::assert(0 == zx::align_down_u64(7, 8, &overflow));
     zx::assert(!overflow);
+
+    // align_down invalid alignment, must set the flag. the return value is
+    // garbage by contract on this path so only the flag is asserted.
+    overflow = false;
+    zx::align_down_u64(69, 3, &overflow);
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::align_down_u64(69, 0, &overflow);
+    zx::assert(overflow);
+
+    // align_up_unsafe
+    zx::assert(8 == zx::align_up_unsafe_u64(5, 8));
+    zx::assert(0 == zx::align_up_unsafe_u64(0, 8));
+    zx::assert(8 == zx::align_up_unsafe_u64(8, 8));
+    zx::assert(64 == zx::align_up_unsafe_u64(33, 64));
+
+    // already aligned at the top of the range, no intermediate wrapping
+    zx::assert((zx::U64_MAX - 7__wbu) ==
+               zx::align_up_unsafe_u64(zx::U64_MAX - 7__wbu, 8));
+
+    // align_down_unsafe
+    zx::assert((zx::U64_MAX - 7__wbu) ==
+               zx::align_down_unsafe_u64(zx::U64_MAX, 8));
+    zx::assert(0 == zx::align_down_unsafe_u64(7, 8));
+    zx::assert(69 == zx::align_down_unsafe_u64(69, 1));
+    zx::assert(64 == zx::align_down_unsafe_u64(69, 64));
 
     // min
     zx::assert(31 == zx::min_u8(31, 69));

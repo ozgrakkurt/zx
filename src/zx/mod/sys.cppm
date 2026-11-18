@@ -1666,7 +1666,8 @@ FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, u64 length) {
 // It essentially just returns control back to the kernel.
 __attribute__((naked, noreturn)) void sigreturn_() {
     __asm__ volatile("movq $15, %rax\n\t" // __NR_rt_sigreturn
-                     "syscall\n\t");
+                     "syscall\n\t"
+                     "ud2\n\t");
 }
 
 enum class [[nodiscard]] SigActionStatus : u8_c {
