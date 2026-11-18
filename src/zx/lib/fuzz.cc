@@ -4,7 +4,6 @@ namespace zx {
 
 // config {
 static constexpr u64 FUZZ_INPUT_CAP = u64{1} << 12;
-static constexpr u64 FUZZ_SIGNATURE_DEDUP_CAP = 4096;
 static constexpr u64 FUZZ_MAGIC[] = {0, U64_MAX};
 static constexpr u64 FUZZ_N_MAGIC = sizeof(FUZZ_MAGIC) / sizeof(FUZZ_MAGIC[0]);
 static constexpr u64 FUZZ_TIME_LIMIT_NANOS =
@@ -80,7 +79,6 @@ static void fuzz_slot_set_push(FuzzSlotSet *set, u64 value) {
 
 struct FuzzCtx {
     SliceMut<FuzzSlotSet> slot_sets;
-    SliceMut<u32> signature_dedup;
     SliceMut<u64> fuzz_input;
     SliceMut<u32> coverage;
     SliceMut<bool> total_coverage;
@@ -101,13 +99,6 @@ static FuzzCtx fuzz_ctx_init(Backtrace *err_bt, Alloc *alloc) {
         err_bt);
     fuzz_input.memset(0);
 
-    SliceMut<u32> signature_dedup;
-    testing::assert_with_trace(
-        AllocStatus::Ok == alloc->alloc<u32>(err_bt, FUZZ_SIGNATURE_DEDUP_CAP,
-                                             &signature_dedup),
-        err_bt);
-    signature_dedup.memset(0);
-
     SliceMut<FuzzSlotSet> slot_sets;
     testing::assert_with_trace(
         AllocStatus::Ok ==
@@ -124,15 +115,10 @@ static FuzzCtx fuzz_ctx_init(Backtrace *err_bt, Alloc *alloc) {
 
     return FuzzCtx{
         .slot_sets = slot_sets,
-        .signature_dedup = signature_dedup,
         .fuzz_input = fuzz_input,
         .coverage = coverage,
         .total_coverage = total_coverage,
     };
-}
-
-static u32 fuzz_calculate_signature(Slice<u32> coverage) {
-    return (u32)rapidhash_v3::hash(coverage.cast_unsafe<u8>(), 0);
 }
 
 static u64 fuzz_calculate_score(Slice<u32> coverage) {
@@ -153,12 +139,11 @@ static bool fuzz_update_total_coverage(SliceMut<bool> total_coverage,
 
     bool new_coverage = false;
     for (u64 i = 0; i < total_coverage.len(); i++) {
-        if (coverage.read_unsafe(i) > 0) {
+        if (coverage.read_unsafe(i) > 0 && !total_coverage.read_unsafe(i)) {
             total_coverage.write_unsafe(i, true);
             new_coverage = true;
         }
     }
-
     return new_coverage;
 }
 
@@ -167,18 +152,6 @@ struct FuzzResult {
     u64 consumed_count;
     bool improvement;
 };
-
-static bool fuzz_push_signature(SliceMut<u32> signature_dedup, u32 signature) {
-    if (signature_dedup.len() == 0) {
-        panic();
-    }
-
-    u64 const idx = rand_mod_u64(signature, signature_dedup.len());
-    u32 const old_sig = signature_dedup.read_unsafe(idx);
-    bool const is_new = old_sig != signature;
-    signature_dedup.write_unsafe(idx, signature);
-    return is_new;
-}
 
 static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
                                void *usr_ctx, fuzz_one_fn fuzz_one) {
@@ -196,13 +169,10 @@ static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
     Slice<u32> const cov = ctx->coverage.as_const();
     bool const new_coverage =
         fuzz_update_total_coverage(ctx->total_coverage, cov);
-    u32 const signature = fuzz_calculate_signature(cov);
     u64 const score = fuzz_calculate_score(cov);
-    bool const sig_is_new =
-        fuzz_push_signature(ctx->signature_dedup, signature);
 
     bool const score_improvement = score > base_score;
-    bool const improvement = sig_is_new && (new_coverage || score_improvement);
+    bool const improvement = new_coverage || score_improvement;
 
     if (improvement) {
         fuzz_slot_set_push(ctx->slot_sets.offset_mut_unsafe(mut_idx),
@@ -241,6 +211,8 @@ void fuzz(FuzzParams params) {
                                &err_bt);
 
     Timer const timer = Timer::init(time_info);
+
+    rand.fill(ctx.fuzz_input.cast_static<u8>());
 
     while (true) {
 #ifndef ZX_FUZZ_UNLIMITED

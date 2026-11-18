@@ -27,7 +27,8 @@ constexpr i32 SA_RESTORER = (i32)0x04000000__wbu;
 
 extern "C" {
 
-// echo "#include <signal.h>" | gcc -xc - -E | grep -i "SIG"
+// echo '#include <asm/signal.h>' | gcc -E -dM -xc - | grep -E '^#define
+// SIG[A-Z0-9]+[ \t]' | sort -t' ' -k3 -n
 enum class SIG : u32_c {
     HUP = 1,
     INT = 2,
@@ -35,31 +36,32 @@ enum class SIG : u32_c {
     ILL = 4,
     TRAP = 5,
     ABRT = 6,
-    STKFLT = 7,
+    BUS = 7,
     FPE = 8,
     KILL = 9,
-    BUS = 10,
+    USR1 = 10,
     SEGV = 11,
-    XCPU = 12,
+    USR2 = 12,
     PIPE = 13,
     ALRM = 14,
     TERM = 15,
-    USR1 = 16,
-    USR2 = 17,
-    CHLD = 18,
-    PWR = 19,
-    VTALRM = 20,
-    PROF = 21,
-    IO = 22,
-    WINCH = 23,
-    STOP = 24,
-    TSTP = 25,
-    CONT = 26,
-    TTIN = 27,
-    TTOU = 28,
-    URG = 29,
-    XFSZ = 30,
+    STKFLT = 16,
+    CHLD = 17,
+    CONT = 18,
+    STOP = 19,
+    TSTP = 20,
+    TTIN = 21,
+    TTOU = 22,
+    URG = 23,
+    XCPU = 24,
+    XFSZ = 25,
+    VTALRM = 26,
+    PROF = 27,
+    WINCH = 28,
+    IO = 29,
+    PWR = 30,
     SYS = 31,
+    RTMIN = 32,
 };
 
 extern "C" struct SigInfo {
@@ -136,6 +138,8 @@ struct SigSet {
 
     u32 m_data[N_ELEM];
 
+    static constexpr u8 BITS_PER_WORD = sizeof(u32) * 8;
+
     static SigSet init() {
         SigSet out;
         __builtin_memset(out.m_data, 0, sizeof(out.m_data));
@@ -148,24 +152,24 @@ struct SigSet {
 
     void unset(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / N_ELEM;
-        u32 const mask = u32{1} << (s % N_ELEM);
+        u32 const pos = s / BITS_PER_WORD;
+        u32 const mask = u32{1} << (s % BITS_PER_WORD);
         assert_dev(pos < N_ELEM);
         this->m_data[pos] &= ~mask;
     }
 
     void set(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / N_ELEM;
-        u32 const mask = u32{1} << (s % N_ELEM);
+        u32 const pos = s / BITS_PER_WORD;
+        u32 const mask = u32{1} << (s % BITS_PER_WORD);
         assert_dev(pos < N_ELEM);
         this->m_data[pos] |= mask;
     }
 
     bool get(SIG sig) const {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
-        u32 const pos = s / N_ELEM;
-        u32 const mask = u32{1} << (s % N_ELEM);
+        u32 const pos = s / BITS_PER_WORD;
+        u32 const mask = u32{1} << (s % BITS_PER_WORD);
         assert_dev(pos < N_ELEM);
         return (this->m_data[pos] & mask) != 0;
     }
