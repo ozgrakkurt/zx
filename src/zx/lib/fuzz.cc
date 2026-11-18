@@ -240,7 +240,7 @@ void fuzz(FuzzParams params) {
                                    TimeInfo::init(&err_bt, &time_info),
                                &err_bt);
 
-    Timer timer = Timer::init(time_info);
+    Timer const timer = Timer::init(time_info);
 
     while (true) {
 #ifndef ZX_FUZZ_UNLIMITED
@@ -291,6 +291,10 @@ void fuzz(FuzzParams params) {
                 stall = 0;
             } else {
                 stall = saturating_add_u32(stall, 1);
+            }
+
+            if (timer.elapsed() >= FUZZ_TIME_LIMIT_NANOS) {
+                break;
             }
         }
 

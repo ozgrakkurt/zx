@@ -2,6 +2,30 @@ import zx;
 
 using namespace zx;
 
+typedef void (*init_fn_t)(void);
+
+extern init_fn_t __init_array_start[] __attribute__((weak));
+extern init_fn_t __init_array_end[] __attribute__((weak));
+
+static void run_init_array_() {
+    init_fn_t const *start = __init_array_start;
+    init_fn_t const *end = __init_array_end;
+
+    if (start == nullptr) {
+        assert(end == nullptr);
+        return;
+    } else {
+        assert(end != nullptr);
+    }
+
+    assert(start <= end);
+
+    for (init_fn_t const *p = start; p < end; ++p) {
+        if (*p != nullptr)
+            (*p)();
+    }
+}
+
 #ifdef ZX_DEBUG_INFO
 
 // The curlies are to indicate that these are actual definitions are the
@@ -103,7 +127,9 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     // the correspoding error code.
 }
 
-extern "C" void zx_setup_debug_info_() {
+extern "C" void zx_setup_() {
+    run_init_array_();
+
     constexpr u64 MEM_SIZE = u64{1} << 25;
     u8 *mem = nullptr;
     assert(page_alloc::AllocStatus::Ok ==
@@ -163,7 +189,7 @@ extern "C" void zx_setup_debug_info_() {
 
 #else // ifdef ZX_DEBUG_INFO
 
-extern "C" void zx_setup_debug_info_() {}
+extern "C" void zx_setup_() { run_init_array_(); }
 
 #endif // ifdef ZX_DEBUG_INFO
 
@@ -185,7 +211,7 @@ __asm__(
     // envp
     "leaq 16(%rsp, %r15, 8), %r13\n\t"
     // call debug info setup function
-    "callq zx_setup_debug_info_\n\t"
+    "callq zx_setup_\n\t"
     // restore saved argc, argv and envp
     "movq %r15, %rdi\n\t"
     "movq %r14, %rsi\n\t"
