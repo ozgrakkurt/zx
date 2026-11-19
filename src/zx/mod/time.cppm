@@ -12,7 +12,7 @@ struct TimeInfo {
     u64 m_time_shift;
     u64 m_time_mult;
 
-    static constexpr u64 MMAP_LEN = 4096;
+    static constexpr u64 MMAP_LEN = sizeof(sys::PerfEventMmapPage);
 
     // function for cleaning up temporary resources that
     // are allocated in the `init` function.

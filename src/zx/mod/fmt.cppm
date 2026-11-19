@@ -2,6 +2,20 @@ export module zx:fmt;
 import :def;
 import :assert;
 import :slice;
+import :libc;
+
+namespace zx {
+
+// use this to avoid UB because of calling memcpy. We don't want to use memmove
+// because we don't have it (:
+__attribute__((no_builtin)) void fmt_copy_bytes_(u8 *out, u8 const *in,
+                                                 u64 len) {
+    for (u64 i = 0; i < len; i++) {
+        out[i] = in[i];
+    }
+}
+
+} // namespace zx
 
 export namespace zx {
 
@@ -48,8 +62,9 @@ struct Fmt {
             (capacity_left > str.len()) ? str.len() : capacity_left;
         *overflow |= (n_write < str.len());
         if (n_write > 0) {
-            mem.slice_unsafe(offset, n_write)
-                .memcpy_from_unsafe(str.slice_unsafe(0, n_write));
+            SliceMut<u8> out = mem.slice_unsafe(offset, n_write);
+            Slice<u8> in = str.slice_unsafe(0, n_write);
+            fmt_copy_bytes_(out.ptr(), in.ptr(), n_write);
         }
         this->m_offset = add_unsafe_u64(offset, n_write);
     }
