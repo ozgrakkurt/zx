@@ -1,3 +1,7 @@
+// The errors sets on this impl should correspond 1-to-1 with the linux manpages
+// section (2). Section (3) is for library functions, section (2) is for the
+// direct systemcalls.
+
 export module zx:sys;
 import :syscall;
 import :def;
@@ -26,6 +30,7 @@ constexpr i32 MAP_HUGE_1GB = (30 << MAP_HUGE_SHIFT);
 constexpr i32 PROT_NONE = 0x0;
 constexpr i32 PROT_READ = 0x1;
 constexpr i32 PROT_WRITE = 0x2;
+constexpr i32 PROT_EXEC = 0x4;
 
 // echo '#include <sys/fcntl.h>' | gcc -E -dM -xc - | grep -i "O_"
 constexpr i32 O_RDONLY = 00;
@@ -89,41 +94,6 @@ constexpr i32 AT_STATX_SYNC_AS_STAT = 0x0000;
 constexpr i32 AT_STATX_FORCE_SYNC = 0x2000;
 constexpr i32 AT_STATX_DONT_SYNC = 0x4000;
 constexpr i32 AT_FDCWD = -100;
-
-// These are already defined in statx.cppm so comment them out here
-// echo '#define _GNU_SOURCE 1
-// #include <sys/stat.h>' | gcc -E -dM -xc - | grep -i "STATX_"
-// constexpr u32 STATX_SUBVOL = 0x00008000U;
-// constexpr u32 STATX_BASIC_STATS = 0x000007ffU;
-// constexpr u32 STATX_BTIME = 0x00000800U;
-// constexpr u32 STATX_MTIME = 0x00000040U;
-// constexpr u32 STATX_NLINK = 0x00000004U;
-// constexpr u32 STATX_UID = 0x00000008U;
-// constexpr u32 STATX_SIZE = 0x00000200U;
-// constexpr u32 STATX_DIOALIGN = 0x00002000U;
-// constexpr u32 STATX_GID = 0x00000010U;
-// constexpr u32 STATX_DIO_READ_ALIGN = 0x00020000U;
-// constexpr u32 STATX_CTIME = 0x00000080U;
-// constexpr u32 STATX_MODE = 0x00000002U;
-// constexpr u32 STATX_ATIME = 0x00000020U;
-// constexpr u32 STATX_WRITE_ATOMIC = 0x00010000U;
-// constexpr u32 STATX_ALL = 0x00000fffU;
-// constexpr u32 STATX__RESERVED = 0x80000000U;
-// constexpr u32 STATX_MNT_ID = 0x00001000U;
-// constexpr u32 STATX_MNT_ID_UNIQUE = 0x00004000U;
-// constexpr u32 STATX_BLOCKS = 0x00000400U;
-// constexpr u32 STATX_INO = 0x00000100U;
-// constexpr u32 STATX_TYPE = 0x00000001U;
-// constexpr u32 STATX_ATTR_AUTOMOUNT = 0x00001000;
-// constexpr u32 STATX_ATTR_VERITY = 0x00100000;
-// constexpr u32 STATX_ATTR_IMMUTABLE = 0x00000010;
-// constexpr u32 STATX_ATTR_COMPRESSED = 0x00000004;
-// constexpr u32 STATX_ATTR_MOUNT_ROOT = 0x00002000;
-// constexpr u32 STATX_ATTR_DAX = 0x00200000;
-// constexpr u32 STATX_ATTR_NODUMP = 0x00000040;
-// constexpr u32 STATX_ATTR_ENCRYPTED = 0x00000800;
-// constexpr u32 STATX_ATTR_APPEND = 0x00000020;
-// constexpr u32 STATX_ATTR_WRITE_ATOMIC = 0x00400000;
 
 constexpr i32 STDIN = 0;
 constexpr i32 STDOUT = 1;
@@ -1250,7 +1220,7 @@ IoUringRegisterStatus io_uring_register(Backtrace *err_bt, i32 fd, u32 opcode,
             Backtrace::collect(err_bt);
             return IoUringRegisterStatus::ENXIo;
         }
-        case ENOTSUP: {
+        case EOPNOTSUPP: {
             Backtrace::collect(err_bt);
             return IoUringRegisterStatus::EOpNotSupp;
         }
@@ -1271,9 +1241,20 @@ enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     Ok = 0,
     Nullptr,
     UnexpectedErr,
+    EAcces,
+    EBusy,
+    EFault,
+    EIo,
+    EIsDir,
+    ELoop,
+    ENameTooLong,
+    ENoEnt,
+    ENoMem,
+    ENotDir,
+    EPerm,
+    ERoFs,
     EBadF,
     EInval,
-    ENotDir,
 };
 
 UnlinkAtStatus unlink_at(Backtrace *err_bt, i32 dirfd, u8 const *pathname,
@@ -1288,6 +1269,54 @@ UnlinkAtStatus unlink_at(Backtrace *err_bt, i32 dirfd, u8 const *pathname,
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
+        case EACCES: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EAcces;
+        }
+        case EBUSY: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EBusy;
+        }
+        case EFAULT: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EFault;
+        }
+        case EIO: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EIo;
+        }
+        case EISDIR: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EIsDir;
+        }
+        case ELOOP: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ELoop;
+        }
+        case ENAMETOOLONG: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ENameTooLong;
+        }
+        case ENOENT: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ENoEnt;
+        }
+        case ENOMEM: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ENoMem;
+        }
+        case ENOTDIR: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ENotDir;
+        }
+        case EPERM: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::EPerm;
+        }
+        case EROFS: {
+            Backtrace::collect(err_bt);
+            return UnlinkAtStatus::ERoFs;
+        }
         case EBADF: {
             Backtrace::collect(err_bt);
             return UnlinkAtStatus::EBadF;
@@ -1295,10 +1324,6 @@ UnlinkAtStatus unlink_at(Backtrace *err_bt, i32 dirfd, u8 const *pathname,
         case EINVAL: {
             Backtrace::collect(err_bt);
             return UnlinkAtStatus::EInval;
-        }
-        case ENOTDIR: {
-            Backtrace::collect(err_bt);
-            return UnlinkAtStatus::ENotDir;
         }
         default: {
             Backtrace::collect(err_bt);
@@ -1321,9 +1346,9 @@ enum class [[nodiscard]] PReadStatus : u8_c {
     EInval,
     EIo,
     EIsDir,
+    ENXIo,
     EOverflow,
     ESPipe,
-    ENXIo,
 };
 
 PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, u64 offset,
@@ -1374,6 +1399,10 @@ PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, u64 offset,
             Backtrace::collect(err_bt);
             return PReadStatus::EIsDir;
         }
+        case ENXIO: {
+            Backtrace::collect(err_bt);
+            return PReadStatus::ENXIo;
+        }
         case EOVERFLOW: {
             Backtrace::collect(err_bt);
             return PReadStatus::EOverflow;
@@ -1381,10 +1410,6 @@ PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, u64 offset,
         case ESPIPE: {
             Backtrace::collect(err_bt);
             return PReadStatus::ESPipe;
-        }
-        case ENXIO: {
-            Backtrace::collect(err_bt);
-            return PReadStatus::ENXIo;
         }
         default: {
             Backtrace::collect(err_bt);
@@ -1412,9 +1437,9 @@ enum class [[nodiscard]] PWriteStatus : u8_c {
     ENoSpc,
     EPerm,
     EPipe,
+    ENXIo,
     EOverflow,
     ESPipe,
-    ENXIo,
 };
 
 PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
@@ -1478,6 +1503,10 @@ PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
             Backtrace::collect(err_bt);
             return PWriteStatus::EPipe;
         }
+        case ENXIO: {
+            Backtrace::collect(err_bt);
+            return PWriteStatus::ENXIo;
+        }
         case EOVERFLOW: {
             Backtrace::collect(err_bt);
             return PWriteStatus::EOverflow;
@@ -1485,10 +1514,6 @@ PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
         case ESPIPE: {
             Backtrace::collect(err_bt);
             return PWriteStatus::ESPipe;
-        }
-        case ENXIO: {
-            Backtrace::collect(err_bt);
-            return PWriteStatus::ENXIo;
         }
         default: {
             Backtrace::collect(err_bt);
@@ -1512,20 +1537,20 @@ enum class [[nodiscard]] LSeekStatus : u8_c {
     ESPipe,
 };
 
-LSeekStatus lseek(Backtrace *err_bt, i32 fd, u64 offset, i32 whence,
-                  u64 *new_offset) {
+LSeekStatus lseek(Backtrace *err_bt, i32 fd, i64 offset, i32 whence,
+                  i64 *new_offset) {
     if (new_offset == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return LSeekStatus::Nullptr;
     }
 
-    u64 const res = syscall3(NR_LSEEK, (u64)fd, offset, (u64)whence);
+    u64 const res = syscall3(NR_LSEEK, (u64)fd, (u64)offset, (u64)whence);
     u64 const errno = errno_(res);
 
     if (errno != SUCCESS) [[unlikely]] {
         // Make the output invalid so callers can detect misuse if they
         // ignore the returned status.
-        *new_offset = U64_MAX;
+        *new_offset = I64_MIN;
 
         switch (errno) {
         case EBADF: {
@@ -1555,7 +1580,7 @@ LSeekStatus lseek(Backtrace *err_bt, i32 fd, u64 offset, i32 whence,
         }
     }
 
-    *new_offset = res;
+    *new_offset = (i64)res;
     return LSeekStatus::Ok;
 }
 
@@ -1617,10 +1642,14 @@ GetRandomStatus getrandom(Backtrace *err_bt, u8 *buf, u64 size, u32 flags,
 enum class [[nodiscard]] FTruncateStatus : u8_c {
     Ok = 0,
     UnexpectedErr,
+    EFBig,
+    ENoSpc,
     EIntr,
     EInval,
-    EFBig,
     EIo,
+    EPerm,
+    ERoFs,
+    ETxtBsy,
     EBadF,
 };
 
@@ -1630,6 +1659,14 @@ FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, u64 length) {
 
     if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
+        case EFBIG: {
+            Backtrace::collect(err_bt);
+            return FTruncateStatus::EFBig;
+        }
+        case ENOSPC: {
+            Backtrace::collect(err_bt);
+            return FTruncateStatus::ENoSpc;
+        }
         case EINTR: {
             Backtrace::collect(err_bt);
             return FTruncateStatus::EIntr;
@@ -1638,13 +1675,21 @@ FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, u64 length) {
             Backtrace::collect(err_bt);
             return FTruncateStatus::EInval;
         }
-        case EFBIG: {
-            Backtrace::collect(err_bt);
-            return FTruncateStatus::EFBig;
-        }
         case EIO: {
             Backtrace::collect(err_bt);
             return FTruncateStatus::EIo;
+        }
+        case EPERM: {
+            Backtrace::collect(err_bt);
+            return FTruncateStatus::EPerm;
+        }
+        case EROFS: {
+            Backtrace::collect(err_bt);
+            return FTruncateStatus::ERoFs;
+        }
+        case ETXTBSY: {
+            Backtrace::collect(err_bt);
+            return FTruncateStatus::ETxtBsy;
         }
         case EBADF: {
             Backtrace::collect(err_bt);

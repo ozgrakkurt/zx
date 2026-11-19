@@ -91,7 +91,7 @@ static void test_file(Backtrace *err_bt) {
     Xoshiro256 rand = Xoshiro256::init(1131);
     rand.fill(data);
 
-    u64 offset = 0;
+    i64 offset = 0;
     testing::assert_with_trace(
         sys::LSeekStatus::Ok ==
             sys::lseek(err_bt, fd, 2000, sys::SEEK_SET, &offset),

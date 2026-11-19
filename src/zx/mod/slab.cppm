@@ -141,16 +141,19 @@ template <typename T> struct Slab {
         u32 const key_idx = key;
 
         if (key_idx >= this->m_capacity) {
+            Backtrace::collect(err_bt);
 #ifdef ZX_DEV
             __builtin_memset(out, 0xaa, sizeof(T));
 #endif
-            Backtrace::collect(err_bt);
             return SlabAccessStatus::OutOfBounds;
         }
 
         Entry_ *entry = this->m_entries.offset_mut_unsafe(key_idx);
         if (!entry->is_occupied_) {
             Backtrace::collect(err_bt);
+#ifdef ZX_DEV
+            __builtin_memset(out, 0xaa, sizeof(T));
+#endif
             return SlabAccessStatus::NotFound;
         }
         entry->next_free_ = this->m_first_free_entry;
