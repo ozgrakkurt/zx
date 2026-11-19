@@ -53,7 +53,7 @@ u8 nibble_to_hex_(u8 nibble, u8 alpha_offset) {
     return nibble + '0' + a;
 }
 
-void format_simple_(u128 uuid, bool upper_case, SliceMut<u8> out) {
+void format_simple_unsafe_(u128 uuid, bool upper_case, SliceMut<u8> out) {
     u8 const alpha_offset = upper_case ? u8{0x07} : u8{0x27};
     u8 bytes[sizeof(u128)];
     static_assert(sizeof(bytes) == sizeof(u128));
@@ -71,7 +71,7 @@ void print(u128 uuid, bool upper_case, Fmt *fmt, bool *fmt_overflow) {
     u8 simple_buf[sizeof(u128) * 2__wbu];
     SliceMut<u8> simple =
         SliceMut<u8>::init_unsafe(simple_buf, sizeof(simple_buf));
-    format_simple_(uuid, upper_case, simple);
+    format_simple_unsafe_(uuid, upper_case, simple);
 
     u8 dst_buf[sizeof(u128) * 2__wbu + 4__wbu];
     SliceMut<u8> dst = SliceMut<u8>::init_unsafe(dst_buf, sizeof(dst_buf));

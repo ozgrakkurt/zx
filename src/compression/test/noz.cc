@@ -62,6 +62,82 @@ static zx::SliceMut<zx::u8> make_alloc(zx::Backtrace *err_bt,
     return ret;
 }
 
+static void test_compress_bound_errors(void) {
+    zx::u64 bound = zx::U64_MAX;
+
+    zx::assert(noz::CompressBoundStatus::Nullptr ==
+               noz::compress_bound(nullptr, 0, nullptr));
+
+    zx::assert(noz::CompressBoundStatus::IntegerOverflow ==
+               noz::compress_bound(nullptr, zx::U64_MAX, &bound));
+}
+
+static void test_compress_errors(void) {
+    zx::u64 n_written = zx::U64_MAX;
+
+    zx::u8 in_buf[16] = {0};
+    zx::u8 out_buf[16] = {0};
+    zx::Slice<zx::u8> in =
+        zx::Slice<zx::u8>::init_unsafe(in_buf, sizeof(in_buf));
+    zx::SliceMut<zx::u8> out =
+        zx::SliceMut<zx::u8>::init_unsafe(out_buf, sizeof(out_buf));
+
+    // Nullptr
+    zx::assert(noz::CompressStatus::Nullptr ==
+               noz::compress(nullptr, in, out, nullptr));
+
+    // InputOutputOverlap
+    zx::u8 shared[16] = {0};
+    zx::Slice<zx::u8> shared_in =
+        zx::Slice<zx::u8>::init_unsafe(shared, sizeof(shared));
+    zx::SliceMut<zx::u8> shared_out =
+        zx::SliceMut<zx::u8>::init_unsafe(shared, sizeof(shared));
+    zx::assert(noz::CompressStatus::InputOutputOverlap ==
+               noz::compress(nullptr, shared_in, shared_out, &n_written));
+
+    // OutputTooShort: bound for a single byte is 72.
+    zx::u8 one_in_buf[1] = {0};
+    zx::u8 one_out_buf[1] = {0};
+    zx::Slice<zx::u8> one_in =
+        zx::Slice<zx::u8>::init_unsafe(one_in_buf, sizeof(one_in_buf));
+    zx::SliceMut<zx::u8> one_out =
+        zx::SliceMut<zx::u8>::init_unsafe(one_out_buf, sizeof(one_out_buf));
+    zx::assert(noz::CompressStatus::OutputTooShort ==
+               noz::compress(nullptr, one_in, one_out, &n_written));
+}
+
+static void test_decompress_errors(void) {
+    zx::u64 n_read = zx::U64_MAX;
+
+    zx::u8 in_buf[16] = {0};
+    zx::u8 out_buf[16] = {0};
+    zx::Slice<zx::u8> in =
+        zx::Slice<zx::u8>::init_unsafe(in_buf, sizeof(in_buf));
+    zx::SliceMut<zx::u8> out =
+        zx::SliceMut<zx::u8>::init_unsafe(out_buf, sizeof(out_buf));
+
+    // Nullptr
+    zx::assert(noz::DecompressStatus::Nullptr ==
+               noz::decompress(nullptr, in, out, nullptr));
+
+    // InputOutputOverlap
+    zx::u8 shared[16] = {0};
+    zx::Slice<zx::u8> shared_in =
+        zx::Slice<zx::u8>::init_unsafe(shared, sizeof(shared));
+    zx::SliceMut<zx::u8> shared_out =
+        zx::SliceMut<zx::u8>::init_unsafe(shared, sizeof(shared));
+    zx::assert(noz::DecompressStatus::InputOutputOverlap ==
+               noz::decompress(nullptr, shared_in, shared_out, &n_read));
+
+    // InputTooShort: non-empty output with no input bytes at all.
+    zx::Slice<zx::u8> empty = zx::Slice<zx::u8>::init_dangling();
+    zx::u8 one_out_buf[1] = {0};
+    zx::SliceMut<zx::u8> one_out =
+        zx::SliceMut<zx::u8>::init_unsafe(one_out_buf, sizeof(one_out_buf));
+    zx::assert(noz::DecompressStatus::InputTooShort ==
+               noz::decompress(nullptr, empty, one_out, &n_read));
+}
+
 int main(void) {
     zx::Backtrace err_bt = zx::Backtrace::init();
 
@@ -102,6 +178,10 @@ int main(void) {
         rand.fill(b0);
         do_test(&err_bt, b0, b1, b2, b3);
     }
+
+    test_compress_bound_errors();
+    test_compress_errors();
+    test_decompress_errors();
 
     return 0;
 }
