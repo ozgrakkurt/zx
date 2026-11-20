@@ -239,7 +239,7 @@ struct Hashtable {
 
     HashtableGetOrInsertStatus get_or_insert(u64 hash, T const *entry,
                                              EqCtx eqctx, T const **out) {
-        if (out == nullptr) [[unlikely]] {
+        if (out == nullptr || entry == nullptr) [[unlikely]] {
             return HashtableGetOrInsertStatus::Nullptr;
         }
 

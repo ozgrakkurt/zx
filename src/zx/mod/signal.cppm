@@ -62,6 +62,8 @@ enum class SIG : u32_c {
     PWR = 30,
     SYS = 31,
     RTMIN = 32,
+    // Dummy value used for bound checking on SigSet,
+    MAX_ = 32,
 };
 
 extern "C" struct SigInfo {
@@ -140,6 +142,9 @@ struct SigSet {
 
     static constexpr u8 BITS_PER_WORD = sizeof(u32) * 8;
 
+    // Make sure the largest possible index value is in range;
+    static_assert(((u64)SIG::MAX_ / BITS_PER_WORD) < N_ELEM);
+
     static SigSet init() {
         SigSet out;
         __builtin_memset(out.m_data, 0, sizeof(out.m_data));
@@ -154,6 +159,7 @@ struct SigSet {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);
+        // Safe because of the static_assert above.
         assert_dev(pos < N_ELEM);
         this->m_data[pos] &= ~mask;
     }
@@ -162,6 +168,7 @@ struct SigSet {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);
+        // Safe because of the static_assert above.
         assert_dev(pos < N_ELEM);
         this->m_data[pos] |= mask;
     }
@@ -170,6 +177,7 @@ struct SigSet {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);
+        // Safe because of the static_assert above.
         assert_dev(pos < N_ELEM);
         return (this->m_data[pos] & mask) != 0;
     }
