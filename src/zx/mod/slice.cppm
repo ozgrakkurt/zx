@@ -532,11 +532,10 @@ template <typename T> struct Slice {
         if (this->m_len != other.m_len) {
             return false;
         }
-        u64 const len = min_u64(this->m_len, other.m_len);
+        u64 const len = this->m_len;
         // This should be ok because overflow condition is checked in the init
         // method.
         u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        // We are assuming little endian here.
         i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
                                    (u8 const *)other.m_ptr, byte_count);
         return res == 0;
