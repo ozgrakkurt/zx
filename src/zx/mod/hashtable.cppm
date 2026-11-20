@@ -22,6 +22,7 @@ enum class [[nodiscard]] HashtableInsertStatus : u8_c {
     CreatedNewEntry = 0,
     ModifiedExistingEntry,
     OutOfCapacity,
+    Nullptr,
 };
 
 enum class [[nodiscard]] HashtableGetOrInsertStatus : u8_c {
@@ -180,6 +181,10 @@ struct Hashtable {
     }
 
     HashtableInsertStatus insert(u64 hash, T const *entry, EqCtx eqctx) {
+        if (entry == nullptr) [[unlikely]] {
+            return HashtableInsertStatus::Nullptr;
+        }
+
         u8 const tag = (u8)(hash >> 57);
         v128_u8 const tag_vec = broadcast_(tag);
 
@@ -303,7 +308,7 @@ struct Hashtable {
 
     HashtableGetStatus get(u64 const hash, T const *entry, EqCtx eqctx,
                            T const **out) const {
-        if (out == nullptr) [[unlikely]] {
+        if (out == nullptr || entry == nullptr) [[unlikely]] {
             return HashtableGetStatus::Nullptr;
         }
 
