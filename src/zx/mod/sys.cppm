@@ -277,10 +277,6 @@ constexpr u64 NR_IO_URING_SETUP = 425;
 constexpr u64 NR_IO_URING_ENTER = 426;
 constexpr u64 NR_IO_URING_REGISTER = 427;
 
-// echo '#include <signal.h>' | gcc -E -dM -xc - | grep -E "SIGBUS"
-constexpr u64 SIGSEGV = 11;
-constexpr u64 SIGBUS = 7;
-
 // echo '#include <sys/random.h>' | gcc -E -dM -xc - | grep -E "GRND"
 constexpr u32 GRND_INSECURE = 0x04;
 constexpr u32 GRND_NONBLOCK = 0x01;
@@ -1351,14 +1347,14 @@ enum class [[nodiscard]] PReadStatus : u8_c {
     ESPipe,
 };
 
-PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, u64 offset,
+PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, i64 offset,
                   u64 *n_read) {
     if (n_read == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PReadStatus::Nullptr;
     }
 
-    u64 const res = syscall4(NR_PREAD64, (u64)fd, (u64)buf, count, offset);
+    u64 const res = syscall4(NR_PREAD64, (u64)fd, (u64)buf, count, (u64)offset);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
         // The returned n_read count isn't supposed to be used on error case.
@@ -1443,13 +1439,14 @@ enum class [[nodiscard]] PWriteStatus : u8_c {
 };
 
 PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
-                    u64 offset, u64 *n_written) {
+                    i64 offset, u64 *n_written) {
     if (n_written == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PWriteStatus::Nullptr;
     }
 
-    u64 const res = syscall4(NR_PWRITE64, (u64)fd, (u64)buf, count, offset);
+    u64 const res =
+        syscall4(NR_PWRITE64, (u64)fd, (u64)buf, count, (u64)offset);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
         *n_written = U64_MAX;
@@ -1653,8 +1650,8 @@ enum class [[nodiscard]] FTruncateStatus : u8_c {
     EBadF,
 };
 
-FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, u64 length) {
-    u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, length);
+FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, i64 length) {
+    u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, (u64)length);
     u64 const errno = errno_(res);
 
     if (errno != SUCCESS) [[unlikely]] {

@@ -169,21 +169,20 @@ enum class IoUringSQEFlagsBit : u32_c {
  * sqe->flags
  */
 /* use fixed fileset */
-constexpr u16 IOSQE_FIXED_FILE = (1U << (u32)IoUringSQEFlagsBit::FixedFileBit);
+constexpr u8 IOSQE_FIXED_FILE = (1U << (u32)IoUringSQEFlagsBit::FixedFileBit);
 /* issue after inflight IO */
-constexpr u16 IOSQE_IO_DRAIN = (1U << (u32)IoUringSQEFlagsBit::IoDrainBit);
+constexpr u8 IOSQE_IO_DRAIN = (1U << (u32)IoUringSQEFlagsBit::IoDrainBit);
 /* links next sqe */
-constexpr u16 IOSQE_IO_LINK = (1U << (u32)IoUringSQEFlagsBit::IoLinkBit);
+constexpr u8 IOSQE_IO_LINK = (1U << (u32)IoUringSQEFlagsBit::IoLinkBit);
 /* like LINK, but stronger */
-constexpr u16 IOSQE_IO_HARDLINK =
-    (1U << (u32)IoUringSQEFlagsBit::IoHardlinkBit);
+constexpr u8 IOSQE_IO_HARDLINK = (1U << (u32)IoUringSQEFlagsBit::IoHardlinkBit);
 /* always go async */
-constexpr u16 IOSQE_ASYNC = (1U << (u32)IoUringSQEFlagsBit::AsyncBit);
+constexpr u8 IOSQE_ASYNC = (1U << (u32)IoUringSQEFlagsBit::AsyncBit);
 /* select buffer from sqe->buf_group */
-constexpr u16 IOSQE_BUFFER_SELECT =
+constexpr u8 IOSQE_BUFFER_SELECT =
     (1U << (u32)IoUringSQEFlagsBit::BufferSelectBit);
 /* don't post CQE if request succeeded */
-constexpr u16 IOSQE_CQE_SKIP_SUCCESS =
+constexpr u8 IOSQE_CQE_SKIP_SUCCESS =
     (1U << (u32)IoUringSQEFlagsBit::CQESkipSuccessBit);
 
 /*
@@ -363,17 +362,17 @@ constexpr u32 IORING_FSYNC_DATASYNC = (1U << 0);
  *					value in nanoseconds instead of
  *					pointing to a timespec.
  */
-constexpr u16 IORING_TIMEOUT_ABS = (1U << 0);
-constexpr u16 IORING_TIMEOUT_UPDATE = (1U << 1);
-constexpr u16 IORING_TIMEOUT_BOOTTIME = (1U << 2);
-constexpr u16 IORING_TIMEOUT_REALTIME = (1U << 3);
-constexpr u16 IORING_LINK_TIMEOUT_UPDATE = (1U << 4);
-constexpr u16 IORING_TIMEOUT_ETIME_SUCCESS = (1U << 5);
-constexpr u16 IORING_TIMEOUT_MULTISHOT = (1U << 6);
-constexpr u16 IORING_TIMEOUT_IMMEDIATE_ARG = (1U << 7);
-constexpr u16 IORING_TIMEOUT_CLOCK_MASK =
+constexpr u32 IORING_TIMEOUT_ABS = (1U << 0);
+constexpr u32 IORING_TIMEOUT_UPDATE = (1U << 1);
+constexpr u32 IORING_TIMEOUT_BOOTTIME = (1U << 2);
+constexpr u32 IORING_TIMEOUT_REALTIME = (1U << 3);
+constexpr u32 IORING_LINK_TIMEOUT_UPDATE = (1U << 4);
+constexpr u32 IORING_TIMEOUT_ETIME_SUCCESS = (1U << 5);
+constexpr u32 IORING_TIMEOUT_MULTISHOT = (1U << 6);
+constexpr u32 IORING_TIMEOUT_IMMEDIATE_ARG = (1U << 7);
+constexpr u32 IORING_TIMEOUT_CLOCK_MASK =
     (IORING_TIMEOUT_BOOTTIME | IORING_TIMEOUT_REALTIME);
-constexpr u16 IORING_TIMEOUT_UPDATE_MASK =
+constexpr u32 IORING_TIMEOUT_UPDATE_MASK =
     (IORING_TIMEOUT_UPDATE | IORING_LINK_TIMEOUT_UPDATE);
 /*
  * sqe->splice_flags
@@ -772,7 +771,7 @@ struct IoUringRegionDesc {
 /* expose the region as registered wait arguments */
 constexpr u32 IORING_MEM_REGION_REG_WAIT_ARG = 1;
 
-struct io_uring_mem_region_reg {
+struct IoUringMemRegionReg {
     u64 region_uptr; /* struct io_uring_region_desc * */
     u64 flags;
     u64 __resv[2];

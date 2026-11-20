@@ -35,7 +35,7 @@ struct Alloc {
 
     void reset() {
 #ifdef ZX_DEV
-        this->m_mem.memset(0xaa);
+        this->m_mem.slice_unsafe(0, this->m_offset).memset(0xaa);
 #endif
         this->m_offset = 0;
     }
