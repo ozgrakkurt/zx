@@ -107,6 +107,9 @@ struct File {
         assert(SliceStatus::Ok == header_list.offset(nullptr, 0, &header));
         assert(header != nullptr);
 
+        assert(header->ident[0] == 0x7f && header->ident[1] == 'E' &&
+               header->ident[2] == 'L' && header->ident[3] == 'F');
+
         assert(header->ehsize == sizeof(ElfHeader));
         assert(header->shentsize == sizeof(SectionHeader));
 
