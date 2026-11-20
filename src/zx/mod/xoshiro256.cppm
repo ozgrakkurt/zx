@@ -50,7 +50,7 @@ struct Xoshiro256 {
 #ifdef ZX_DEV
         {
             bool all_zero = true;
-            for (i8 i = 0; i < 4; i++) {
+            for (u8 i = 0; i < 4; i++) {
                 all_zero &= rand.s[i] == 0;
             }
             if (all_zero) {
