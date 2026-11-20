@@ -3,6 +3,7 @@ import :def;
 import :assert;
 import :slice;
 import :libc;
+import :arith;
 
 namespace zx {
 
@@ -99,7 +100,7 @@ struct Fmt {
             this->push_u64((u64)val, overflow);
         } else {
             this->push_char((u8)'-', overflow);
-            this->push_u64((u64)-val, overflow);
+            this->push_u64(inverse_u64((u64)val), overflow);
         }
     }
 
