@@ -19,8 +19,7 @@ static void sigset_test() {
     assert(!set.get(sys::SIG::KILL));
     assert(!set.get(sys::SIG::RTMIN));
 
-    // set every valid signal number 1..63.
-    for (u32 sig = 1; sig <= 63; sig++) {
+    for (u32 sig = (u32)sys::SIG::MIN_; sig <= (u32)sys::SIG::MAX_; sig++) {
         set.set((sys::SIG)sig);
     }
 

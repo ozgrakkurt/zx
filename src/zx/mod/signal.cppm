@@ -62,8 +62,9 @@ enum class SIG : u32_c {
     PWR = 30,
     SYS = 31,
     RTMIN = 32,
-    // Dummy value used for bound checking on SigSet,
-    MAX_ = 32,
+    // Dummy values used for bound checking on SigSet,
+    MAX_ = 63,
+    MIN_ = 1,
 };
 
 extern "C" struct SigInfo {
@@ -143,7 +144,10 @@ struct SigSet {
     static constexpr u8 BITS_PER_WORD = sizeof(u32) * 8;
 
     // Make sure the largest possible index value is in range;
-    static_assert(((u64)SIG::MAX_ / BITS_PER_WORD) < N_ELEM);
+    static_assert(((u32)SIG::MAX_ / BITS_PER_WORD) < N_ELEM);
+
+    // Make sure this is > 0 as we subtract 1 from it;
+    static_assert((u32)SIG::MIN_ > 0);
 
     static SigSet init() {
         SigSet out;
