@@ -501,24 +501,30 @@ template <typename T> struct Slice {
 
     [[nodiscard]] Comparison compare(Slice other) const {
         u64 const len = min_u64(this->m_len, other.m_len);
-        // This should be ok because overflow condition is checked in the init
-        // method.
-        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        // We are assuming little endian here.
-        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                   (u8 const *)other.m_ptr, byte_count);
-        if (res == 0) {
-            if (this->m_len > other.m_len) {
+
+        T const *ptr = this->m_ptr;
+        T const *other_ptr = other.m_ptr;
+
+        for (u64 i = 0; i < len; i++) {
+            T const val = ptr[i];
+            T const other_val = other_ptr[i];
+            // This is slow because it can't be vectorized, changing it to use a
+            // SIMD function that finds the first differing position might
+            // perform a lot better.
+            if (val > other_val) {
                 return Comparison::Greater;
-            } else if (this->m_len < other.m_len) {
-                return Comparison::Less;
-            } else {
-                return Comparison::Equal;
             }
-        } else if (res < 0) {
+            if (val < other_val) {
+                return Comparison::Less;
+            }
+        }
+
+        if (this->m_len > other.m_len) {
+            return Comparison::Greater;
+        } else if (this->m_len < other.m_len) {
             return Comparison::Less;
         } else {
-            return Comparison::Greater;
+            return Comparison::Equal;
         }
     }
 
@@ -526,7 +532,14 @@ template <typename T> struct Slice {
         if (this->m_len != other.m_len) {
             return false;
         }
-        return this->compare(other) == Comparison::Equal;
+        u64 const len = min_u64(this->m_len, other.m_len);
+        // This should be ok because overflow condition is checked in the init
+        // method.
+        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
+        // We are assuming little endian here.
+        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
+                                   (u8 const *)other.m_ptr, byte_count);
+        return res == 0;
     }
 
     [[nodiscard]] u64 count(T elem) const {
@@ -1016,24 +1029,30 @@ template <typename T> struct SliceMut {
 
     [[nodiscard]] Comparison compare(SliceMut other) const {
         u64 const len = min_u64(this->m_len, other.m_len);
-        // This should be ok because overflow condition is checked in the init
-        // method.
-        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        // We are assuming little endian here.
-        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                   (u8 const *)other.m_ptr, byte_count);
-        if (res == 0) {
-            if (this->m_len > other.m_len) {
+
+        T const *ptr = this->m_ptr;
+        T const *other_ptr = other.m_ptr;
+
+        for (u64 i = 0; i < len; i++) {
+            T const val = ptr[i];
+            T const other_val = other_ptr[i];
+            // This is slow because it can't be vectorized, changing it to use a
+            // SIMD function that finds the first differing position might
+            // perform a lot better.
+            if (val > other_val) {
                 return Comparison::Greater;
-            } else if (this->m_len < other.m_len) {
-                return Comparison::Less;
-            } else {
-                return Comparison::Equal;
             }
-        } else if (res < 0) {
+            if (val < other_val) {
+                return Comparison::Less;
+            }
+        }
+
+        if (this->m_len > other.m_len) {
+            return Comparison::Greater;
+        } else if (this->m_len < other.m_len) {
             return Comparison::Less;
         } else {
-            return Comparison::Greater;
+            return Comparison::Equal;
         }
     }
 
@@ -1041,7 +1060,14 @@ template <typename T> struct SliceMut {
         if (this->m_len != other.m_len) {
             return false;
         }
-        return this->compare(other) == Comparison::Equal;
+        u64 const len = min_u64(this->m_len, other.m_len);
+        // This should be ok because overflow condition is checked in the init
+        // method.
+        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
+        // We are assuming little endian here.
+        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
+                                   (u8 const *)other.m_ptr, byte_count);
+        return res == 0;
     }
 
     [[nodiscard]] u64 count(T elem) const {

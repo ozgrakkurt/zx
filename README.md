@@ -1,7 +1,5 @@
 # zx
 
-This is the implementation of `zx` programming language.
-
 ## Developing
 
 ### CLI
