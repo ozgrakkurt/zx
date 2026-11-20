@@ -117,4 +117,15 @@ We allocate memory from the OS using mmap at program start and then don't do any
 
 ### SIMD
 
-Since we don't include standard headers, we use clang builtins or inline assembly for doing SIMD.
+Since we don't include standard headers, we use clang builtins for doing SIMD.
+
+Vector types are defined in `zx:vector`.
+
+Tipically you can replace an immintrin function with an operator (+, -, ..) or a __builtin_ia32* intrinsic.
+
+To find how to immitate an immintrin function, go to https://github.com/llvm/llvm-project/blob/main/clang/lib/Headers/immintrin.h and find the header file that corresponds to the feature set of
+the immintrin you want to use. For example `avxintrin.h` contains intrinsics that implement the `AVX` features. Then you can check the definition of the immintrin function there to find how it is implemented.
+You will want to do w/e that function is doing directly in this codebase.
+
+We generally don't want to implement the immintrin functions in this codebase since there is a huge number of them and they are not particularly useful to have in terms of abstraction.
+
