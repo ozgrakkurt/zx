@@ -118,8 +118,21 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     };
 
     Backtrace bt;
-    // ignore truncation error
-    (void)ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, &bt);
+    elf::EhFrame::BacktraceStatus const status =
+        ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, &bt);
+    switch (status) {
+    case elf::EhFrame::BacktraceStatus::Ok: {
+        break;
+    }
+    case elf::EhFrame::BacktraceStatus::OutOfCapacity: {
+        // we don't care if it truncated.
+        break;
+    }
+    default: {
+        __builtin_memset(&bt, 0, sizeof(Backtrace));
+        break;
+    }
+    }
 
     elf::print_stack_trace_panic(&bt);
 

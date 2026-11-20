@@ -89,7 +89,7 @@ The code consists exclusively of `.cppm` and `.cc` files.
 
 We don't link-in any standard library code or standard headers. There is no header usage in the codebase, no includes or `.h` files.
 
-It is now allowed to use basically any C++ feature except methods and templates.
+It is not allowed to use basically any C++ feature except methods and templates.
 
 Struct field names should be prefixed with m_ in structs with methods.
 

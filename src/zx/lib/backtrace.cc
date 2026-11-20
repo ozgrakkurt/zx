@@ -18,8 +18,19 @@ void Backtrace::collect(Backtrace *bt) {
 
     elf::EhFrame::BacktraceStatus const status =
         ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, bt);
-    // doesn't matter if it truncated
-    (void)status;
+    switch (status) {
+    case elf::EhFrame::BacktraceStatus::Ok: {
+        break;
+    }
+    case elf::EhFrame::BacktraceStatus::OutOfCapacity: {
+        // we don't care if it truncated.
+        break;
+    }
+    default: {
+        __builtin_memset(bt, 0, sizeof(Backtrace));
+        break;
+    }
+    }
 }
 
 #else // ifdef ZX_DEBUG_INFO

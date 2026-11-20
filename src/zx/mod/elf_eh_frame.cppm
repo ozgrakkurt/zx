@@ -1146,11 +1146,17 @@ struct EhFrame {
     enum class [[nodiscard]] BacktraceStatus : u8_c {
         Ok = 0,
         OutOfCapacity,
+        DebugInfoUninitialized,
     };
 
     BacktraceStatus backtrace_panic(CPUContext const *cpu_ctx, Backtrace *bt) {
         assert(cpu_ctx != nullptr);
         assert(bt != nullptr);
+
+        if (this->is_empty()) {
+            __builtin_memset(bt, 0xaa, sizeof(Backtrace));
+            return BacktraceStatus::DebugInfoUninitialized;
+        }
 
         constexpr u64 STATE_STACK_SIZE = 16;
         RegisterState state_stack_mem[STATE_STACK_SIZE];
@@ -1398,6 +1404,8 @@ struct EhFrame {
             .m_fd_entries = out_fdes.as_const(),
         };
     }
+
+    bool is_empty() const { return this->m_fd_entries.len() == 0; }
 };
 
 } // namespace elf

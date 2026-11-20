@@ -62,11 +62,14 @@ template <typename T> struct Slice {
             return SliceInitStatus::UnalignedPtr;
         }
 
-        bool overflow = false;
-        mul_u64(len, sizeof(T), &overflow);
-        if (overflow) [[unlikely]] {
-            Backtrace::collect(err_bt);
-            return SliceInitStatus::IntegerOverflow;
+        {
+            bool overflow = false;
+            u64 const offset = mul_u64(len, sizeof(T), &overflow);
+            add_u64((u64)ptr, offset, &overflow);
+            if (overflow) [[unlikely]] {
+                Backtrace::collect(err_bt);
+                return SliceInitStatus::IntegerOverflow;
+            }
         }
 
         *out = Slice{
@@ -81,7 +84,8 @@ template <typename T> struct Slice {
         assert_dev(__builtin_is_aligned(ptr, alignof(T)));
 
         bool overflow = false;
-        mul_u64(len, sizeof(T), &overflow);
+        u64 const offset = mul_u64(len, sizeof(T), &overflow);
+        add_u64(offset, (u64)ptr, &overflow);
         assert_dev(!overflow);
 
         return Slice{
@@ -568,11 +572,14 @@ template <typename T> struct SliceMut {
             return SliceInitStatus::UnalignedPtr;
         }
 
-        bool overflow = false;
-        mul_u64(len, sizeof(T), &overflow);
-        if (overflow) [[unlikely]] {
-            Backtrace::collect(err_bt);
-            return SliceInitStatus::IntegerOverflow;
+        {
+            bool overflow = false;
+            u64 const offset = mul_u64(len, sizeof(T), &overflow);
+            add_u64((u64)ptr, offset, &overflow);
+            if (overflow) [[unlikely]] {
+                Backtrace::collect(err_bt);
+                return SliceInitStatus::IntegerOverflow;
+            }
         }
 
         *out = SliceMut{
@@ -587,7 +594,8 @@ template <typename T> struct SliceMut {
         assert_dev(__builtin_is_aligned(ptr, alignof(T)));
 
         bool overflow = false;
-        mul_u64(len, sizeof(T), &overflow);
+        u64 const offset = mul_u64(len, sizeof(T), &overflow);
+        add_u64(offset, (u64)ptr, &overflow);
         assert_dev(!overflow);
 
         return SliceMut{

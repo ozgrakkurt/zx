@@ -110,9 +110,44 @@ static void empty_test() {
     zx::assert(overflow);
 }
 
+static void overlap_test() {
+    zx::u8 arr[16];
+    __builtin_memset(arr, 0xaa, sizeof(arr));
+
+    zx::Fmt fmt =
+        zx::Fmt::init(zx::SliceMut<zx::u8>::init_unsafe(arr, sizeof(arr)));
+
+    // The source and destination are the same range [0, 8), so the copy must
+    // be rejected.
+    bool fail = false;
+    fmt.push_str(zx::Slice<zx::u8>::init_unsafe(arr, 8), &fail);
+    zx::assert(fail);
+    zx::assert(fmt.n_written() == 0);
+    for (zx::u64 i = 0; i < sizeof(arr); i++) {
+        zx::assert(arr[i] == 0xaa);
+    }
+
+    // Write a prefix from a non-overlapping source. This must not set fail.
+    zx::u8 const prefix[] = {'a', 'b', 'c', 'd'};
+    fail = false;
+    fmt.push_str(zx::Slice<zx::u8>::init_unsafe(prefix, 4), &fail);
+    zx::assert(!fail);
+    zx::assert(fmt.n_written() == 4);
+
+    // Now the destination is [4, 9) and the source is [2, 7), which overlap
+    // on [4, 7). This partial overlap must also be rejected without writing
+    // anything.
+    fail = false;
+    fmt.push_str(zx::Slice<zx::u8>::init_unsafe(arr + 2, 5), &fail);
+    zx::assert(fail);
+    zx::assert(fmt.n_written() == 4);
+    zx::assert(0 == __builtin_memcmp(arr, "abcd", 4));
+}
+
 int main(void) {
     basic_test();
     empty_test();
+    overlap_test();
 
     return 0;
 }

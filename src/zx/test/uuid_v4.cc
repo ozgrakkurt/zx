@@ -16,10 +16,6 @@ using namespace zx;
 // The `print` vectors are the canonical textual form of their corresponding
 // 128-bit values.
 
-// bit 0 is the most significant bit. The version nibble is bits 48-51 and
-// the variant bits are bits 64-65, matching the textual layout where hex
-// digit 12 is the version and the top 2 bits of hex digit 16 are the
-// variant.
 constexpr u128 VERSION_NIBBLE_MASK = u128{0xF} << 76__wbu;
 constexpr u128 VERSION_NIBBLE_4 = u128{4} << 76__wbu;
 constexpr u128 VARIANT_BITS_MASK = u128{0x3} << 62__wbu;

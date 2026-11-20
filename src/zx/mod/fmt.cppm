@@ -5,19 +5,6 @@ import :slice;
 import :libc;
 import :arith;
 
-namespace zx {
-
-// use this to avoid UB because of calling memcpy. We don't want to use memmove
-// because we don't have it (:
-__attribute__((no_builtin)) void fmt_copy_bytes_(u8 *out, u8 const *in,
-                                                 u64 len) {
-    for (u64 i = 0; i < len; i++) {
-        out[i] = in[i];
-    }
-}
-
-} // namespace zx
-
 export namespace zx {
 
 struct Fmt {
@@ -55,17 +42,22 @@ struct Fmt {
         this->m_offset = 0;
     }
 
-    void push_str(Slice<u8> str, bool *overflow) {
+    void push_str(Slice<u8> str, bool *fail) {
         SliceMut<u8> const mem = this->m_mem;
         u64 const offset = this->m_offset;
         u64 const capacity_left = this->capacity_left();
         u64 const n_write =
             (capacity_left > str.len()) ? str.len() : capacity_left;
-        *overflow |= (n_write < str.len());
+        *fail |= (n_write < str.len());
         if (n_write > 0) {
             SliceMut<u8> out = mem.slice_unsafe(offset, n_write);
             Slice<u8> in = str.slice_unsafe(0, n_write);
-            fmt_copy_bytes_(out.ptr(), in.ptr(), n_write);
+
+            if (out.as_const().is_overlapping(in)) {
+                *fail = true;
+                return;
+            }
+            out.memcpy_from_unsafe(in);
         }
         this->m_offset = add_unsafe_u64(offset, n_write);
     }
