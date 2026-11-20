@@ -146,34 +146,16 @@ struct Hashtable {
     }
 
     static u16 tag_match_(v128_u8 group, v128_u8 tag_vec) {
-        u64_c tag_m;
-
-        __asm__("vpcmpeqb %[tag_vec], %[group], %%xmm15\n\t"
-                "vpmovmskb %%xmm15, %[tag_m]\n\t"
-                : [tag_m] "=&r"(tag_m)
-                : [group] "v"(group), [tag_vec] "v"(tag_vec)
-                : "xmm15");
-
-        return (u16)tag_m;
+        return (u16)__builtin_ia32_pmovmskb128(group == tag_vec);
     }
 
     static u16 empty_match_(v128_u8 group) {
-        u64_c empty_m;
-
-        __asm__("vpmovmskb %[group], %[empty_m]\n\t"
-                : [empty_m] "=&r"(empty_m)
-                : [group] "v"(group));
-
-        return (u16)empty_m;
+        return (u16)__builtin_ia32_pmovmskb128(group);
     }
 
     static v128_u8 broadcast_(u8 tag) {
-        v128_u8 tag_vec;
-        __asm__("vmovd %[tag], %[tag_vec]\n\t"
-                "vpbroadcastb %[tag_vec], %[tag_vec]\n\t"
-                : [tag_vec] "=&v"(tag_vec)
-                : [tag] "r"((u32_c)tag));
-        return tag_vec;
+        return {tag, tag, tag, tag, tag, tag, tag, tag,
+                tag, tag, tag, tag, tag, tag, tag, tag};
     }
 
     static u16 remove_last_set_bit_(u16 v) {
