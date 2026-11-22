@@ -5,20 +5,26 @@ import :assert;
 
 export namespace zx {
 
-// Should strive to make these implementations SMALL. As in the machine code
-// output should be as small as possible.
-//
-// For example memcpy doesn't have to be the absolute best at copying 10GB of
-// memory, the caller should benchmark and write something that is actually good
-// at that size if they have a usecase like this.
-//
-// We can keep the size small and code basic here so we don't trash the
-// instruction cache for imaginary performance gains.
-
 __attribute__((no_builtin)) void *
 memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 const *input = (u8 const *)src;
     u8 *output = (u8 *)dest;
+
+    // Large copies: the CPU's rep movsb path streams better than our vector
+    // loop. Only use it when the destination is 64 byte aligned or when source
+    // and destination share the same 64 byte phase; otherwise rep movsb can hit
+    // a very slow alignment case on AMD.
+    if (count >= (u64{48} << 20__wbu) && ((((u64)dest ^ (u64)src) & 63) == 0 ||
+                                          ((u64)dest & 63) == 0)) [[unlikely]] {
+        u64_c n = count;
+        void *d = dest;
+        void const *s = src;
+        __asm__ __volatile__("rep movsb"
+                             : "+D"(d), "+S"(s), "+c"(n)
+                             :
+                             : "memory");
+        return dest;
+    }
 
     u64 offset = 0;
 
