@@ -73,7 +73,8 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
         return CompressStatus::Ok;
     }
 
-    zx::v512_u8 const zeros = {};
+    zx::v512_u8 zeros;
+    __asm__("vxorps %[zeros], %[zeros], %[zeros]\n\t" : [zeros] "=&v"(zeros));
 
     zx::u64 in_offset = 0;
     zx::u64 out_offset = 0;
@@ -81,37 +82,46 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
          in_offset = zx::add_unsafe_u64(in_offset, 64)) {
         zx::u64 const data_offset =
             zx::add_unsafe_u64(out_offset, sizeof(zx::u64));
+        zx::u64_c n_w;
+        __asm__("vmovdqu8 %[input], %%zmm31\n\t"
+                "vpcmpub $4, %%zmm31, %[zeros], %%k7\n\t"
+                "kmovq %%k7, %[out0]\n\t"
+                "kmovq %%k7, %[n_w]\n\t"
+                "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+                "vmovdqu8 %%zmm30, %[out1]\n\t"
+                "popcntq %[n_w], %[n_w]\n\t"
+                : [out0] "=&m"(*(zx::u8(*)[8]) & output.ptr()[out_offset]),
+                  [out1] "=&m"(*(zx::u8(*)[64]) & output.ptr()[data_offset]),
+                  [n_w] "=&r"(n_w)
+                : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[in_offset]),
+                  [zeros] "v"(zeros)
+                : "zmm30", "zmm31", "k7");
 
-        zx::v512_u8 const in_vec =
-            input.read_unaligned_unsafe<zx::v512_u8>(in_offset);
-        zx::u64 const mask =
-            __builtin_ia32_ucmpb512_mask(in_vec, zeros, 4, zx::U64_MAX);
-        zx::v512_u8 const compressed =
-            __builtin_ia32_compressqi512_mask(in_vec, zeros, mask);
-
-        output.write_unaligned_unsafe<zx::u64>(out_offset, mask);
-        output.write_unaligned_unsafe<zx::v512_u8>(data_offset, compressed);
-
-        out_offset = zx::add_unsafe_u64(data_offset, zx::popcount_u64(mask));
+        out_offset = zx::add_unsafe_u64(data_offset, n_w);
     }
 
     zx::u64 const remainder = zx::sub_unsafe_u64(input.len(), in_offset);
     if (remainder > 0) {
-        zx::u64 const loadmask = __builtin_ia32_bzhi_di(zx::U64_MAX, remainder);
+        register zx::u64_c const loadmask __asm__("k6") =
+            __builtin_ia32_bzhi_di(~(zx::u64){0}, remainder);
         zx::u64 const data_offset =
             zx::add_unsafe_u64(out_offset, sizeof(zx::u64));
+        zx::u64_c n_w;
+        __asm__("vmovdqu8 %[input], %%zmm31 %{%[loadmask]%}%{z%}\n\t"
+                "vpcmpub $4, %%zmm31, %[zeros], %%k7\n\t"
+                "kmovq %%k7, %[out0]\n\t"
+                "kmovq %%k7, %[n_w]\n\t"
+                "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+                "vmovdqu8 %%zmm30, %[out1]\n\t"
+                "popcntq %[n_w], %[n_w]\n\t"
+                : [out0] "=&m"(*(zx::u8(*)[8]) & output.ptr()[out_offset]),
+                  [out1] "=&m"(*(zx::u8(*)[64]) & output.ptr()[data_offset]),
+                  [n_w] "=&r"(n_w)
+                : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[in_offset]),
+                  [zeros] "v"(zeros), [loadmask] "k"(loadmask)
+                : "zmm31", "zmm30", "k7");
 
-        zx::v512_u8 const in_vec = __builtin_ia32_loaddquqi512_mask(
-            (zx::v512_i8 const *)&input.ptr()[in_offset], zeros, loadmask);
-        zx::u64 const mask =
-            __builtin_ia32_ucmpb512_mask(in_vec, zeros, 4, zx::U64_MAX);
-        zx::v512_u8 const compressed =
-            __builtin_ia32_compressqi512_mask(in_vec, zeros, mask);
-
-        output.write_unaligned_unsafe<zx::u64>(out_offset, mask);
-        output.write_unaligned_unsafe<zx::v512_u8>(data_offset, compressed);
-
-        out_offset = zx::add_unsafe_u64(data_offset, zx::popcount_u64(mask));
+        out_offset = zx::add_unsafe_u64(data_offset, n_w);
     }
 
     *n_written = out_offset;
@@ -142,8 +152,6 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
         return DecompressStatus::Ok;
     }
 
-    zx::v512_u8 const zeros = {};
-
     zx::u64 in_offset = 0;
     zx::u64 out_offset = 0;
     for (; zx::add_unsafe_u64(out_offset, 64) <= output.len();
@@ -155,7 +163,8 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             return DecompressStatus::InputTooShort;
         }
 
-        zx::u64 const control = input.read_unaligned_unsafe<zx::u64>(in_offset);
+        register zx::u64_c control __asm__("k7") =
+            input.read_unaligned_unsafe<zx::u64>(in_offset);
 
         zx::u64 const step_end =
             zx::add_unsafe_u64(control_end, zx::popcount_u64(control));
@@ -164,9 +173,13 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             return DecompressStatus::InputTooShort;
         }
 
-        zx::v512_u8 const expanded = __builtin_ia32_expandloadqi512_mask(
-            (zx::v512_i8 const *)&input.ptr()[control_end], zeros, control);
-        output.write_unaligned_unsafe<zx::v512_u8>(out_offset, expanded);
+        __asm__(
+            "vpexpandb %[input], %%zmm31 %{%[control]%}%{z%}\n\t"
+            "vmovdqu8 %%zmm31, %[output]\n\t"
+            : [output] "=&m"(*(zx::u8(*)[64]) & output.ptr()[out_offset])
+            : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[control_end]),
+              [control] "k"(control)
+            : "zmm31");
 
         in_offset = step_end;
     }
@@ -180,7 +193,8 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             return DecompressStatus::InputTooShort;
         }
 
-        zx::u64 const control = input.read_unaligned_unsafe<zx::u64>(in_offset);
+        register zx::u64_c control __asm__("k7") =
+            input.read_unaligned_unsafe<zx::u64>(in_offset);
 
         zx::u64 const step_end =
             zx::add_unsafe_u64(control_end, zx::popcount_u64(control));
@@ -189,13 +203,16 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             return DecompressStatus::InputTooShort;
         }
 
-        zx::u64 const storemask =
-            __builtin_ia32_bzhi_di(zx::U64_MAX, remainder);
+        register zx::u64_c const storemask __asm__("k6") =
+            __builtin_ia32_bzhi_di(~(zx::u64){0}, remainder);
 
-        zx::v512_u8 const expanded = __builtin_ia32_expandloadqi512_mask(
-            (zx::v512_i8 const *)&input.ptr()[control_end], zeros, control);
-        __builtin_ia32_storedquqi512_mask(
-            (zx::v512_i8 *)&output.ptr()[out_offset], expanded, storemask);
+        __asm__(
+            "vpexpandb %[input], %%zmm31 %{%[control]%}%{z%}\n\t"
+            "vmovdqu8 %%zmm31, %[output] %{%[storemask]%}\n\t"
+            : [output] "=&m"(*(zx::u8(*)[64]) & output.ptr()[out_offset])
+            : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[control_end]),
+              [control] "k"(control), [storemask] "k"(storemask)
+            : "zmm31");
 
         in_offset = step_end;
     }
