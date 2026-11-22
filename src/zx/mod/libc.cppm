@@ -187,7 +187,8 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
         }
     }
 
-    // read 64 byte aligned chunks so we never go over a page boundary (4096 > 64)
+    // read 64 byte aligned chunks so we never go over a page boundary (4096 >
+    // 64)
     u64 const up_addr = __builtin_align_up((u64)str, 64);
     assert_dev(up_addr >= (u64)str);
     u64 offset = up_addr - (u64)str;
