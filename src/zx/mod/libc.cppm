@@ -42,6 +42,22 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
             offset = diff;
         }
     }
+
+    for (; offset + 256__wbu <= count; offset += 256__wbu) {
+        __asm__("vmovups (%[input]), %%zmm31\n\t"
+                "vmovups 64(%[input]), %%zmm30\n\t"
+                "vmovups 128(%[input]), %%zmm29\n\t"
+                "vmovups 192(%[input]), %%zmm28\n\t"
+                "vmovups %%zmm31, (%[output])\n\t"
+                "vmovups %%zmm30, 64(%[output])\n\t"
+                "vmovups %%zmm29, 128(%[output])\n\t"
+                "vmovups %%zmm28, 192(%[output])\n\t"
+                : "=m"(*(u8(*)[256]) & output[offset])
+                : "m"(*(u8 const(*)[256]) & input[offset]),
+                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
+                : "zmm31", "zmm30", "zmm29", "zmm28");
+    }
+    
     for (; offset + 64__wbu <= count; offset += 64__wbu) {
         v512_u8 scratch;
         __asm__("vmovups %[input], %[scratch]\n\t"
