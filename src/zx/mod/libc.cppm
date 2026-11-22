@@ -21,26 +21,28 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 *output = (u8 *)dest;
 
     u64 offset = 0;
-   
-    for (; offset + 32__wbu <= count; offset += 32__wbu) {
-        v256_u8 scratch;
-        __asm__("vmovups %[input], %[scratch]\n\t"
-                "vmovups %[scratch], %[output]\n\t"
-                : [output] "=m"(*(u8(*)[32]) & output[offset]), [scratch] "=v"(
-                                                                    scratch)
-                : [input] "m"(*(u8 const(*)[32]) & input[offset]));
+
+    for (; offset + 64__wbu <= count; offset += 64__wbu) {
+        __asm__("vmovups (%[input]), %%ymm31\n\t"
+                "vmovups 32(%[input]), %%ymm30\n\t"
+                "vmovups %%ymm31, (%[output])\n\t"
+                "vmovups %%ymm30, 32(%[output])\n\t"
+                : "=m"(*(u8(*)[64]) & output[offset])
+                : "m"(*(u8 const(*)[64]) & input[offset]),
+                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
+                : "ymm31", "ymm30");
     }
 
     u64 const remainder = count - offset;
     if (remainder > 0) {
         u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-        v256_u8 scratch;
+        v512_u8 scratch;
         __asm__(
             "vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
             "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
-            : [output] "=m"(*(u8(*)[32]) & output[offset]), [scratch] "=v"(
+            : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
                                                                 scratch)
-            : [input] "m"(*(u8 const(*)[32]) & input[offset]), [storemask] "Yk"(
+            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "Yk"(
                                                                    storemask));
     }
 
@@ -51,17 +53,23 @@ __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
     u8 *output = (u8 *)dest;
     u32_c const byte = (u8)ch;
 
-    v512_u8 vbytes;
+    v256_u8 vbytes;
     __asm__("vpbroadcastb %[byte], %[vbytes]\n\t"
             : [vbytes] "=v"(vbytes)
             : [byte] "r"(byte));
 
+    v512_u8 vbytes512;
+    __asm__("vpbroadcastb %[byte], %[vbytes512]\n\t"
+            : [vbytes512] "=v"(vbytes512)
+            : [byte] "r"(byte));
+
     u64 offset = 0;
 
-    for (; offset + 64__wbu <= count; offset += 64) {
-        __asm__("vmovdqu8 %[vbytes], %[output]\n\t"
-                : [output] "=m"(*(u8(*)[64]) & output[offset])
-                : [vbytes] "v"(vbytes));
+    for (; offset + 64__wbu <= count; offset += 64__wbu) {
+        __asm__("vmovdqu8 %[vbytes], (%[output])\n\t"
+                "vmovdqu8 %[vbytes], 32(%[output])\n\t"
+                : "=m"(*(u8(*)[64]) & output[offset])
+                : [vbytes] "v"(vbytes), [output] "r"(&output[offset]));
     }
 
     u64 const remainder = count - offset;
@@ -70,7 +78,7 @@ __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
         u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
         __asm__("vmovdqu8 %[vbytes], %[output] %{%[storemask]%}\n\t"
                 : [output] "=m"(*(u8(*)[64]) & output[offset])
-                : [vbytes] "v"(vbytes), [storemask] "Yk"(storemask));
+                : [vbytes] "v"(vbytes512), [storemask] "Yk"(storemask));
     }
 
     return dest;
@@ -142,7 +150,7 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
     // long as we don't go over page boundaries prematurely.
     //
     // If the regular strlen semantics allow us to read memory location x then
-    // we can read anywhere in the 4096KB page that includes x.
+    // we can read anywhere in the 4KB page that includes x.
     //
     // We can use vectorization by exploiting this fact.
 
@@ -179,8 +187,7 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
         }
     }
 
-    // read 64 byte aligned chunks so we never go over a page boundary (4096 >
-    // 64)
+    // read 64 byte aligned chunks so we never go over a page boundary (4096 > 64)
     u64 const up_addr = __builtin_align_up((u64)str, 64);
     assert_dev(up_addr >= (u64)str);
     u64 offset = up_addr - (u64)str;
