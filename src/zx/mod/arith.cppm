@@ -1299,8 +1299,7 @@ i64 u64_to_i64_unsafe(u64 a) {
 }
 
 u64 align_up_u64(u64 val, u64 align, bool *failure) {
-    bool const pow_two = is_pow_two_u64(align);
-    if (!pow_two) [[unlikely]] {
+    if (!is_pow_two_u64(align)) [[unlikely]] {
         *failure = true;
         return 0;
     }
@@ -1322,6 +1321,19 @@ u64 align_down_u64(u64 val, u64 align, bool *failure) {
 u64 align_down_unsafe_u64(u64 val, u64 align) {
     assert_dev(is_pow_two_u64(align));
     return val & ~(align - 1);
+}
+
+bool is_aligned_u64(u64 val, u64 align, bool *failure) {
+    if (!is_pow_two_u64(align)) [[unlikely]] {
+        *failure = true;
+        return false;
+    }
+    return __builtin_is_aligned(val, align);
+}
+
+bool is_aligned_unsafe_u64(u64 val, u64 align) {
+    assert_dev(is_pow_two_u64(align));
+    return __builtin_is_aligned(val, align);
 }
 
 } // namespace zx

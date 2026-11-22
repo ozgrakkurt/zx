@@ -5,6 +5,16 @@ import :assert;
 
 export namespace zx {
 
+// Should strive to make these implementations SMALL. As in the machine code
+// output should be as small as possible.
+//
+// For example memcpy doesn't have to be the absolute best at copying 10GB of
+// memory, the caller should benchmark and write something that is actually good
+// at that size if they have a usecase like this.
+//
+// We can keep the size small and code basic here so we don't trash the
+// instruction cache for imaginary performance gains.
+
 __attribute__((no_builtin)) void *
 memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 const *input = (u8 const *)src;
@@ -12,41 +22,46 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
     u64 offset = 0;
 
-    for (; offset + 256__wbu <= count; offset += 256__wbu) {
-        __asm__("vmovups (%[input]), %%zmm31\n\t"
-                "vmovups 64(%[input]), %%zmm30\n\t"
-                "vmovups 128(%[input]), %%zmm29\n\t"
-                "vmovups 192(%[input]), %%zmm28\n\t"
-                "vmovups %%zmm31, (%[output])\n\t"
-                "vmovups %%zmm30, 64(%[output])\n\t"
-                "vmovups %%zmm29, 128(%[output])\n\t"
-                "vmovups %%zmm28, 192(%[output])\n\t"
-                : "=m"(*(u8(*)[256]) & output[offset])
-                : "m"(*(u8 const(*)[256]) & input[offset]),
-                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
-                : "zmm31", "zmm30", "zmm29", "zmm28");
-    }
+    if (!__builtin_is_aligned(output, 64)) {
+        // align output here by copying x bytes from input to output.
+        // This will make the rest of the function run faster.
+        u64 const addr = (u64)output;
+        u64 const up_addr = __builtin_align_up(addr, 64);
+        assert_dev(up_addr > addr);
+        u64 const diff = up_addr - addr;
+        assert_dev(diff < 64);
 
+        if (diff <= count) {
+            u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, diff);
+            v512_u8 scratch;
+            __asm__("vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
+                    "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
+                    : [output] "=m"(*(u8(*)[64])output), [scratch] "=v"(scratch)
+                    : [input] "m"(*(u8 const(*)[64])input), [storemask] "Yk"(
+                                                                storemask));
+            offset = diff;
+        }
+    }
     for (; offset + 64__wbu <= count; offset += 64__wbu) {
-        __asm__("vmovups (%[input]), %%zmm31\n\t"
-                "vmovups %%zmm31, (%[output])\n\t"
-                : "=m"(*(u8(*)[64]) & output[offset])
-                : "m"(*(u8 const(*)[64]) & input[offset]),
-                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
-                : "zmm31");
+        v512_u8 scratch;
+        __asm__("vmovups %[input], %[scratch]\n\t"
+                "vmovups %[scratch], %[output]\n\t"
+                : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
+                                                                    scratch)
+                : [input] "m"(*(u8 const(*)[64]) & input[offset]));
     }
 
     u64 const remainder = count - offset;
     if (remainder > 0) {
-        register u64_c const storemask __asm__("k7") =
-            __builtin_ia32_bzhi_di(~(u64){0}, remainder);
+        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
+        v512_u8 scratch;
         __asm__(
-            "vmovdqu8 %[input], %%zmm31 %{%[storemask]%}\n\t"
-            "vmovdqu8 %%zmm31, %[output] %{%[storemask]%}\n\t"
-            : [output] "=m"(*(u8(*)[64]) & output[offset])
-            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "k"(
-                                                                   storemask)
-            : "zmm31");
+            "vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
+            "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
+            : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
+                                                                scratch)
+            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "Yk"(
+                                                                   storemask));
     }
 
     return dest;
@@ -54,14 +69,12 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
 __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
     u8 *output = (u8 *)dest;
-    u64_c const byte = (u8)ch;
+    u32_c const byte = (u8)ch;
 
     v512_u8 vbytes;
-    __asm__("vmovd %[byte], %%xmm31\n\t"
-            "vpbroadcastb %%xmm31, %[vbytes]\n\t"
+    __asm__("vpbroadcastb %[byte], %[vbytes]\n\t"
             : [vbytes] "=v"(vbytes)
-            : [byte] "r"(byte)
-            : "xmm31");
+            : [byte] "r"(byte));
 
     u64 offset = 0;
 
@@ -74,11 +87,10 @@ __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
     u64 const remainder = count - offset;
 
     if (remainder > 0) {
-        register u64_c const storemask __asm__("k2") =
-            __builtin_ia32_bzhi_di(~(u64){0}, remainder);
+        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
         __asm__("vmovdqu8 %[vbytes], %[output] %{%[storemask]%}\n\t"
                 : [output] "=m"(*(u8(*)[64]) & output[offset])
-                : [vbytes] "v"(vbytes), [storemask] "k"(storemask));
+                : [vbytes] "v"(vbytes), [storemask] "Yk"(storemask));
     }
 
     return dest;
@@ -146,6 +158,14 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
 }
 
 __attribute__((no_builtin)) u64_c strlen(char const *str) {
+    // The key to vectorizing this is to realize that we can read anything as
+    // long as we don't go over page boundaries prematurely.
+    //
+    // If the regular strlen semantics allow us to read memory location x then
+    // we can read anywhere in the 4096KB page that includes x.
+    //
+    // We can use vectorization by exploiting this fact.
+
     v512_u8 zeros;
     __asm__("vpxorq %[zeros], %[zeros], %[zeros]\n\t" : [zeros] "=v"(zeros));
 
