@@ -21,62 +21,26 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 *output = (u8 *)dest;
 
     u64 offset = 0;
-
-    if (!__builtin_is_aligned(output, 64)) {
-        // align output here by copying x bytes from input to output.
-        // This will make the rest of the function run faster.
-        u64 const addr = (u64)output;
-        u64 const up_addr = __builtin_align_up(addr, 64);
-        assert_dev(up_addr > addr);
-        u64 const diff = up_addr - addr;
-        assert_dev(diff < 64);
-
-        if (diff <= count) {
-            u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, diff);
-            v512_u8 scratch;
-            __asm__("vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
-                    "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
-                    : [output] "=m"(*(u8(*)[64])output), [scratch] "=v"(scratch)
-                    : [input] "m"(*(u8 const(*)[64])input), [storemask] "Yk"(
-                                                                storemask));
-            offset = diff;
-        }
-    }
-
-    for (; offset + 256__wbu <= count; offset += 256__wbu) {
-        __asm__("vmovups (%[input]), %%zmm31\n\t"
-                "vmovups 64(%[input]), %%zmm30\n\t"
-                "vmovups 128(%[input]), %%zmm29\n\t"
-                "vmovups 192(%[input]), %%zmm28\n\t"
-                "vmovups %%zmm31, (%[output])\n\t"
-                "vmovups %%zmm30, 64(%[output])\n\t"
-                "vmovups %%zmm29, 128(%[output])\n\t"
-                "vmovups %%zmm28, 192(%[output])\n\t"
-                : "=m"(*(u8(*)[256]) & output[offset])
-                : "m"(*(u8 const(*)[256]) & input[offset]),
-                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
-                : "zmm31", "zmm30", "zmm29", "zmm28");
-    }
-    
-    for (; offset + 64__wbu <= count; offset += 64__wbu) {
-        v512_u8 scratch;
+   
+    for (; offset + 32__wbu <= count; offset += 32__wbu) {
+        v256_u8 scratch;
         __asm__("vmovups %[input], %[scratch]\n\t"
                 "vmovups %[scratch], %[output]\n\t"
-                : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
+                : [output] "=m"(*(u8(*)[32]) & output[offset]), [scratch] "=v"(
                                                                     scratch)
-                : [input] "m"(*(u8 const(*)[64]) & input[offset]));
+                : [input] "m"(*(u8 const(*)[32]) & input[offset]));
     }
 
     u64 const remainder = count - offset;
     if (remainder > 0) {
         u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-        v512_u8 scratch;
+        v256_u8 scratch;
         __asm__(
             "vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
             "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
-            : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
+            : [output] "=m"(*(u8(*)[32]) & output[offset]), [scratch] "=v"(
                                                                 scratch)
-            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "Yk"(
+            : [input] "m"(*(u8 const(*)[32]) & input[offset]), [storemask] "Yk"(
                                                                    storemask));
     }
 
