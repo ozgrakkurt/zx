@@ -727,6 +727,38 @@ int main(void) {
     zx::assert(69 == zx::align_down_unsafe_u64(69, 1));
     zx::assert(64 == zx::align_down_unsafe_u64(69, 64));
 
+    // is_aligned
+    overflow = false;
+    zx::assert(zx::is_aligned_u64(0, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::is_aligned_u64(8, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(!zx::is_aligned_u64(5, 8, &overflow));
+    zx::assert(!overflow);
+
+    overflow = false;
+    zx::assert(zx::is_aligned_u64(69, 1, &overflow));
+    zx::assert(!overflow);
+
+    // is_aligned invalid alignment, must set the flag and return false
+    overflow = false;
+    zx::assert(!zx::is_aligned_u64(69, 3, &overflow));
+    zx::assert(overflow);
+
+    overflow = false;
+    zx::assert(!zx::is_aligned_u64(69, 0, &overflow));
+    zx::assert(overflow);
+
+    // is_aligned_unsafe
+    zx::assert(zx::is_aligned_unsafe_u64(0, 8));
+    zx::assert(zx::is_aligned_unsafe_u64(8, 8));
+    zx::assert(!zx::is_aligned_unsafe_u64(5, 8));
+    zx::assert(zx::is_aligned_unsafe_u64(69, 1));
+
     // min
     zx::assert(31 == zx::min_u8(31, 69));
     zx::assert(31 == zx::min_u8(69, 31));
