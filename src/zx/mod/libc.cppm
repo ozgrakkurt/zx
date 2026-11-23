@@ -188,7 +188,8 @@ __attribute__((no_builtin)) u64_c strlen(char const *str) {
         u64_c zero_pos;
         __asm__ volatile(
             "vmovdqu8 (%[down]), %%zmm31 %{%[loadmask]%}\n\t"
-            "kxorq %[zero_pos], %[zero_pos], %[zero_pos]\n\t"
+            // The masking of vptestnmb is implicitly {z} anyway so we
+            // can't/won't specify it here.
             "vptestnmb %%zmm31, %%zmm31, %[zero_pos]%{%[loadmask]%}\n\t"
             : [zero_pos] "=&Yk"(zero_pos)
             : [down] "r"(down), [loadmask] "Yk"(loadmask)
