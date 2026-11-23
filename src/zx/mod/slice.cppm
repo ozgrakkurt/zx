@@ -508,8 +508,8 @@ template <typename T> struct Slice {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline SliceMemcmpStatus memcmp(Backtrace *err_bt,
-                                                  Slice other, i32 *out) const {
+    inline SliceMemcmpStatus memcmp(Backtrace *err_bt, Slice other,
+                                    i32 *out) const {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return SliceMemcmpStatus::Nullptr;
@@ -1022,8 +1022,8 @@ template <typename T> struct SliceMut {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline SliceMemcmpStatus
-    memcmp(Backtrace *err_bt, SliceMut other, i32 *out) const {
+    inline SliceMemcmpStatus memcmp(Backtrace *err_bt, SliceMut other,
+                                    i32 *out) const {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return SliceMemcmpStatus::Nullptr;
