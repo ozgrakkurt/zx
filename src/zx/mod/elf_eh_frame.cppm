@@ -40,7 +40,8 @@ constexpr u8 RETURN_ADDRESS_REGISTER = 16;
 // section_addr is the address of the elf section at runtime. can be found in
 // elf_section_header.addr field. field_offset is the offset of the field inside
 // the section. encoded_val is the pcrel encoded EH_FRAME value to be decoded.
-u64 decode_pcrel_panic_(u64 section_addr, u64 field_offset, i32 encoded_val) {
+inline u64 decode_pcrel_panic_(u64 section_addr, u64 field_offset,
+                               i32 encoded_val) {
     i64 const extended_encoded = encoded_val;
     return wrapping_add_u64(wrapping_add_u64(section_addr, field_offset),
                             (u64)extended_encoded);
@@ -131,8 +132,8 @@ struct Instructions {
     Slice<Instr> m_instr;
     Slice<u8> m_data;
 
-    static u64 advance_loc_panic_(u32 code_alignment_factor, u64 loc,
-                                  u32 delta) {
+    inline static u64 advance_loc_panic_(u32 code_alignment_factor, u64 loc,
+                                         u32 delta) {
         bool overflow = false;
         u32 const scaled = mul_u32(code_alignment_factor, delta, &overflow);
         u64 out = add_u64(loc, scaled, &overflow);
@@ -152,7 +153,7 @@ struct Instructions {
         RegisterState *current_state;
     };
 
-    void run_panic(RunArgs args) const {
+    inline void run_panic(RunArgs args) const {
         assert(args.current_state != nullptr);
         assert(args.stack != nullptr);
 
@@ -496,29 +497,30 @@ struct Instructions {
         }
     }
 
-    static u32 offset_to_u32_panic_(u64 offset) {
+    inline static u32 offset_to_u32_panic_(u64 offset) {
         bool overflow = false;
         u32 const out = u64_to_u32(offset, &overflow);
         assert(!overflow);
         return out;
     }
 
-    static i32 offset_to_i32_panic_(i64 offset) {
+    inline static i32 offset_to_i32_panic_(i64 offset) {
         bool overflow = false;
         i32 const out = i64_to_i32(offset, &overflow);
         assert(!overflow);
         return out;
     }
 
-    static u8 register_to_u8_panic_(u64 reg) {
+    inline static u8 register_to_u8_panic_(u64 reg) {
         static_assert(NUM_REGS < U8_MAX);
         assert(reg < NUM_REGS);
         return (u8)reg;
     }
 
-    static void parse_one_panic_(u64 section_addr, List<Instr> *instr_list,
-                                 WriteCursor *data_writer,
-                                 Cursor *input_cursor) {
+    inline static void parse_one_panic_(u64 section_addr,
+                                        List<Instr> *instr_list,
+                                        WriteCursor *data_writer,
+                                        Cursor *input_cursor) {
         u8 byte = 0;
         assert(Cursor::Status::Ok == input_cursor->read<u8>(nullptr, &byte));
 
@@ -938,10 +940,10 @@ struct Instructions {
         }
     }
 
-    static Instructions parse_panic(Alloc *alloc, Alloc *tmp_alloc,
-                                    u64 section_addr,
-                                    u64 instructions_end_offset,
-                                    Cursor *input_cursor) {
+    inline static Instructions parse_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                           u64 section_addr,
+                                           u64 instructions_end_offset,
+                                           Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
 
         if (input_cursor->offset() == instructions_end_offset) {
@@ -1001,7 +1003,7 @@ struct Instructions {
 struct UnwindContext {
     u64 registers[NUM_REGS];
 
-    static UnwindContext init(CPUContext const *ctx) {
+    inline static UnwindContext init(CPUContext const *ctx) {
         UnwindContext out;
         __builtin_memset(out.registers, 0, sizeof(out.registers));
 
@@ -1017,7 +1019,7 @@ struct UnwindContext {
         return out;
     }
 
-    u64 rip() const { return this->registers[REG_MAP_RETURN_ADDRESS]; }
+    inline u64 rip() const { return this->registers[REG_MAP_RETURN_ADDRESS]; }
 };
 
 struct EhFrame {
@@ -1036,8 +1038,8 @@ struct EhFrame {
 
     Slice<FDE> m_fd_entries;
 
-    void step_panic(List<RegisterState> *state_stack,
-                    UnwindContext *ctx) const {
+    inline void step_panic(List<RegisterState> *state_stack,
+                           UnwindContext *ctx) const {
         assert(state_stack != nullptr);
         assert(ctx != nullptr);
         assert(state_stack->n_written() == 0);
@@ -1149,7 +1151,8 @@ struct EhFrame {
         DebugInfoUninitialized,
     };
 
-    BacktraceStatus backtrace_panic(CPUContext const *cpu_ctx, Backtrace *bt) {
+    inline BacktraceStatus backtrace_panic(CPUContext const *cpu_ctx,
+                                           Backtrace *bt) {
         assert(cpu_ctx != nullptr);
         assert(bt != nullptr);
 
@@ -1191,8 +1194,9 @@ struct EhFrame {
         return BacktraceStatus::Ok;
     }
 
-    static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
-                               u64 section_addr, Cursor *input_cursor) {
+    inline static CIE parse_cie_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                      u64 end_offset, u64 section_addr,
+                                      Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
 
         u8 version = 0;
@@ -1270,9 +1274,9 @@ struct EhFrame {
         };
     }
 
-    static FDE parse_fde_panic(Alloc *alloc, Alloc *tmp_alloc, u64 end_offset,
-                               u64 section_addr, CIE const *cie,
-                               Cursor *input_cursor) {
+    inline static FDE parse_fde_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                      u64 end_offset, u64 section_addr,
+                                      CIE const *cie, Cursor *input_cursor) {
         assert(alloc != tmp_alloc);
 
         // We know this is a SDATA4 encoded and PCREL applied value because we
@@ -1313,8 +1317,9 @@ struct EhFrame {
     // Parses .eh_frame section in `buf`. Panics if there is a problem.
     // This resulting structure's lifetime is tied to the allocator that was
     // passed in.
-    static EhFrame init_panic(Alloc *alloc, Alloc *tmp_alloc,
-                              u64 section_address, Slice<u8> input_bytes) {
+    inline static EhFrame init_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                     u64 section_address,
+                                     Slice<u8> input_bytes) {
         assert(alloc != nullptr);
         assert(tmp_alloc != nullptr);
         assert(alloc != tmp_alloc);
@@ -1405,7 +1410,7 @@ struct EhFrame {
         };
     }
 
-    bool is_empty() const { return this->m_fd_entries.len() == 0; }
+    inline bool is_empty() const { return this->m_fd_entries.len() == 0; }
 };
 
 } // namespace elf

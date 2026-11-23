@@ -51,8 +51,8 @@ struct Hashtable {
     static constexpr u8 EMPTY_TAG_ = 0b11111111;
     static constexpr u32 LOAD_FACTOR_ = 80;
 
-    static HashtableInitStatus init(Backtrace *err_bt, Alloc *alloc,
-                                    u32 capacity, Hashtable *table) {
+    inline static HashtableInitStatus init(Backtrace *err_bt, Alloc *alloc,
+                                           u32 capacity, Hashtable *table) {
         if (alloc == nullptr || table == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return HashtableInitStatus::Nullptr;
@@ -124,15 +124,15 @@ struct Hashtable {
         return HashtableInitStatus::Ok;
     }
 
-    u32 n_occupied() const {
+    inline u32 n_occupied() const {
         return sub_unsafe_u32(this->m_capacity, this->m_capacity_left);
     }
 
-    u32 capacity() const { return this->m_capacity; }
+    inline u32 capacity() const { return this->m_capacity; }
 
-    u32 capacity_left() const { return this->m_capacity_left; }
+    inline u32 capacity_left() const { return this->m_capacity_left; }
 
-    void reset() {
+    inline void reset() {
 #ifdef ZX_DEV
         this->m_entries.memset(0xaa);
 #endif
@@ -140,29 +140,29 @@ struct Hashtable {
         this->m_capacity_left = this->m_capacity;
     }
 
-    static u32 maybe_mirror_index_(u32 cap_mask, u32 index) {
+    inline static u32 maybe_mirror_index_(u32 cap_mask, u32 index) {
         return wrapping_add_u32(
             (wrapping_sub_u32(index, GROUP_SIZE_) & cap_mask), GROUP_SIZE_);
     }
 
-    static u16 tag_match_(v128_u8 group, v128_u8 tag_vec) {
+    inline static u16 tag_match_(v128_u8 group, v128_u8 tag_vec) {
         return (u16)__builtin_ia32_pmovmskb128(group == tag_vec);
     }
 
-    static u16 empty_match_(v128_u8 group) {
+    inline static u16 empty_match_(v128_u8 group) {
         return (u16)__builtin_ia32_pmovmskb128(group);
     }
 
-    static v128_u8 broadcast_(u8 tag) {
+    inline static v128_u8 broadcast_(u8 tag) {
         return {tag, tag, tag, tag, tag, tag, tag, tag,
                 tag, tag, tag, tag, tag, tag, tag, tag};
     }
 
-    static u16 remove_last_set_bit_(u16 v) {
+    inline static u16 remove_last_set_bit_(u16 v) {
         return v & wrapping_sub_u16(v, 1);
     }
 
-    HashtableInsertStatus insert(u64 hash, T const *entry, EqCtx eqctx) {
+    inline HashtableInsertStatus insert(u64 hash, T const *entry, EqCtx eqctx) {
         if (entry == nullptr) [[unlikely]] {
             return HashtableInsertStatus::Nullptr;
         }
@@ -224,8 +224,8 @@ struct Hashtable {
         }
     }
 
-    HashtableGetOrInsertStatus get_or_insert(u64 hash, T const *entry,
-                                             EqCtx eqctx, T const **out) {
+    inline HashtableGetOrInsertStatus
+    get_or_insert(u64 hash, T const *entry, EqCtx eqctx, T const **out) {
         if (out == nullptr || entry == nullptr) [[unlikely]] {
             return HashtableGetOrInsertStatus::Nullptr;
         }
@@ -288,8 +288,8 @@ struct Hashtable {
         }
     }
 
-    HashtableGetStatus get(u64 const hash, T const *entry, EqCtx eqctx,
-                           T const **out) const {
+    inline HashtableGetStatus get(u64 const hash, T const *entry, EqCtx eqctx,
+                                  T const **out) const {
         if (out == nullptr || entry == nullptr) [[unlikely]] {
             return HashtableGetStatus::Nullptr;
         }

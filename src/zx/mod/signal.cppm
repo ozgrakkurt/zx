@@ -149,17 +149,17 @@ struct SigSet {
     // Make sure this is > 0 as we subtract 1 from it;
     static_assert((u32)SIG::MIN_ > 0);
 
-    static SigSet init() {
+    inline static SigSet init() {
         SigSet out;
         __builtin_memset(out.m_data, 0, sizeof(out.m_data));
         return out;
     }
 
-    void fill() {
+    inline void fill() {
         __builtin_memset(this->m_data, u8{0xff__wbu}, sizeof(this->m_data));
     }
 
-    void unset(SIG sig) {
+    inline void unset(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);
@@ -168,7 +168,7 @@ struct SigSet {
         this->m_data[pos] &= ~mask;
     }
 
-    void set(SIG sig) {
+    inline void set(SIG sig) {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);
@@ -177,7 +177,7 @@ struct SigSet {
         this->m_data[pos] |= mask;
     }
 
-    bool get(SIG sig) const {
+    inline bool get(SIG sig) const {
         u32 const s = sub_unsafe_u32((u32)sig, 1);
         u32 const pos = s / BITS_PER_WORD;
         u32 const mask = u32{1} << (s % BITS_PER_WORD);

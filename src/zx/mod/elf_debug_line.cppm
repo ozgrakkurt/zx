@@ -69,7 +69,7 @@ constexpr u8 DW_MACRO_import_sup8 = 0x12;
 constexpr u8 DW_MACRO_lo_user = 0xe0;
 constexpr u8 DW_MACRO_hi_user = 0xff;
 
-u64 strnlen_panic_(u8 const *str, u64 max_len) {
+inline u64 strnlen_panic_(u8 const *str, u64 max_len) {
     for (u64 i = 0; i < max_len; i++) {
         if (str[i] == 0) {
             return i;
@@ -115,10 +115,11 @@ struct DebugLine {
     // go into the global `file_paths` list.
     //
     // Lifetimes of paths might be tied to debug_line_str data too.
-    static Slice<u16> parse_filepaths_panic_(Alloc *alloc, Alloc *tmp_alloc,
-                                             Slice<u8> debug_line_str,
-                                             Cursor *input,
-                                             List<CString> *file_paths) {
+    inline static Slice<u16> parse_filepaths_panic_(Alloc *alloc,
+                                                    Alloc *tmp_alloc,
+                                                    Slice<u8> debug_line_str,
+                                                    Cursor *input,
+                                                    List<CString> *file_paths) {
         assert(alloc != tmp_alloc);
 
         bool overflow = false;
@@ -388,7 +389,7 @@ struct DebugLine {
         u16 line;
         u16 file;
 
-        static RunState init() {
+        inline static RunState init() {
             return RunState{
                 .address = 0,
                 .column = 0,
@@ -398,7 +399,7 @@ struct DebugLine {
         }
     };
 
-    static void push_row_panic_(RunArgs args, RunState state) {
+    inline static void push_row_panic_(RunArgs args, RunState state) {
         u16 file_no = 0;
         assert(SliceStatus::Ok ==
                args.file_path_map.read(nullptr, state.file, &file_no));
@@ -412,7 +413,7 @@ struct DebugLine {
         assert(ListPushStatus::Ok == args.rows->push(nullptr, row));
     }
 
-    static void end_sequence_panic_(RunArgs args, u64 pc_end) {
+    inline static void end_sequence_panic_(RunArgs args, u64 pc_end) {
         bool overflow = false;
 
         u64 const sequence_index = args.sequences->n_written();
@@ -474,7 +475,7 @@ struct DebugLine {
                args.sequence_ends->push(nullptr, rows_end));
     }
 
-    static void run_instructions_panic_(RunArgs args) {
+    inline static void run_instructions_panic_(RunArgs args) {
         RunState state = RunState::init();
 
         bool overflow = false;
@@ -674,12 +675,10 @@ struct DebugLine {
         assert(args.sequence_ends->n_written() == args.sequences->n_written());
     }
 
-    static void parse_compilation_unit_panic_(Alloc *alloc, Alloc *tmp_alloc,
-                                              Slice<u8> debug_line_str,
-                                              Cursor *input, List<Row> *rows,
-                                              List<Sequence> *sequences,
-                                              List<u32> *sequence_ends,
-                                              List<CString> *file_paths) {
+    inline static void parse_compilation_unit_panic_(
+        Alloc *alloc, Alloc *tmp_alloc, Slice<u8> debug_line_str, Cursor *input,
+        List<Row> *rows, List<Sequence> *sequences, List<u32> *sequence_ends,
+        List<CString> *file_paths) {
         assert(alloc != tmp_alloc);
 
         bool overflow = false;
@@ -782,15 +781,15 @@ struct DebugLine {
     }
 
     template <typename T>
-    static List<T> make_tmp_list_panic_(Alloc *tmp_alloc, u64 len) {
+    inline static List<T> make_tmp_list_panic_(Alloc *tmp_alloc, u64 len) {
         SliceMut<T> mem;
         assert(AllocStatus::Ok == tmp_alloc->alloc<T>(nullptr, len, &mem));
         return List<T>::init(mem);
     }
 
-    static DebugLine init_panic(Alloc *alloc, Alloc *tmp_alloc,
-                                Slice<u8> input_bytes,
-                                Slice<u8> debug_line_str) {
+    inline static DebugLine init_panic(Alloc *alloc, Alloc *tmp_alloc,
+                                       Slice<u8> input_bytes,
+                                       Slice<u8> debug_line_str) {
         assert(alloc != nullptr);
         assert(tmp_alloc != nullptr);
         assert(alloc != tmp_alloc);
@@ -876,7 +875,7 @@ struct DebugLine {
         NotFound,
     };
 
-    LineInfo row_to_line_info_unsafe_(Row const row) const {
+    inline LineInfo row_to_line_info_unsafe_(Row const row) const {
         return LineInfo{
             .file_path = this->file_paths.read_unsafe(row.file_no),
             .line_no = row.line_no,
@@ -884,7 +883,8 @@ struct DebugLine {
         };
     }
 
-    GetLineInfosStatus get_line_infos(u64 pc, List<LineInfo> *out) const {
+    inline GetLineInfosStatus get_line_infos(u64 pc,
+                                             List<LineInfo> *out) const {
         if (out == nullptr) {
             return GetLineInfosStatus::Nullptr;
         }

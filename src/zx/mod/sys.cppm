@@ -284,7 +284,7 @@ constexpr u32 GRND_RANDOM = 0x02;
 
 constexpr u64 SUCCESS = 0;
 
-u64 errno_(u64 ret) {
+inline u64 errno_(u64 ret) {
     i64 const sgnd = (i64)ret;
     if (sgnd > -4096 && sgnd < 0) {
         return (u64)-sgnd;
@@ -306,7 +306,8 @@ enum class [[nodiscard]] ReadStatus : u8_c {
     EIsDir,
 };
 
-ReadStatus read(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, u64 *n_read) {
+inline ReadStatus read(Backtrace *err_bt, i32 fd, u8 *buf, u64 count,
+                       u64 *n_read) {
     if (n_read == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return ReadStatus::Nullptr;
@@ -381,8 +382,8 @@ enum class [[nodiscard]] WriteStatus : u8_c {
     EPipe,
 };
 
-WriteStatus write(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
-                  u64 *n_written) {
+inline WriteStatus write(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
+                         u64 *n_written) {
     if (n_written == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return WriteStatus::Nullptr;
@@ -485,8 +486,8 @@ enum class [[nodiscard]] OpenStatus : u8_c {
     EWouldBlock,
 };
 
-OpenStatus open(Backtrace *err_bt, u8 const *path, i32 flags, u32 mode,
-                i32 *fd) {
+inline OpenStatus open(Backtrace *err_bt, u8 const *path, i32 flags, u32 mode,
+                       i32 *fd) {
     if (path == nullptr || fd == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return OpenStatus::Nullptr;
@@ -623,7 +624,7 @@ enum class [[nodiscard]] CloseStatus : u8_c {
     EDQuot,
 };
 
-CloseStatus close(Backtrace *err_bt, i32 fd) {
+inline CloseStatus close(Backtrace *err_bt, i32 fd) {
     u64 const res = syscall1(NR_CLOSE, (u64)fd);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
@@ -675,7 +676,7 @@ enum class [[nodiscard]] MMapStatus : u8_c {
     ETxtBsy,
 };
 
-MMapStatus mmap_err_(Backtrace *err_bt, u64 errno) {
+inline MMapStatus mmap_err_(Backtrace *err_bt, u64 errno) {
     switch (errno) {
     case EACCES: {
         Backtrace::collect(err_bt);
@@ -728,8 +729,8 @@ MMapStatus mmap_err_(Backtrace *err_bt, u64 errno) {
     }
 }
 
-MMapStatus mmap(Backtrace *err_bt, u8 *addr, u64 length, i32 prot, i32 flags,
-                i32 fd, i64 offset, u8 **mem) {
+inline MMapStatus mmap(Backtrace *err_bt, u8 *addr, u64 length, i32 prot,
+                       i32 flags, i32 fd, i64 offset, u8 **mem) {
     if (mem == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return MMapStatus::Nullptr;
@@ -748,7 +749,7 @@ MMapStatus mmap(Backtrace *err_bt, u8 *addr, u64 length, i32 prot, i32 flags,
     return MMapStatus::Ok;
 }
 
-MMapStatus munmap(Backtrace *err_bt, u8 *mem, u64 length) {
+inline MMapStatus munmap(Backtrace *err_bt, u8 *mem, u64 length) {
     if (mem == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return MMapStatus::Nullptr;
@@ -773,7 +774,8 @@ enum class [[nodiscard]] MProtectStatus : u8_c {
     ENoMem,
 };
 
-MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length, i32 prot) {
+inline MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length,
+                               i32 prot) {
     if (addr == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return MProtectStatus::Nullptr;
@@ -806,7 +808,7 @@ MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length, i32 prot) {
     return MProtectStatus::Ok;
 }
 
-[[noreturn]] void exit_group(i32 status) {
+[[noreturn]] inline void exit_group(i32 status) {
     syscall1(NR_EXIT_GROUP, (u64)status);
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
@@ -837,9 +839,10 @@ enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
     ESrch,
 };
 
-PerfEventOpenStatus perf_event_open(Backtrace *err_bt, PerfEventAttr *attr,
-                                    i32 pid, i32 cpu, i32 group_fd, u64 flags,
-                                    i32 *fd) {
+inline PerfEventOpenStatus perf_event_open(Backtrace *err_bt,
+                                           PerfEventAttr *attr, i32 pid,
+                                           i32 cpu, i32 group_fd, u64 flags,
+                                           i32 *fd) {
     if (attr == nullptr || fd == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PerfEventOpenStatus::Nullptr;
@@ -948,8 +951,8 @@ enum class [[nodiscard]] StatXStatus : u8_c {
     ENotDir,
 };
 
-StatXStatus statx(Backtrace *err_bt, i32 dirfd, u8 const *path, i32 flags,
-                  u32 mask, StatX *statxbuf) {
+inline StatXStatus statx(Backtrace *err_bt, i32 dirfd, u8 const *path,
+                         i32 flags, u32 mask, StatX *statxbuf) {
     if (statxbuf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return StatXStatus::Nullptr;
@@ -1019,8 +1022,8 @@ enum class [[nodiscard]] IoUringSetupStatus : u8_c {
     ENXIo,
 };
 
-IoUringSetupStatus io_uring_setup(Backtrace *err_bt, u32 n_entries,
-                                  IoUringParams *params, i32 *fd) {
+inline IoUringSetupStatus io_uring_setup(Backtrace *err_bt, u32 n_entries,
+                                         IoUringParams *params, i32 *fd) {
     if (fd == nullptr || params == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return IoUringSetupStatus::Nullptr;
@@ -1087,9 +1090,9 @@ enum class [[nodiscard]] IoUringEnterStatus : u8_c {
     EOwnerDead,
 };
 
-IoUringEnterStatus io_uring_enter(Backtrace *err_bt, i32 fd, u32 to_submit,
-                                  u32 min_complete, u32 flags, void *arg,
-                                  u64 sz) {
+inline IoUringEnterStatus io_uring_enter(Backtrace *err_bt, i32 fd,
+                                         u32 to_submit, u32 min_complete,
+                                         u32 flags, void *arg, u64 sz) {
     u64 const res = syscall6(NR_IO_URING_ENTER, (u64)fd, to_submit,
                              min_complete, flags, (u64)arg, sz);
     u64 const errno = errno_(res);
@@ -1169,8 +1172,9 @@ enum class [[nodiscard]] IoUringRegisterStatus : u8_c {
     ENoEnt,
 };
 
-IoUringRegisterStatus io_uring_register(Backtrace *err_bt, i32 fd, u32 opcode,
-                                        void const *arg, u32 nr_args) {
+inline IoUringRegisterStatus io_uring_register(Backtrace *err_bt, i32 fd,
+                                               u32 opcode, void const *arg,
+                                               u32 nr_args) {
     u64 const res =
         syscall4(NR_IO_URING_REGISTER, (u64)fd, opcode, (u64)arg, nr_args);
     u64 const errno = errno_(res);
@@ -1253,8 +1257,8 @@ enum class [[nodiscard]] UnlinkAtStatus : u8_c {
     EInval,
 };
 
-UnlinkAtStatus unlink_at(Backtrace *err_bt, i32 dirfd, u8 const *pathname,
-                         i32 flags) {
+inline UnlinkAtStatus unlink_at(Backtrace *err_bt, i32 dirfd,
+                                u8 const *pathname, i32 flags) {
     if (pathname == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return UnlinkAtStatus::Nullptr;
@@ -1347,8 +1351,8 @@ enum class [[nodiscard]] PReadStatus : u8_c {
     ESPipe,
 };
 
-PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count, i64 offset,
-                  u64 *n_read) {
+inline PReadStatus pread(Backtrace *err_bt, i32 fd, u8 *buf, u64 count,
+                         i64 offset, u64 *n_read) {
     if (n_read == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PReadStatus::Nullptr;
@@ -1438,8 +1442,8 @@ enum class [[nodiscard]] PWriteStatus : u8_c {
     ESPipe,
 };
 
-PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
-                    i64 offset, u64 *n_written) {
+inline PWriteStatus pwrite(Backtrace *err_bt, i32 fd, u8 const *buf, u64 count,
+                           i64 offset, u64 *n_written) {
     if (n_written == nullptr || buf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PWriteStatus::Nullptr;
@@ -1534,8 +1538,8 @@ enum class [[nodiscard]] LSeekStatus : u8_c {
     ESPipe,
 };
 
-LSeekStatus lseek(Backtrace *err_bt, i32 fd, i64 offset, i32 whence,
-                  i64 *new_offset) {
+inline LSeekStatus lseek(Backtrace *err_bt, i32 fd, i64 offset, i32 whence,
+                         i64 *new_offset) {
     if (new_offset == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return LSeekStatus::Nullptr;
@@ -1592,8 +1596,8 @@ enum class [[nodiscard]] GetRandomStatus : u8_c {
     ENoSys,
 };
 
-GetRandomStatus getrandom(Backtrace *err_bt, u8 *buf, u64 size, u32 flags,
-                          u64 *n_read) {
+inline GetRandomStatus getrandom(Backtrace *err_bt, u8 *buf, u64 size,
+                                 u32 flags, u64 *n_read) {
     if (buf == nullptr || n_read == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return GetRandomStatus::Nullptr;
@@ -1650,7 +1654,7 @@ enum class [[nodiscard]] FTruncateStatus : u8_c {
     EBadF,
 };
 
-FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, i64 length) {
+inline FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, i64 length) {
     u64 const res = syscall2(NR_FTRUNCATE, (u64)fildes, (u64)length);
     u64 const errno = errno_(res);
 
@@ -1719,9 +1723,9 @@ enum class [[nodiscard]] SigActionStatus : u8_c {
     EInval,
 };
 
-SigActionStatus sigaction(Backtrace *err_bt, SIG signum,
-                          SigAction const *__restrict act,
-                          SigAction *__restrict oldact) {
+inline SigActionStatus sigaction(Backtrace *err_bt, SIG signum,
+                                 SigAction const *__restrict act,
+                                 SigAction *__restrict oldact) {
     SigAction_ k_act;
     if (act != nullptr) {
         k_act = SigAction_{
@@ -1774,8 +1778,9 @@ enum class [[nodiscard]] SigAltStackStatus : u8_c {
     EPerm,
 };
 
-SigAltStackStatus sigaltstack(Backtrace *err_bt, Stack const *__restrict ss,
-                              Stack *__restrict old_ss) {
+inline SigAltStackStatus sigaltstack(Backtrace *err_bt,
+                                     Stack const *__restrict ss,
+                                     Stack *__restrict old_ss) {
     u64 const res = syscall2(NR_RT_SIGALTSTACK, (u64)ss, (u64)old_ss);
     u64 const errno = errno_(res);
 

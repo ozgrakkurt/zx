@@ -9,7 +9,7 @@ export namespace zx {
 
 namespace testing {
 
-void print_panic_(char const *message) {
+inline void print_panic_(char const *message) {
     assert(message != nullptr);
 
     u64 const len = __builtin_strlen(message);
@@ -22,7 +22,7 @@ void print_panic_(char const *message) {
 
 #ifdef ZX_DEBUG_INFO
 
-void assert_with_trace(bool cond, Backtrace const *bt) {
+inline void assert_with_trace(bool cond, Backtrace const *bt) {
     if (!cond) [[unlikely]] {
         print_panic_(
             "Printing stack trace because testing error assertion failed.\n");
@@ -34,7 +34,7 @@ void assert_with_trace(bool cond, Backtrace const *bt) {
 
 #else // ifdef ZX_DEBUG_INFO
 
-void assert_with_trace(bool cond, Backtrace const *bt) {
+inline void assert_with_trace(bool cond, Backtrace const *bt) {
     (void)bt;
 
     if (!cond) [[unlikely]] {

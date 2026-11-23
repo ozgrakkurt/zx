@@ -6,7 +6,7 @@ import :arith;
 
 export namespace zx {
 
-__attribute__((no_builtin)) void *
+inline __attribute__((no_builtin)) void *
 memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 const *input = (u8 const *)src;
     u8 *output = (u8 *)dest;
@@ -65,7 +65,8 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     return dest;
 }
 
-__attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
+inline __attribute__((no_builtin)) void *memset(void *dest, i32_c ch,
+                                                u64_c count) {
     u8 *output = (u8 *)dest;
     u32_c const byte = (u8)ch;
 
@@ -106,8 +107,8 @@ __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
     return dest;
 }
 
-__attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
-                                         u64_c count) {
+inline __attribute__((no_builtin)) i32_c memcmp(void const *lhs,
+                                                void const *rhs, u64_c count) {
     u8 const *left = (u8 const *)lhs;
     u8 const *right = (u8 const *)rhs;
 
@@ -166,7 +167,7 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
     return 0;
 }
 
-__attribute__((no_builtin)) u64_c strlen(char const *str) {
+inline __attribute__((no_builtin)) u64_c strlen(char const *str) {
     // The key to vectorizing this is to realize that we can read anything as
     // long as we don't go over page boundaries prematurely.
     //

@@ -50,8 +50,9 @@ extern "C" struct ElfHeader {
     u16 shstrndx;
 };
 
-void parse_section_name_table_panic_(Slice<SectionHeader> headers,
-                                     Slice<u8> data, SliceMut<Slice<u8>> out) {
+inline void parse_section_name_table_panic_(Slice<SectionHeader> headers,
+                                            Slice<u8> data,
+                                            SliceMut<Slice<u8>> out) {
     assert(headers.len() == out.len());
     if (out.len() == 0) {
         return;
@@ -91,7 +92,7 @@ struct File {
 
     // Parses the buffer as an elf file, panics if there is a problem.
     // The resulting structure's lifetime is tied to `alloc` and `buf`.
-    static File init_panic(Alloc *alloc, Slice<u8> buf) {
+    inline static File init_panic(Alloc *alloc, Slice<u8> buf) {
         assert(alloc != nullptr);
 
         Slice<u8> header_bytes;
@@ -166,7 +167,7 @@ struct File {
         };
     }
 
-    u64 get_section_index_panic_(Slice<u8> name) const {
+    inline u64 get_section_index_panic_(Slice<u8> name) const {
         Slice<Slice<u8>> section_names = this->m_section_names;
 
         for (u64 i = 0; i < section_names.len(); i++) {
@@ -180,7 +181,7 @@ struct File {
         panic();
     }
 
-    Section get_section_panic(Slice<u8> name) const {
+    inline Section get_section_panic(Slice<u8> name) const {
         u64 const index = this->get_section_index_panic_(name);
 
         SectionHeader const *header = nullptr;
@@ -210,7 +211,7 @@ struct File {
 // this is implemented in start.cc
 extern "C" DebugLine ZX_ELF_DEBUG_LINE_;
 
-void print_stack_trace_panic(Backtrace const *bt) {
+inline void print_stack_trace_panic(Backtrace const *bt) {
     assert(bt != nullptr);
 
     constexpr u64 FMT_SIZE = u64{1} << 14;

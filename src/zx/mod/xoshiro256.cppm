@@ -32,7 +32,7 @@ export namespace zx {
 struct Xoshiro256 {
     u64 s[4];
 
-    static Xoshiro256 init(u64 seed) {
+    inline static Xoshiro256 init(u64 seed) {
         constexpr u64 PHI = 0x9e3779b97f4a7c15;
 
         u64 state = seed;
@@ -62,7 +62,7 @@ struct Xoshiro256 {
         return rand;
     }
 
-    u64 next() {
+    inline u64 next() {
         u64 const r =
             __builtin_rotateleft64(this->s[0] + this->s[3], 23) + this->s[0];
         u64 const t = this->s[1] << 17;
@@ -78,7 +78,7 @@ struct Xoshiro256 {
         return r;
     }
 
-    void fill(SliceMut<u8> out) {
+    inline void fill(SliceMut<u8> out) {
         if (out.len() == 0) {
             return;
         }
@@ -101,7 +101,7 @@ struct Xoshiro256 {
         }
     }
 
-    template <typename T> T random() {
+    template <typename T> inline T random() {
         T out;
         this->fill(SliceMut<u8>::init_from_ptr_unsafe(&out));
         return out;

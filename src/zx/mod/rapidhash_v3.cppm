@@ -41,18 +41,18 @@ constexpr u64 RAPIDHASH_V3_SECRET_[8] = {
     0x90ed1765281c388c, 0xaaaaaaaaaaaaaaaa,
 };
 
-void rapidhash_v3_mum_(u64 *a, u64 *b) {
+inline void rapidhash_v3_mum_(u64 *a, u64 *b) {
     u128 const r = ((u128){*a}) * ((u128){*b});
     *a = (u64)r;
     *b = (u64)(r >> 64);
 }
 
-u64 rapidhash_v3_mix_(u64 a, u64 b) {
+inline u64 rapidhash_v3_mix_(u64 a, u64 b) {
     rapidhash_v3_mum_(&a, &b);
     return a ^ b;
 }
 
-u64 rapidhash_v3_finish_(u64 a, u64 b, u64 seed, u64 i) {
+inline u64 rapidhash_v3_finish_(u64 a, u64 b, u64 seed, u64 i) {
     a ^= RAPIDHASH_V3_SECRET_[1];
     b ^= seed;
     rapidhash_v3_mum_(&a, &b);
@@ -60,7 +60,7 @@ u64 rapidhash_v3_finish_(u64 a, u64 b, u64 seed, u64 i) {
                              b ^ RAPIDHASH_V3_SECRET_[1] ^ i);
 }
 
-u64 rapidhash_v3_16_(Slice<u8> key, u64 seed) {
+inline u64 rapidhash_v3_16_(Slice<u8> key, u64 seed) {
     assert(key.len() <= 16);
 
     u64 a = 0;
@@ -91,7 +91,7 @@ u64 rapidhash_v3_16_(Slice<u8> key, u64 seed) {
     return rapidhash_v3_finish_(a, b, s, key.len());
 }
 
-u64 rapidhash_v3_long_(Slice<u8> key, u64 seed) {
+inline u64 rapidhash_v3_long_(Slice<u8> key, u64 seed) {
     assert(key.len() > 16);
     u64 a = 0;
     u64 b = 0;
@@ -150,7 +150,7 @@ u64 rapidhash_v3_long_(Slice<u8> key, u64 seed) {
     return rapidhash_v3_finish_(a, b, s, i);
 }
 
-u64 hash(Slice<u8> key, u64 seed) {
+inline u64 hash(Slice<u8> key, u64 seed) {
     if (key.len() <= 16) {
         return rapidhash_v3_16_(key, seed);
     } else {

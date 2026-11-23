@@ -39,7 +39,7 @@ export namespace zx {
 
 namespace uuid_v4 {
 
-u128 generate(Xoshiro256 *rng) {
+inline u128 generate(Xoshiro256 *rng) {
     u128 out = 0;
     rng->fill(SliceMut<u8>::init_from_ptr_unsafe<u128>(&out));
     // This is an optimized method for generating random UUIDs that just masks
@@ -48,12 +48,13 @@ u128 generate(Xoshiro256 *rng) {
            u128{0x40008000000000000000__wbu};
 }
 
-u8 nibble_to_hex_(u8 nibble, u8 alpha_offset) {
+inline u8 nibble_to_hex_(u8 nibble, u8 alpha_offset) {
     u8 const a = (nibble > 9) ? alpha_offset : u8{0};
     return nibble + '0' + a;
 }
 
-void format_simple_unsafe_(u128 uuid, bool upper_case, SliceMut<u8> out) {
+inline void format_simple_unsafe_(u128 uuid, bool upper_case,
+                                  SliceMut<u8> out) {
     u8 const alpha_offset = upper_case ? u8{0x07} : u8{0x27};
     u8 bytes[sizeof(u128)];
     static_assert(sizeof(bytes) == sizeof(u128));
@@ -67,7 +68,7 @@ void format_simple_unsafe_(u128 uuid, bool upper_case, SliceMut<u8> out) {
     }
 }
 
-void print(u128 uuid, bool upper_case, Fmt *fmt, bool *fmt_overflow) {
+inline void print(u128 uuid, bool upper_case, Fmt *fmt, bool *fmt_overflow) {
     u8 simple_buf[sizeof(u128) * 2__wbu];
     SliceMut<u8> simple =
         SliceMut<u8>::init_unsafe(simple_buf, sizeof(simple_buf));

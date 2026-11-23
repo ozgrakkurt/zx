@@ -131,3 +131,9 @@ We generally don't want to implement the immintrin functions in this codebase si
 
 Using builtins for avx512 is much worse than using inline asm so we just use inline asm for most of the avx512 code.
 
+## Notes
+
+- Just putting a function in a module `.cppm` file doesn't mean the other files that import it can inline that function.
+  Function has to be defined as `inline` in order for it's "body" to be included in the `.pcm` files so it can be inline across source files.
+  Because of this we put `inline` on every function definition.
+
