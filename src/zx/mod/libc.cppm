@@ -35,10 +35,6 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
         : [input] "r"(input), [output] "r"(output), [storemask] "Yk"(storemask)
         : "memory", "zmm29");
 
-    if (count < 64) {
-        return dest;
-    }
-
     for (; offset < count; offset += 64__wbu) {
         __asm__ volatile(
             "vmovups (%[input]), %%ymm31\n\t"
