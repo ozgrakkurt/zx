@@ -117,7 +117,7 @@ We allocate memory from the OS using mmap at program start and then don't do any
 
 ### SIMD
 
-Since we don't include standard headers, we use clang builtins for doing SIMD.
+Since we don't include standard headers, we use clang builtins or inline assembly for doing SIMD.
 
 Vector types are defined in `zx:vector`.
 
@@ -128,4 +128,6 @@ the immintrin you want to use. For example `avxintrin.h` contains intrinsics tha
 You will want to do w/e that function is doing directly in this codebase.
 
 We generally don't want to implement the immintrin functions in this codebase since there is a huge number of them and they are not particularly useful to have in terms of abstraction.
+
+Using builtins for avx512 is much worse than using inline asm so we just use inline asm for most of the avx512 code.
 
