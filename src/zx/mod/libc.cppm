@@ -28,14 +28,27 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
     u64 offset = count % 64;
     if (offset > 0) {
-        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, offset);
+        u64_c const fullmask =
+        __builtin_ia32_bzhi_di(~(u64){0}, offset);
+
+        u32_c const mask0 = (u32_c)fullmask;
+        u32_c const mask1 = (u32_c)(fullmask >> 32);
+
         __asm__ volatile(
-            "vmovdqu8 (%[input]), %%zmm29 %{%[storemask]%}%{z%}\n\t"
-            "vmovdqu8 %%zmm29, (%[output]) %{%[storemask]%}\n\t"
+            "vmovdqu8 (%[input]), %%ymm29 %{%[mask0]%}%{z%}\n\t"
+            "vmovdqu8 %%ymm29, (%[output]) %{%[mask0]%}\n\t"
             :
             : [input] "r"(input), [output] "r"(output),
-              [storemask] "Yk"(storemask)
-            : "memory", "zmm29");
+              [mask0] "Yk"(mask0)
+            : "memory", "ymm29");
+
+        __asm__ volatile(
+            "vmovdqu8 32(%[input]), %%ymm28 %{%[mask1]%}%{z%}\n\t"
+            "vmovdqu8 %%ymm28, 32(%[output]) %{%[mask1]%}\n\t"
+            :
+            : [input] "r"(input), [output] "r"(output),
+              [mask1] "Yk"(mask1)
+            : "memory", "ymm28");
     }
 
     for (; offset < count; offset += 64__wbu) {
