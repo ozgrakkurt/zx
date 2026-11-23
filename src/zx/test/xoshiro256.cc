@@ -136,7 +136,7 @@ static void fill_aligned() {
     constexpr u64 len = 69;
     u64 vals[len];
     SliceMut<u64> const data = SliceMut<u64>::init_unsafe(vals, len);
-    data.memset(69);
+    data.memset(0x45);
 
     Xoshiro256 rand = Xoshiro256::init(69);
 
@@ -144,7 +144,7 @@ static void fill_aligned() {
 
     for (u64 i = 0; i < data.len(); i++) {
         u64 const v = data.as_const().read_unsafe(i);
-        assert(v != 69);
+        assert(v != 0x4545454545454545__wbu);
     }
 }
 

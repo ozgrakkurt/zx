@@ -819,24 +819,74 @@ static void test_mut(Backtrace *err_bt) {
     assert(!sli8.as_const().is_overlapping(dangler.as_const()));
 }
 
-void test_memcmp() {
+static void test_memcmp(Backtrace *err_bt) {
     u8 a[] = {1, 2, 3, 4, 5};
     u8 b[] = {1, 2, 3, 4, 5, 6};
+    u8 c[] = {1, 2, 4, 4, 5};
 
-    i32 res = 0;
+    i32 res = 69;
+
+    testing::assert_with_trace(
+        Slice<u8>::init_unsafe(a, sizeof(a))
+                .memcmp(err_bt, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
+            SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res == 0);
+
+    testing::assert_with_trace(
+        Slice<u8>::init_unsafe(a, sizeof(a))
+                .memcmp(err_bt, Slice<u8>::init_unsafe(c, sizeof(c)), &res) ==
+            SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res < 0);
+    assert(Slice<u8>::init_unsafe(a, sizeof(a))
+               .memcmp_unsafe(Slice<u8>::init_unsafe(c, sizeof(c))) < 0);
+
+    testing::assert_with_trace(
+        Slice<u8>::init_unsafe(c, sizeof(c))
+                .memcmp(err_bt, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
+            SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res > 0);
+    assert(Slice<u8>::init_unsafe(c, sizeof(c))
+               .memcmp_unsafe(Slice<u8>::init_unsafe(a, sizeof(a))) > 0);
 
     assert(Slice<u8>::init_unsafe(a, sizeof(a))
-               .memcmp(nullptr, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
-           SliceMemcmpStatus::Ok);
-    assert(res == 0);
+               .memcmp(nullptr, Slice<u8>::init_unsafe(a, sizeof(a)),
+                       nullptr) == SliceMemcmpStatus::Nullptr);
     assert(Slice<u8>::init_unsafe(a, sizeof(a))
                .memcmp(nullptr, Slice<u8>::init_unsafe(b, sizeof(b)), &res) ==
            SliceMemcmpStatus::SizeMismatch);
 
+    res = 69;
+    testing::assert_with_trace(
+        SliceMut<u8>::init_unsafe(a, sizeof(a))
+                .memcmp(err_bt, SliceMut<u8>::init_unsafe(a, sizeof(a)),
+                        &res) == SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res == 0);
+
+    testing::assert_with_trace(
+        SliceMut<u8>::init_unsafe(a, sizeof(a))
+                .memcmp(err_bt, SliceMut<u8>::init_unsafe(c, sizeof(c)),
+                        &res) == SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res < 0);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a))
+               .memcmp_unsafe(SliceMut<u8>::init_unsafe(c, sizeof(c))) < 0);
+
+    testing::assert_with_trace(
+        SliceMut<u8>::init_unsafe(c, sizeof(c))
+                .memcmp(err_bt, SliceMut<u8>::init_unsafe(a, sizeof(a)),
+                        &res) == SliceMemcmpStatus::Ok,
+        err_bt);
+    assert(res > 0);
+    assert(SliceMut<u8>::init_unsafe(c, sizeof(c))
+               .memcmp_unsafe(SliceMut<u8>::init_unsafe(a, sizeof(a))) > 0);
+
     assert(SliceMut<u8>::init_unsafe(a, sizeof(a))
                .memcmp(nullptr, SliceMut<u8>::init_unsafe(a, sizeof(a)),
-                       &res) == SliceMemcmpStatus::Ok);
-    assert(res == 0);
+                       nullptr) == SliceMemcmpStatus::Nullptr);
     assert(SliceMut<u8>::init_unsafe(a, sizeof(a))
                .memcmp(nullptr, SliceMut<u8>::init_unsafe(b, sizeof(b)),
                        &res) == SliceMemcmpStatus::SizeMismatch);
@@ -860,7 +910,7 @@ int main(void) {
     test_write_access(&err_bt);
     test_memfunctions(&err_bt);
     test_cstring();
-    test_memcmp();
+    test_memcmp(&err_bt);
 
     return 0;
 }
