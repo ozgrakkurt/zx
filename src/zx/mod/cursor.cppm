@@ -34,7 +34,7 @@ struct Cursor {
         return this->m_offset == this->m_buf.len();
     }
 
-    template <typename T> Status read(Backtrace *err_bt, T *out) {
+    template <typename T> inline Status read(Backtrace *err_bt, T *out) {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return Status::Nullptr;
@@ -122,7 +122,7 @@ struct WriteCursor {
         return this->m_buf.slice_unsafe(0, this->m_offset).as_const();
     }
 
-    template <typename T> Status write(Backtrace *err_bt, T val) {
+    template <typename T> inline Status write(Backtrace *err_bt, T val) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, sizeof(T), &overflow);
         if (overflow) [[unlikely]] {

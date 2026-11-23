@@ -1710,7 +1710,7 @@ inline FTruncateStatus ftruncate(Backtrace *err_bt, i32 fildes, i64 length) {
 // https://www.man7.org/linux/man-pages/man2/sigreturn.2.html
 //
 // It essentially just returns control back to the kernel.
-inline __attribute__((naked, noreturn)) void sigreturn_() {
+__attribute__((naked, noreturn)) void sigreturn_() {
     __asm__ volatile("movq $15, %rax\n\t" // __NR_rt_sigreturn
                      "syscall\n\t"
                      "ud2\n\t");

@@ -20,7 +20,7 @@ extern "C" void zx_getcpucontext_(CPUContext *out);
 
 #else // ifdef ZX_DEBUG_INFO
 
-extern "C" inline void zx_getcpucontext_(CPUContext *out) {
+extern "C" void zx_getcpucontext_(CPUContext *out) {
 #ifdef ZX_DEV
     __builtin_memset(out, 0xaa, sizeof(CPUContext));
 #endif

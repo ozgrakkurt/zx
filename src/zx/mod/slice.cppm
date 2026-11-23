@@ -122,7 +122,8 @@ template <typename T> struct Slice {
         return SliceInitStatus::Ok;
     }
 
-    template <typename U> static Slice init_from_ptr_unsafe(U const *ptr) {
+    template <typename U>
+    inline static Slice init_from_ptr_unsafe(U const *ptr) {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         assert_dev(ptr != nullptr);
@@ -271,7 +272,7 @@ template <typename T> struct Slice {
         return SliceCastStatus::Ok;
     }
 
-    template <typename U> Slice<U> cast_truncate_unsafe() const {
+    template <typename U> inline Slice<U> cast_truncate_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
 
@@ -285,7 +286,7 @@ template <typename T> struct Slice {
         };
     }
 
-    template <typename U> Slice<U> cast_unsafe() const {
+    template <typename U> inline Slice<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
         assert_dev(mod_unsafe_u64(byte_cap, sizeof(U)) == 0);
@@ -300,7 +301,7 @@ template <typename T> struct Slice {
         };
     }
 
-    template <typename U> Slice<U> cast_static() const {
+    template <typename U> inline Slice<U> cast_static() const {
         static_assert(alignof(U) <= alignof(T));
         static_assert(sizeof(U) <= sizeof(T));
         static_assert(sizeof(T) % sizeof(U) == 0);
@@ -479,7 +480,7 @@ template <typename T> struct Slice {
         return SliceStatus::Ok;
     }
 
-    template <typename U> U read_unaligned_unsafe(u64 offset) const {
+    template <typename U> inline U read_unaligned_unsafe(u64 offset) const {
 #ifdef ZX_DEV
         assert(offset < this->m_len);
         u64 const item_cap = sub_unsafe_u64(this->m_len, offset);
@@ -636,7 +637,7 @@ template <typename T> struct SliceMut {
         return SliceInitStatus::Ok;
     }
 
-    template <typename U> static SliceMut init_from_ptr_unsafe(U *ptr) {
+    template <typename U> inline static SliceMut init_from_ptr_unsafe(U *ptr) {
         static_assert(sizeof(U) % sizeof(T) == 0);
 
         assert_dev(ptr != nullptr);
@@ -785,7 +786,7 @@ template <typename T> struct SliceMut {
         return SliceCastStatus::Ok;
     }
 
-    template <typename U> SliceMut<U> cast_truncate_unsafe() const {
+    template <typename U> inline SliceMut<U> cast_truncate_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
 
@@ -799,7 +800,7 @@ template <typename T> struct SliceMut {
         };
     }
 
-    template <typename U> SliceMut<U> cast_unsafe() const {
+    template <typename U> inline SliceMut<U> cast_unsafe() const {
         u64 const byte_cap = mul_unsafe_u64(this->m_len, sizeof(T));
         u64 const new_len = div_unsafe_u64(byte_cap, sizeof(U));
         assert_dev(mod_unsafe_u64(byte_cap, sizeof(U)) == 0);
@@ -814,7 +815,7 @@ template <typename T> struct SliceMut {
         };
     }
 
-    template <typename U> SliceMut<U> cast_static() const {
+    template <typename U> inline SliceMut<U> cast_static() const {
         static_assert(alignof(U) <= alignof(T));
         static_assert(sizeof(U) <= sizeof(T));
         static_assert(sizeof(T) % sizeof(U) == 0);
@@ -1015,7 +1016,7 @@ template <typename T> struct SliceMut {
         return SliceStatus::Ok;
     }
 
-    template <typename U> U read_unaligned_unsafe(u64 offset) const {
+    template <typename U> inline U read_unaligned_unsafe(u64 offset) const {
 #ifdef ZX_DEV
         assert(offset < this->m_len);
         u64 const item_cap = sub_unsafe_u64(this->m_len, offset);
@@ -1146,7 +1147,8 @@ template <typename T> struct SliceMut {
         return SliceStatus::Ok;
     }
 
-    template <typename U> void write_unaligned_unsafe(u64 offset, U val) const {
+    template <typename U>
+    inline void write_unaligned_unsafe(u64 offset, U val) const {
 #ifdef ZX_DEV
         assert(offset < this->m_len);
         u64 const item_cap = sub_unsafe_u64(this->m_len, offset);

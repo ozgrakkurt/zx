@@ -141,7 +141,8 @@ struct Alloc {
         return this->aligned_alloc<T>(err_bt, alignof(T), len, out);
     }
 
-    template <typename T> AllocStatus create(Backtrace *err_bt, T **out) {
+    template <typename T>
+    inline AllocStatus create(Backtrace *err_bt, T **out) {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return AllocStatus::Nullptr;

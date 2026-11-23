@@ -101,7 +101,7 @@ struct Xoshiro256 {
         }
     }
 
-    template <typename T> T random() {
+    template <typename T> inline T random() {
         T out;
         this->fill(SliceMut<u8>::init_from_ptr_unsafe(&out));
         return out;
