@@ -28,8 +28,7 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
 
     u64 offset = count % 64;
     if (offset > 0) {
-        u64_c const fullmask =
-        __builtin_ia32_bzhi_di(~(u64){0}, offset);
+        u64_c const fullmask = __builtin_ia32_bzhi_di(U64_MAX, offset);
 
         u32_c const mask0 = (u32_c)fullmask;
         u32_c const mask1 = (u32_c)(fullmask >> 32);
@@ -38,16 +37,14 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
             "vmovdqu8 (%[input]), %%ymm29 %{%[mask0]%}%{z%}\n\t"
             "vmovdqu8 %%ymm29, (%[output]) %{%[mask0]%}\n\t"
             :
-            : [input] "r"(input), [output] "r"(output),
-              [mask0] "Yk"(mask0)
+            : [input] "r"(input), [output] "r"(output), [mask0] "Yk"(mask0)
             : "memory", "ymm29");
 
         __asm__ volatile(
             "vmovdqu8 32(%[input]), %%ymm28 %{%[mask1]%}%{z%}\n\t"
             "vmovdqu8 %%ymm28, 32(%[output]) %{%[mask1]%}\n\t"
             :
-            : [input] "r"(input), [output] "r"(output),
-              [mask1] "Yk"(mask1)
+            : [input] "r"(input), [output] "r"(output), [mask1] "Yk"(mask1)
             : "memory", "ymm28");
     }
 
@@ -62,6 +59,8 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
             : "ymm31", "ymm30", "memory");
     }
 
+    assert_dev(offset == count);
+
     return dest;
 }
 
@@ -74,28 +73,34 @@ __attribute__((no_builtin)) void *memset(void *dest, i32_c ch, u64_c count) {
             : [vbytes] "=v"(vbytes)
             : [byte] "r"(byte));
 
-    v512_u8 vbytes512;
-    __asm__("vpbroadcastb %[byte], %[vbytes512]\n\t"
-            : [vbytes512] "=v"(vbytes512)
-            : [byte] "r"(byte));
+    u64 offset = count % 64;
+    if (offset > 0) {
+        u64_c const fullmask = __builtin_ia32_bzhi_di(U64_MAX, offset);
 
-    u64 offset = 0;
+        u32_c const mask0 = (u32_c)fullmask;
+        u32_c const mask1 = (u32_c)(fullmask >> 32);
 
-    for (; offset + 64__wbu <= count; offset += 64__wbu) {
-        __asm__("vmovdqu8 %[vbytes], (%[output])\n\t"
-                "vmovdqu8 %[vbytes], 32(%[output])\n\t"
-                : "=m"(*(u8(*)[64]) & output[offset])
-                : [vbytes] "v"(vbytes), [output] "r"(&output[offset]));
+        __asm__ volatile(
+            "vmovdqu8 %[vbytes], (%[output]) %{%[mask0]%}\n\t"
+            :
+            : [vbytes] "v"(vbytes), [output] "r"(output), [mask0] "Yk"(mask0)
+            : "memory");
+        __asm__ volatile(
+            "vmovdqu8 %[vbytes], 32(%[output]) %{%[mask1]%}\n\t"
+            :
+            : [vbytes] "v"(vbytes), [output] "r"(output), [mask1] "Yk"(mask1)
+            : "memory");
     }
 
-    u64 const remainder = count - offset;
-
-    if (remainder > 0) {
-        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-        __asm__("vmovdqu8 %[vbytes], %[output] %{%[storemask]%}\n\t"
-                : [output] "=m"(*(u8(*)[64]) & output[offset])
-                : [vbytes] "v"(vbytes512), [storemask] "Yk"(storemask));
+    for (; offset < count; offset += 64__wbu) {
+        __asm__ volatile("vmovdqu8 %[vbytes], (%[output])\n\t"
+                         "vmovdqu8 %[vbytes], 32(%[output])\n\t"
+                         :
+                         : [vbytes] "v"(vbytes), [output] "r"(&output[offset])
+                         : "memory");
     }
+
+    assert_dev(offset == count);
 
     return dest;
 }
@@ -105,17 +110,42 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
     u8 const *left = (u8 const *)lhs;
     u8 const *right = (u8 const *)rhs;
 
-    u64 offset = 0;
-    for (; offset + 64__wbu <= count; offset += 64__wbu) {
+    u64 offset = count % 64;
+    if (offset > 0) {
+        u64_c const loadmask = __builtin_ia32_bzhi_di(U64_MAX, offset);
         u64_c nonzero_mask;
-        __asm__("vmovdqu8 %[left], %%zmm31\n\t"
-                "vmovdqu8 %[right], %%zmm30\n\t"
-                // 4 means Not Equal OP
-                "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
-                : [nonzero_mask] "=&k"(nonzero_mask)
-                : [left] "m"(*(u8 const(*)[64]) & left[offset]),
-                  [right] "m"(*(u8 const(*)[64]) & right[offset])
-                : "zmm30", "zmm31");
+        __asm__ volatile(
+            "vmovdqu (%[left]), %%zmm31 %{%[loadmask]%}%{z%}\n\t"
+            "vmovdqu (%[right]), %%zmm30 %{%[loadmask]%}%{z%}\n\t"
+            // 4 means Not Equal OP
+            "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
+            : [nonzero_mask] "=Yk"(nonzero_mask)
+            : [left] "r"(left), [right] "r"(right), [loadmask] "Yk"(loadmask)
+            : "memory", "zmm31", "zmm30");
+        if (nonzero_mask != 0) {
+            // find first diff
+            u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
+            // idx can't be oob of the vector.
+            assert_dev(idx < 64);
+            // idx can't be oob of remainder.
+            assert_dev(idx < offset);
+            u64 const pos = offset + idx;
+            i32 const ret = i32{left[pos]} - i32{right[pos]};
+            // can't be equal
+            assert_dev(ret != 0);
+            return ret;
+        }
+    }
+
+    for (; offset < count; offset += 64__wbu) {
+        u64_c nonzero_mask;
+        __asm__ volatile("vmovdqu8 (%[left]), %%zmm29\n\t"
+                         "vmovdqu8 (%[right]), %%zmm28\n\t"
+                         // 4 means Not Equal OP
+                         "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
+                         : [nonzero_mask] "=Yk"(nonzero_mask)
+                         : [left] "r"(left), [right] "r"(right)
+                         : "memory", "zmm29", "zmm28");
         if (nonzero_mask != 0) {
             // find first diff
             u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
@@ -129,34 +159,7 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
         }
     }
 
-    u64 const remainder = count - offset;
-    if (remainder > 0) {
-        register u64_c const storemask __asm__("k7") =
-            __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-        u64_c nonzero_mask;
-        __asm__("vmovdqu8 %[left], %%zmm31 %{%[storemask]%}%{z%}\n\t"
-                "vmovdqu8 %[right], %%zmm30 %{%[storemask]%}%{z%}\n\t"
-                // 4 means Not Equal OP
-                "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
-                : [nonzero_mask] "=&k"(nonzero_mask)
-                : [left] "m"(*(u8 const(*)[64]) & left[offset]),
-                  [right] "m"(*(u8 const(*)[64]) & right[offset]),
-                  [storemask] "k"(storemask)
-                : "zmm30", "zmm31");
-        if (nonzero_mask != 0) {
-            // find first diff
-            u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
-            // idx can't be oob of the vector.
-            assert_dev(idx < 64);
-            // idx can't be oob of remainder.
-            assert_dev(idx < remainder);
-            u64 const pos = offset + idx;
-            i32 const ret = i32{left[pos]} - i32{right[pos]};
-            // can't be equal
-            assert_dev(ret != 0);
-            return ret;
-        }
-    }
+    assert_dev(offset == count);
 
     return 0;
 }
