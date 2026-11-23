@@ -11,7 +11,7 @@ namespace leb128 {
 constexpr u8 CONT_BIT = 0x80__wbu;
 constexpr u8 SIGN_BIT = 0x40__wbu;
 
-u8 getval_(u8 byte) { return byte & 0x7f__wbu; }
+inline u8 getval_(u8 byte) { return byte & 0x7f__wbu; }
 
 enum class [[nodiscard]] EncodeStatus : u8_c {
     Ok = 0,
@@ -20,8 +20,8 @@ enum class [[nodiscard]] EncodeStatus : u8_c {
     OutOfCapacity,
 };
 
-EncodeStatus encode_u64(Backtrace *err_bt, u64 num, SliceMut<u8> out,
-                        u64 *offset) {
+inline EncodeStatus encode_u64(Backtrace *err_bt, u64 num, SliceMut<u8> out,
+                               u64 *offset) {
     if (offset == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return EncodeStatus::Nullptr;
@@ -64,8 +64,8 @@ enum class [[nodiscard]] DecodeStatus : u8_c {
     InvalidInput,
 };
 
-DecodeStatus decode_u64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
-                        u64 *num) {
+inline DecodeStatus decode_u64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
+                               u64 *num) {
     if (offset == nullptr || num == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return DecodeStatus::Nullptr;
@@ -118,8 +118,8 @@ DecodeStatus decode_u64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
     return DecodeStatus::InvalidInput;
 }
 
-EncodeStatus encode_i64(Backtrace *err_bt, i64 num, SliceMut<u8> out,
-                        u64 *offset) {
+inline EncodeStatus encode_i64(Backtrace *err_bt, i64 num, SliceMut<u8> out,
+                               u64 *offset) {
     if (offset == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return EncodeStatus::Nullptr;
@@ -156,8 +156,8 @@ EncodeStatus encode_i64(Backtrace *err_bt, i64 num, SliceMut<u8> out,
     }
 }
 
-DecodeStatus decode_i64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
-                        i64 *num) {
+inline DecodeStatus decode_i64(Backtrace *err_bt, Slice<u8> input, u64 *offset,
+                               i64 *num) {
     if (offset == nullptr || num == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return DecodeStatus::Nullptr;

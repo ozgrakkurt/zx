@@ -40,8 +40,8 @@ template <typename T> struct Slab {
     u32 m_n_occupied;
     u32 m_capacity;
 
-    static SlabInitStatus init(Backtrace *err_bt, Alloc *alloc, u32 capacity,
-                               Slab *slab) {
+    inline static SlabInitStatus init(Backtrace *err_bt, Alloc *alloc,
+                                      u32 capacity, Slab *slab) {
         if (alloc == nullptr || slab == nullptr) {
             Backtrace::collect(err_bt);
             return SlabInitStatus::Nullptr;
@@ -80,7 +80,7 @@ template <typename T> struct Slab {
         return SlabInitStatus::Ok;
     }
 
-    void reset() {
+    inline void reset() {
         SliceMut<Entry_> const entries = this->m_entries;
         u32 const capacity = this->m_capacity;
         for (u32 i = 0; i < capacity; i++) {
@@ -95,15 +95,15 @@ template <typename T> struct Slab {
         this->m_first_free_entry = 0;
     }
 
-    u32 capacity() const { return this->m_capacity; }
+    inline u32 capacity() const { return this->m_capacity; }
 
-    u32 n_occupied() const { return this->m_n_occupied; }
+    inline u32 n_occupied() const { return this->m_n_occupied; }
 
-    u32 capacity_left() const {
+    inline u32 capacity_left() const {
         return sub_unsafe_u32(this->m_capacity, this->m_n_occupied);
     }
 
-    SlabInsertStatus insert(Backtrace *err_bt, T const *val, u32 *idx) {
+    inline SlabInsertStatus insert(Backtrace *err_bt, T const *val, u32 *idx) {
         if (val == nullptr || idx == nullptr) {
             Backtrace::collect(err_bt);
             return SlabInsertStatus::Nullptr;
@@ -132,7 +132,7 @@ template <typename T> struct Slab {
         return SlabInsertStatus::Ok;
     }
 
-    SlabAccessStatus remove(Backtrace *err_bt, u32 key, T *out) {
+    inline SlabAccessStatus remove(Backtrace *err_bt, u32 key, T *out) {
         if (out == nullptr) {
             Backtrace::collect(err_bt);
             return SlabAccessStatus::Nullptr;
@@ -168,7 +168,7 @@ template <typename T> struct Slab {
         return SlabAccessStatus::Found;
     }
 
-    SlabAccessStatus get_mut(Backtrace *err_bt, u32 key, T **out) {
+    inline SlabAccessStatus get_mut(Backtrace *err_bt, u32 key, T **out) {
         if (out == nullptr) {
             Backtrace::collect(err_bt);
             return SlabAccessStatus::Nullptr;
@@ -193,7 +193,8 @@ template <typename T> struct Slab {
         return SlabAccessStatus::Found;
     }
 
-    SlabAccessStatus get(Backtrace *err_bt, u32 key, T const **out) const {
+    inline SlabAccessStatus get(Backtrace *err_bt, u32 key,
+                                T const **out) const {
         if (out == nullptr) {
             Backtrace::collect(err_bt);
             return SlabAccessStatus::Nullptr;

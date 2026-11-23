@@ -21,33 +21,35 @@ template <typename T> struct List {
     SliceMut<T> m_slice;
     u64 m_offset;
 
-    static List init(SliceMut<T> slice) {
+    inline static List init(SliceMut<T> slice) {
         return List{
             .m_slice = slice,
             .m_offset = 0,
         };
     }
 
-    u64 offset() const { return this->m_offset; }
+    inline u64 offset() const { return this->m_offset; }
 
-    SliceMut<T> slice() const { return this->m_slice; }
+    inline SliceMut<T> slice() const { return this->m_slice; }
 
-    bool is_full() const { return this->m_offset == this->m_slice.len(); }
+    inline bool is_full() const {
+        return this->m_offset == this->m_slice.len();
+    }
 
-    Slice<T> written() const {
+    inline Slice<T> written() const {
         return this->m_slice.slice_unsafe(0, this->m_offset).as_const();
     }
 
-    u64 n_written() const { return this->m_offset; }
+    inline u64 n_written() const { return this->m_offset; }
 
-    void reset() {
+    inline void reset() {
 #ifdef ZX_DEV
         this->m_slice.memset(0xaa);
 #endif
         this->m_offset = 0;
     }
 
-    ListPushStatus push(Backtrace *err_bt, T val) {
+    inline ListPushStatus push(Backtrace *err_bt, T val) {
         assert_dev(this->m_offset <= this->m_slice.len());
         if (this->m_offset == this->m_slice.len()) [[unlikely]] {
             Backtrace::collect(err_bt);
@@ -59,7 +61,7 @@ template <typename T> struct List {
         return ListPushStatus::Ok;
     }
 
-    ListPopStatus pop(Backtrace *err_bt, T *out) {
+    inline ListPopStatus pop(Backtrace *err_bt, T *out) {
         assert_dev(this->m_offset <= this->m_slice.len());
 
         if (out == nullptr) [[unlikely]] {

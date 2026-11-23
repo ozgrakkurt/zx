@@ -19,7 +19,7 @@ struct Alloc {
     SliceMut<u8> m_mem;
     u64 m_offset;
 
-    static Alloc init(SliceMut<u8> mem) {
+    inline static Alloc init(SliceMut<u8> mem) {
 #ifdef ZX_DEV
         mem.memset(0xaa);
 #endif
@@ -29,11 +29,11 @@ struct Alloc {
         };
     }
 
-    u64 capacity_left() const {
+    inline u64 capacity_left() const {
         return sub_unsafe_u64(this->m_mem.len(), this->m_offset);
     }
 
-    void reset() {
+    inline void reset() {
 #ifdef ZX_DEV
         this->m_mem.slice_unsafe(0, this->m_offset).memset(0xaa);
 #endif
@@ -45,7 +45,7 @@ struct Alloc {
         OutOfBounds,
     };
 
-    ResizeStatus resize(Backtrace *err_bt, u64 offset) {
+    inline ResizeStatus resize(Backtrace *err_bt, u64 offset) {
         if (offset > this->m_mem.len()) [[unlikely]] {
             Backtrace::collect(err_bt);
             return ResizeStatus::OutOfBounds;
@@ -68,11 +68,11 @@ struct Alloc {
         return ResizeStatus::Ok;
     }
 
-    u64 offset() const { return this->m_offset; }
+    inline u64 offset() const { return this->m_offset; }
 
     template <typename T>
-    AllocStatus aligned_alloc(Backtrace *err_bt, u16 align, u64 len,
-                              SliceMut<T> *out) {
+    inline AllocStatus aligned_alloc(Backtrace *err_bt, u16 align, u64 len,
+                                     SliceMut<T> *out) {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return AllocStatus::Nullptr;
@@ -137,7 +137,7 @@ struct Alloc {
     }
 
     template <typename T>
-    AllocStatus alloc(Backtrace *err_bt, u64 len, SliceMut<T> *out) {
+    inline AllocStatus alloc(Backtrace *err_bt, u64 len, SliceMut<T> *out) {
         return this->aligned_alloc<T>(err_bt, alignof(T), len, out);
     }
 
@@ -158,7 +158,8 @@ struct Alloc {
     }
 
     template <typename T>
-    AllocStatus copy_from(Backtrace *err_bt, Slice<T> data, SliceMut<T> *out) {
+    inline AllocStatus copy_from(Backtrace *err_bt, Slice<T> data,
+                                 SliceMut<T> *out) {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return AllocStatus::Nullptr;

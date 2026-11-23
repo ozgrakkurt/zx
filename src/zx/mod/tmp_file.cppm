@@ -12,7 +12,7 @@ enum class [[nodiscard]] OpenStatus : u8_c {
     SysOpenFail,
 };
 
-OpenStatus open(Backtrace *err_bt, i32 *fd) {
+inline OpenStatus open(Backtrace *err_bt, i32 *fd) {
     if (fd == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return OpenStatus::Nullptr;

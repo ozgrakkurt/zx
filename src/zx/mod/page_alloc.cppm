@@ -19,8 +19,8 @@ enum class [[nodiscard]] AllocStatus : u8_c {
     InvalidInput,
 };
 
-AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
-                   i32 huge_page_flags, u8 **out) {
+inline AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
+                          i32 huge_page_flags, u8 **out) {
     if (out == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return AllocStatus::Nullptr;
@@ -64,16 +64,16 @@ AllocStatus alloc_(Backtrace *err_bt, u64 size, u64 page_size,
     return AllocStatus::Ok;
 }
 
-AllocStatus alloc_4kb(Backtrace *err_bt, u64 size, u8 **out) {
+inline AllocStatus alloc_4kb(Backtrace *err_bt, u64 size, u8 **out) {
     return alloc_(err_bt, size, u64{1} << 12, 0, out);
 }
 
-AllocStatus alloc_huge_2mb(Backtrace *err_bt, u64 size, u8 **out) {
+inline AllocStatus alloc_huge_2mb(Backtrace *err_bt, u64 size, u8 **out) {
     return alloc_(err_bt, size, u64{1} << 21,
                   sys::MAP_HUGETLB | sys::MAP_HUGE_2MB, out);
 }
 
-AllocStatus alloc_huge_1gb(Backtrace *err_bt, u64 size, u8 **out) {
+inline AllocStatus alloc_huge_1gb(Backtrace *err_bt, u64 size, u8 **out) {
     return alloc_(err_bt, size, u64{1} << 30,
                   sys::MAP_HUGETLB | sys::MAP_HUGE_1GB, out);
 }
@@ -86,7 +86,7 @@ enum class [[nodiscard]] FreeStatus : u8_c {
     UnexpectedErr,
 };
 
-FreeStatus free(Backtrace *err_bt, u8 *mem, u64 size) {
+inline FreeStatus free(Backtrace *err_bt, u8 *mem, u64 size) {
     if (mem == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return FreeStatus::Nullptr;

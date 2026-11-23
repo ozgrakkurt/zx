@@ -11,8 +11,8 @@ enum class [[nodiscard]] CompressBoundStatus : zx::u8_c {
     IntegerOverflow,
 };
 
-CompressBoundStatus compress_bound(zx::Backtrace *err_bt, zx::u64 input_size,
-                                   zx::u64 *bound) {
+inline CompressBoundStatus compress_bound(zx::Backtrace *err_bt,
+                                          zx::u64 input_size, zx::u64 *bound) {
     if (bound == nullptr) [[unlikely]] {
         zx::Backtrace::collect(err_bt);
         return CompressBoundStatus::Nullptr;
@@ -45,8 +45,9 @@ enum class [[nodiscard]] CompressStatus : zx::u8_c {
     OutputTooShort,
 };
 
-CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
-                        zx::SliceMut<zx::u8> output, zx::u64 *n_written) {
+inline CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
+                               zx::SliceMut<zx::u8> output,
+                               zx::u64 *n_written) {
     if (n_written == nullptr) [[unlikely]] {
         zx::Backtrace::collect(err_bt);
         return CompressStatus::Nullptr;
@@ -135,8 +136,10 @@ enum class [[nodiscard]] DecompressStatus : zx::u8_c {
     InputTooShort,
 };
 
-DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
-                            zx::SliceMut<zx::u8> output, zx::u64 *n_read) {
+inline DecompressStatus decompress(zx::Backtrace *err_bt,
+                                   zx::Slice<zx::u8> input,
+                                   zx::SliceMut<zx::u8> output,
+                                   zx::u64 *n_read) {
     if (n_read == nullptr) [[unlikely]] {
         zx::Backtrace::collect(err_bt);
         return DecompressStatus::Nullptr;

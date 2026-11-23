@@ -16,7 +16,7 @@ struct TimeInfo {
 
     // function for cleaning up temporary resources that
     // are allocated in the `init` function.
-    static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
+    inline static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
         if (mmap_page != nullptr) {
             sys::MMapStatus const sys_status =
                 sys::munmap(nullptr, (u8 *)mmap_page, MMAP_LEN);
@@ -41,7 +41,7 @@ struct TimeInfo {
         InvalidNum,
     };
 
-    static InitStatus init(Backtrace *err_bt, TimeInfo *out) {
+    inline static InitStatus init(Backtrace *err_bt, TimeInfo *out) {
         if (out == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return InitStatus::Nullptr;
@@ -99,7 +99,7 @@ struct TimeInfo {
         return InitStatus::Ok;
     }
 
-    u64 cycles_to_nanos(u64 cycles) const {
+    inline u64 cycles_to_nanos(u64 cycles) const {
         u128 const x = cycles;
         assert_dev(this->m_time_shift < 128__wbu);
         return (u64)((x * this->m_time_mult) >> this->m_time_shift);
@@ -110,7 +110,7 @@ struct Timer {
     TimeInfo m_info;
     u64 m_start;
 
-    static u64 now_() {
+    inline static u64 now_() {
         unsigned int aux;
         u64 const ticker = __builtin_ia32_rdtscp(&aux);
         (void)aux;
@@ -118,7 +118,7 @@ struct Timer {
         return ticker;
     }
 
-    static Timer init(TimeInfo info) {
+    inline static Timer init(TimeInfo info) {
         u64 const start = now_();
 
         return Timer{
@@ -129,7 +129,7 @@ struct Timer {
 
     // Returns the number of nanoseconds elapsed since last lap.
     // and resets the lap timer.
-    u64 lap() {
+    inline u64 lap() {
         u64 const now = now_();
         u64 const diff = sub_unsafe_u64(now, this->m_start);
         this->m_start = now;
@@ -137,7 +137,7 @@ struct Timer {
     }
 
     // Returns the number of nanoseconds elapsed since last lap.
-    u64 elapsed() const {
+    inline u64 elapsed() const {
         u64 const now = now_();
         u64 const diff = sub_unsafe_u64(now, this->m_start);
         return this->m_info.cycles_to_nanos(diff);

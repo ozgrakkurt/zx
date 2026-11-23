@@ -19,18 +19,20 @@ struct Cursor {
     Slice<u8> m_buf;
     u64 m_offset;
 
-    static Cursor init(Slice<u8> buf) {
+    inline static Cursor init(Slice<u8> buf) {
         return Cursor{
             .m_buf = buf,
             .m_offset = 0,
         };
     }
 
-    u64 offset() const { return this->m_offset; }
+    inline u64 offset() const { return this->m_offset; }
 
-    Slice<u8> buf() const { return this->m_buf; }
+    inline Slice<u8> buf() const { return this->m_buf; }
 
-    bool is_finished() const { return this->m_offset == this->m_buf.len(); }
+    inline bool is_finished() const {
+        return this->m_offset == this->m_buf.len();
+    }
 
     template <typename T> Status read(Backtrace *err_bt, T *out) {
         if (out == nullptr) [[unlikely]] {
@@ -57,15 +59,15 @@ struct Cursor {
         return Status::Ok;
     }
 
-    leb128::DecodeStatus read_uleb128(Backtrace *err_bt, u64 *out) {
+    inline leb128::DecodeStatus read_uleb128(Backtrace *err_bt, u64 *out) {
         return leb128::decode_u64(err_bt, this->m_buf, &this->m_offset, out);
     }
 
-    leb128::DecodeStatus read_sleb128(Backtrace *err_bt, i64 *out) {
+    inline leb128::DecodeStatus read_sleb128(Backtrace *err_bt, i64 *out) {
         return leb128::decode_i64(err_bt, this->m_buf, &this->m_offset, out);
     }
 
-    Status skip(Backtrace *err_bt, u64 len) {
+    inline Status skip(Backtrace *err_bt, u64 len) {
         bool overflow = false;
         u64 const end = add_u64(this->m_offset, len, &overflow);
         if (overflow) [[unlikely]] {
@@ -81,7 +83,7 @@ struct Cursor {
         return Status::Ok;
     }
 
-    Status seek(Backtrace *err_bt, u64 offset) {
+    inline Status seek(Backtrace *err_bt, u64 offset) {
         if (offset > this->m_buf.len()) [[unlikely]] {
             Backtrace::collect(err_bt);
             return Status::OutOfBounds;
@@ -101,20 +103,22 @@ struct WriteCursor {
     SliceMut<u8> m_buf;
     u64 m_offset;
 
-    static WriteCursor init(SliceMut<u8> buf) {
+    inline static WriteCursor init(SliceMut<u8> buf) {
         return WriteCursor{
             .m_buf = buf,
             .m_offset = 0,
         };
     }
 
-    u64 offset() const { return this->m_offset; }
+    inline u64 offset() const { return this->m_offset; }
 
-    SliceMut<u8> buf() const { return this->m_buf; }
+    inline SliceMut<u8> buf() const { return this->m_buf; }
 
-    bool is_finished() const { return this->m_offset == this->m_buf.len(); }
+    inline bool is_finished() const {
+        return this->m_offset == this->m_buf.len();
+    }
 
-    Slice<u8> written() const {
+    inline Slice<u8> written() const {
         return this->m_buf.slice_unsafe(0, this->m_offset).as_const();
     }
 

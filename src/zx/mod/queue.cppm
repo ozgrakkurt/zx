@@ -35,8 +35,8 @@ template <typename T> struct Queue {
     u32 m_cap_mask;
     u32 m_capacity;
 
-    static QueueInitStatus init(Backtrace *err_bt, Alloc *alloc, u32 capacity,
-                                Queue *queue) {
+    inline static QueueInitStatus init(Backtrace *err_bt, Alloc *alloc,
+                                       u32 capacity, Queue *queue) {
         if (alloc == nullptr || queue == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return QueueInitStatus::Nullptr;
@@ -76,7 +76,7 @@ template <typename T> struct Queue {
         return QueueInitStatus::Ok;
     }
 
-    void reset() {
+    inline void reset() {
 #ifdef ZX_DEV
         this->m_entries.memset(0xaa);
 #endif
@@ -84,15 +84,15 @@ template <typename T> struct Queue {
         this->m_len = 0;
     }
 
-    u32 capacity() const { return this->m_capacity; }
+    inline u32 capacity() const { return this->m_capacity; }
 
-    u32 capacity_left() const {
+    inline u32 capacity_left() const {
         return sub_unsafe_u32(this->m_capacity, this->m_len);
     }
 
-    u32 len() const { return this->m_len; }
+    inline u32 len() const { return this->m_len; }
 
-    QueuePushStatus push(Backtrace *err_bt, T const *entry) {
+    inline QueuePushStatus push(Backtrace *err_bt, T const *entry) {
         if (entry == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return QueuePushStatus::Nullptr;
@@ -111,7 +111,7 @@ template <typename T> struct Queue {
         return QueuePushStatus::Ok;
     }
 
-    QueuePopStatus pop(Backtrace *err_bt, T *entry) {
+    inline QueuePopStatus pop(Backtrace *err_bt, T *entry) {
         if (entry == nullptr) [[unlikely]] {
             Backtrace::collect(err_bt);
             return QueuePopStatus::Nullptr;
