@@ -116,7 +116,7 @@ static void test_file(Backtrace *err_bt) {
         err_bt);
     assert(n == out.len());
 
-    assert(!out.equals(data));
+    assert(out.memcmp_unsafe(data) != 0);
 
     // seek to proper position
     testing::assert_with_trace(
@@ -131,7 +131,7 @@ static void test_file(Backtrace *err_bt) {
         err_bt);
     assert(n == out.len());
 
-    assert(out.equals(data));
+    assert(out.memcmp_unsafe(data) == 0);
 
     sys::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
@@ -163,7 +163,7 @@ static void test_file(Backtrace *err_bt) {
         err_bt);
     assert(n == out.len());
 
-    assert(!out.equals(data));
+    assert(out.memcmp_unsafe(data) != 0);
 
     // read from right offset
     n = 0;
@@ -173,7 +173,7 @@ static void test_file(Backtrace *err_bt) {
         err_bt);
     assert(n == out.len());
 
-    assert(out.equals(data));
+    assert(out.memcmp_unsafe(data) == 0);
 }
 
 int main() {

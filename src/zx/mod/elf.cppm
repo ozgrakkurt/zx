@@ -173,7 +173,7 @@ struct File {
         for (u64 i = 0; i < section_names.len(); i++) {
             Slice<u8> nm = section_names.read_unsafe(i);
 
-            if (nm.equals(name)) {
+            if (nm.len() == name.len() && nm.memcmp_unsafe(name) == 0) {
                 return i;
             }
         }

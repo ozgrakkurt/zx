@@ -96,7 +96,7 @@ struct Hashtable {
             break;
         }
         }
-        metadata.fill(EMPTY_TAG_);
+        metadata.memset(EMPTY_TAG_);
 
         SliceMut<T> entries;
         switch (alloc->alloc<T>(err_bt, cap, &entries)) {
@@ -136,7 +136,7 @@ struct Hashtable {
 #ifdef ZX_DEV
         this->m_entries.memset(0xaa);
 #endif
-        this->m_metadata.fill(EMPTY_TAG_);
+        this->m_metadata.memset(EMPTY_TAG_);
         this->m_capacity_left = this->m_capacity;
     }
 
