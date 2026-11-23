@@ -115,8 +115,8 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
         u64_c const loadmask = __builtin_ia32_bzhi_di(U64_MAX, offset);
         u64_c nonzero_mask;
         __asm__ volatile(
-            "vmovdqu (%[left]), %%zmm31 %{%[loadmask]%}%{z%}\n\t"
-            "vmovdqu (%[right]), %%zmm30 %{%[loadmask]%}%{z%}\n\t"
+            "vmovdqu8 (%[left]), %%zmm31 %{%[loadmask]%}%{z%}\n\t"
+            "vmovdqu8 (%[right]), %%zmm30 %{%[loadmask]%}%{z%}\n\t"
             // 4 means Not Equal OP
             "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
             : [nonzero_mask] "=Yk"(nonzero_mask)
@@ -129,7 +129,7 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
             assert_dev(idx < 64);
             // idx can't be oob of remainder.
             assert_dev(idx < offset);
-            u64 const pos = offset + idx;
+            u64 const pos = idx;
             i32 const ret = i32{left[pos]} - i32{right[pos]};
             // can't be equal
             assert_dev(ret != 0);
@@ -139,13 +139,14 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
 
     for (; offset < count; offset += 64__wbu) {
         u64_c nonzero_mask;
-        __asm__ volatile("vmovdqu8 (%[left]), %%zmm29\n\t"
-                         "vmovdqu8 (%[right]), %%zmm28\n\t"
-                         // 4 means Not Equal OP
-                         "vpcmpub $4, %%zmm30, %%zmm31, %[nonzero_mask]\n\t"
-                         : [nonzero_mask] "=Yk"(nonzero_mask)
-                         : [left] "r"(left), [right] "r"(right)
-                         : "memory", "zmm29", "zmm28");
+        __asm__ volatile(
+            "vmovdqu8 (%[left]), %%zmm29\n\t"
+            "vmovdqu8 (%[right]), %%zmm28\n\t"
+            // 4 means Not Equal OP
+            "vpcmpub $4, %%zmm28, %%zmm29, %[nonzero_mask]\n\t"
+            : [nonzero_mask] "=Yk"(nonzero_mask)
+            : [left] "r"(&left[offset]), [right] "r"(&right[offset])
+            : "memory", "zmm29", "zmm28");
         if (nonzero_mask != 0) {
             // find first diff
             u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
