@@ -2,42 +2,115 @@ import zx;
 
 using namespace zx;
 
+static constexpr u64 PAGE = 4096;
+
 struct Ctx {
     SliceMut<u8> mem;
 };
 
-__attribute__((no_builtin)) static void fuzz_one(void *usr_ctx,
-                                                 FuzzInput *fuzz_input) {
-    assert(usr_ctx != nullptr);
-    SliceMut<u8> mem = ((Ctx const *)usr_ctx)->mem;
-    assert(mem.len() > 0);
+// `i * 37 + 11` has a full period modulo 256, so every byte value appears once
+// per 256 bytes.
+static u8 payload(u64 i) { return (u8)(i * 37 + 11); }
 
-    bool const left_align = fuzz_input->next() & u64{1};
-    u64 const len = max_u64(1, mod_unsafe_u64(fuzz_input->next(), mem.len()));
-    assert(len > 0);
+// Maps `usable` bytes with a PROT_NONE page on each side so that any read one
+// byte before/after the returned slice faults.
+static SliceMut<u8> make_guarded(Backtrace *err_bt, u64 usable) {
+    u64 const mapped = add_unsafe_u64(usable, 2 * PAGE);
 
-    u64 const first = mod_unsafe_u64(fuzz_input->next(), len);
-    u64 const second = mod_unsafe_u64(fuzz_input->next(), len);
-    u64 const third = mod_unsafe_u64(fuzz_input->next(), len);
+    u8 *base = nullptr;
+    testing::assert_with_trace(
+        sys::MMapStatus::Ok ==
+            sys::mmap(err_bt, nullptr, mapped, sys::PROT_READ | sys::PROT_WRITE,
+                      sys::MAP_PRIVATE | sys::MAP_ANONYMOUS, -1, 0, &base),
+        err_bt);
+    assert(base != nullptr);
 
-    SliceMut<u8> const str =
-        left_align ? mem.slice_unsafe(0, len)
-                   : mem.slice_at_unsafe(sub_unsafe_u64(mem.len(), len));
-    assert(str.len() == len);
-    assert(str.len() > 0);
+    testing::assert_with_trace(
+        sys::MProtectStatus::Ok ==
+            sys::mprotect(err_bt, base, PAGE, sys::PROT_NONE),
+        err_bt);
+    testing::assert_with_trace(
+        sys::MProtectStatus::Ok ==
+            sys::mprotect(err_bt, &base[mapped - PAGE], PAGE, sys::PROT_NONE),
+        err_bt);
 
-    str.fill(69);
-    str.write_unsafe(first, 0);
-    str.write_unsafe(second, 0);
-    str.write_unsafe(third, 0);
-
-    u64 const slen = strlen((char const *)str.ptr());
-
-    u64 const expected = min_u64(third, min_u64(first, second));
-    assert(slen == expected);
+    return SliceMut<u8>::init_unsafe(&base[PAGE], usable);
 }
 
-Alloc make_alloc(Backtrace *err_bt, u64 size) {
+// Picks an offset in `[0, max_off]`. Covers the placements that matter: the
+// start of the window (touches the leading guard page), the end of the window
+// (touches the trailing guard page), small offsets that cover every 64 byte
+// phase, and arbitrary offsets.
+static u64 pick_offset(u64 bits, u64 max_off) {
+    switch (bits % 4__wbu) {
+    case 0: {
+        return 0;
+    }
+    case 1: {
+        return max_off;
+    }
+    case 2: {
+        return min_u64(bits % 64__wbu, max_off);
+    }
+    default: {
+        return mod_unsafe_u64(bits, add_unsafe_u64(max_off, 1));
+    }
+    }
+}
+
+static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
+    assert(usr_ctx != nullptr);
+    SliceMut<u8> const mem = ((Ctx const *)usr_ctx)->mem;
+    u64 const cap = mem.len();
+    assert(cap > 0);
+
+    u64 const off = pick_offset(fuzz_input->next(), sub_unsafe_u64(cap, 1));
+    u64 const max_pos = sub_unsafe_u64(cap, add_unsafe_u64(off, 1));
+
+    // Bytes before the string start are zero. For an unaligned `str` they are
+    // part of the 64 byte aligned-down block that strlen loads, so a broken
+    // mask in that path makes strlen return 0.
+    for (u64 i = 0; i < off; i++) {
+        mem.write_unsafe(i, 0);
+    }
+    // Everything from the start on is nonzero except for the terminator.
+    for (u64 i = off; i < cap; i++) {
+        mem.write_unsafe(i, (u8)(payload(i) | 1__wbu));
+    }
+
+    // Bias the terminator position so that the first (masked, when `off` is
+    // unaligned) block, the last byte of the window and arbitrary blocks are
+    // all covered.
+    u64 const s = fuzz_input->next();
+    u64 pos;
+    switch (s % 4__wbu) {
+    case 0: {
+        u64 const diff = mod_unsafe_u64(off, 64);
+        u64 const span = diff == 0 ? min_u64(64, add_unsafe_u64(max_pos, 1))
+                                   : min_u64(sub_unsafe_u64(64, diff),
+                                             add_unsafe_u64(max_pos, 1));
+        pos = mod_unsafe_u64(s, span);
+        break;
+    }
+    case 1: {
+        // Terminator at the very last byte of the window: the aligned block
+        // that contains it ends right at the trailing guard page.
+        pos = max_pos;
+        break;
+    }
+    default: {
+        pos = mod_unsafe_u64(s, add_unsafe_u64(max_pos, 1));
+        break;
+    }
+    }
+
+    mem.write_unsafe(add_unsafe_u64(off, pos), 0);
+
+    u64 const got = strlen((char const *)&mem.ptr()[off]);
+    assert(got == pos);
+}
+
+static Alloc make_alloc(Backtrace *err_bt, u64 size) {
     u8 *mem = nullptr;
     testing::assert_with_trace(page_alloc::AllocStatus::Ok ==
                                    page_alloc::alloc_4kb(err_bt, size, &mem),
@@ -48,33 +121,12 @@ Alloc make_alloc(Backtrace *err_bt, u64 size) {
     return alloc;
 }
 
-static SliceMut<u8> make_guarded_alloc(Backtrace *err_bt, u64 capacity) {
-    assert(is_pow_two_u64(capacity));
-    assert(capacity >= 4096);
-
-    u64 const mem_size = mul_unsafe_u64(capacity, 2);
-    u8 *mem = nullptr;
-    page_alloc::AllocStatus const alloc_status =
-        page_alloc::alloc_4kb(err_bt, mem_size, &mem);
-    testing::assert_with_trace(alloc_status == page_alloc::AllocStatus::Ok,
-                               err_bt);
-
-    sys::MProtectStatus sys_status =
-        sys::mprotect(err_bt, &mem[capacity], capacity, sys::PROT_NONE);
-    testing::assert_with_trace(sys_status == sys::MProtectStatus::Ok, err_bt);
-
-    SliceMut<u8> ret = SliceMut<u8>::init_unsafe(mem, capacity);
-    ret.memset(0);
-
-    return ret;
-}
-
 int main(void) {
     Backtrace err_bt = Backtrace::init();
 
     Alloc alloc = make_alloc(&err_bt, FUZZ_MEM_CAP);
     Ctx const ctx = Ctx{
-        .mem = make_guarded_alloc(&err_bt, 4096),
+        .mem = make_guarded(&err_bt, 8192),
     };
     fuzz(FuzzParams{
         .alloc = &alloc,
