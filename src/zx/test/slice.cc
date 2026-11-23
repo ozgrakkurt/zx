@@ -825,21 +825,21 @@ void test_memcmp() {
 
     i32 res = 0;
 
-    assert(Slice<u8>::init_unsafe(a, sizeof(a)).memcmp(
-               nullptr, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
+    assert(Slice<u8>::init_unsafe(a, sizeof(a))
+               .memcmp(nullptr, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
            SliceMemcmpStatus::Ok);
     assert(res == 0);
-    assert(Slice<u8>::init_unsafe(a, sizeof(a)).memcmp(
-               nullptr, Slice<u8>::init_unsafe(b, sizeof(b)), &res) ==
+    assert(Slice<u8>::init_unsafe(a, sizeof(a))
+               .memcmp(nullptr, Slice<u8>::init_unsafe(b, sizeof(b)), &res) ==
            SliceMemcmpStatus::SizeMismatch);
 
-    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).memcmp(
-               nullptr, SliceMut<u8>::init_unsafe(a, sizeof(a)), &res) ==
-           SliceMemcmpStatus::Ok);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a))
+               .memcmp(nullptr, SliceMut<u8>::init_unsafe(a, sizeof(a)),
+                       &res) == SliceMemcmpStatus::Ok);
     assert(res == 0);
-    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).memcmp(
-               nullptr, SliceMut<u8>::init_unsafe(b, sizeof(b)), &res) ==
-           SliceMemcmpStatus::SizeMismatch);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a))
+               .memcmp(nullptr, SliceMut<u8>::init_unsafe(b, sizeof(b)),
+                       &res) == SliceMemcmpStatus::SizeMismatch);
 }
 
 int main(void) {
