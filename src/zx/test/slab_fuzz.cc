@@ -32,7 +32,7 @@ static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
     testing::assert_with_trace(
         AllocStatus::Ok == alloc->alloc<u32>(err_bt, capacity, &slab_keys),
         err_bt);
-    slab_keys.fill(U32_MAX);
+    slab_keys.memset(0xff);
     u32 n_slab_keys = 0;
 
     for (u32 i = 0; i < n_ops; i++) {

@@ -13,7 +13,7 @@ static void test_slicing_impl(Backtrace *err_bt) {
     // SLICE
     testing::assert_with_trace(
         SliceStatus::Ok == slice.slice(err_bt, 0, 5, &other), err_bt);
-    assert(slice.equals(other));
+    assert(slice.memcmp_unsafe(other) == 0);
 
     testing::assert_with_trace(
         SliceStatus::Ok == slice.slice(err_bt, 4, 0, &other), err_bt);
@@ -31,7 +31,7 @@ static void test_slicing_impl(Backtrace *err_bt) {
 
     // SLICE_UNSAFE
     other = slice.slice_unsafe(0, 5);
-    assert(slice.equals(other));
+    assert(slice.memcmp_unsafe(other) == 0);
 
     other = slice.slice_unsafe(4, 0);
     assert(other.len() == 0);
@@ -42,12 +42,12 @@ static void test_slicing_impl(Backtrace *err_bt) {
     // SLICE_AT
     testing::assert_with_trace(
         SliceStatus::Ok == slice.slice_at(err_bt, 0, &other), err_bt);
-    assert(other.equals(slice));
+    assert(other.memcmp_unsafe(slice) == 0);
 
     testing::assert_with_trace(
         SliceStatus::Ok == slice.slice_at(err_bt, 4, &other), err_bt);
     assert(other.len() == 1);
-    assert(other.equals(slice.slice_unsafe(4, 1)));
+    assert(other.memcmp_unsafe(slice.slice_unsafe(4, 1)) == 0);
 
     testing::assert_with_trace(
         SliceStatus::Ok == slice.slice_at(err_bt, 5, &other), err_bt);
@@ -58,11 +58,11 @@ static void test_slicing_impl(Backtrace *err_bt) {
 
     // SLICE_AT_UNSAFE
     other = slice.slice_at_unsafe(0);
-    assert(other.equals(slice));
+    assert(other.memcmp_unsafe(slice) == 0);
 
     other = slice.slice_at_unsafe(4);
     assert(other.len() == 1);
-    assert(other.equals(slice.slice_unsafe(4, 1)));
+    assert(other.memcmp_unsafe(slice.slice_unsafe(4, 1)) == 0);
 
     other = slice.slice_at_unsafe(5);
     assert(other.len() == 0);
@@ -82,7 +82,7 @@ static void test_cstring() {
     Slice<u8> slice =
         Slice<u8>::init_unsafe((u8 const *)str, __builtin_strlen(str));
 
-    assert(slice.equals(cstr.as_slice()));
+    assert(slice.memcmp_unsafe(cstr.as_slice()) == 0);
     assert(str == cstr.as_cstr());
 }
 
@@ -90,12 +90,6 @@ static void test_memfunctions(Backtrace *err_bt) {
     u16 data[] = {1, 2, 3, 4, 5};
     u64 const data_len = sizeof(data) / sizeof(data[0]);
     SliceMut<u16> const slice = SliceMut<u16>::init_unsafe(data, data_len);
-
-    slice.fill(69);
-
-    for (u64 i = 0; i < 5; i++) {
-        assert(data[i] == 69);
-    }
 
     slice.memset(0xaa);
 
@@ -765,16 +759,12 @@ static void test_immut(Backtrace *err_bt) {
 
     assert(sli8.read_unaligned_unsafe<u32>(0) == sli.read_unsafe(0));
 
-    assert(sli8.equals(sli.cast_truncate_unsafe<u8>()));
+    assert(sli8.memcmp_unsafe(sli.cast_truncate_unsafe<u8>()) == 0);
 
     assert(sli8.is_overlapping(sli.cast_truncate_unsafe<u8>()));
 
     Slice<u8> dangler = Slice<u8>::init_dangling();
     assert(!sli8.is_overlapping(dangler));
-
-    assert(dangler.compare(sli8) == Comparison::Less);
-    assert(sli8.compare(dangler) == Comparison::Greater);
-    assert(sli8.compare(sli.cast_truncate_unsafe<u8>()) == Comparison::Equal);
 }
 
 static void test_mut(Backtrace *err_bt) {
@@ -784,10 +774,10 @@ static void test_mut(Backtrace *err_bt) {
                                    SliceInitStatus::Ok,
                                err_bt);
 
-    sli.fill(100);
+    sli.memset(100);
 
     SliceMut<u32> slik = SliceMut<u32>::init_unsafe(data, 20);
-    assert(sli.as_const().equals(slik.as_const()));
+    assert(sli.as_const().memcmp_unsafe(slik.as_const()) == 0);
 
     data[10] = 69;
     assert(sli.as_const().read_unsafe(10) == 69);
@@ -819,110 +809,37 @@ static void test_mut(Backtrace *err_bt) {
     assert(sli8.as_const().read_unaligned_unsafe<u32>(0) ==
            sli.as_const().read_unsafe(0));
 
-    assert(sli8.as_const().equals(sli.cast_truncate_unsafe<u8>().as_const()));
+    assert(sli8.as_const().memcmp_unsafe(
+               sli.cast_truncate_unsafe<u8>().as_const()) == 0);
 
     assert(sli8.as_const().is_overlapping(
         sli.cast_truncate_unsafe<u8>().as_const()));
 
     SliceMut<u8> dangler = SliceMut<u8>::init_dangling();
     assert(!sli8.as_const().is_overlapping(dangler.as_const()));
-
-    assert(dangler.as_const().compare(sli8.as_const()) == Comparison::Less);
-    assert(sli8.as_const().compare(dangler.as_const()) == Comparison::Greater);
-    assert(sli8.as_const().compare(sli.cast_truncate_unsafe<u8>().as_const()) ==
-           Comparison::Equal);
 }
 
-void test_equals_same_but_diff_len() {
+void test_memcmp() {
     u8 a[] = {1, 2, 3, 4, 5};
     u8 b[] = {1, 2, 3, 4, 5, 6};
 
-    assert(!Slice<u8>::init_unsafe(a, sizeof(a))
-                .equals(Slice<u8>::init_unsafe(b, sizeof(b))));
+    i32 res = 0;
 
-    assert(!SliceMut<u8>::init_unsafe(a, sizeof(a))
-                .equals(SliceMut<u8>::init_unsafe(b, sizeof(b))));
-}
+    assert(Slice<u8>::init_unsafe(a, sizeof(a)).memcmp(
+               nullptr, Slice<u8>::init_unsafe(a, sizeof(a)), &res) ==
+           SliceMemcmpStatus::Ok);
+    assert(res == 0);
+    assert(Slice<u8>::init_unsafe(a, sizeof(a)).memcmp(
+               nullptr, Slice<u8>::init_unsafe(b, sizeof(b)), &res) ==
+           SliceMemcmpStatus::SizeMismatch);
 
-void test_count() {
-    u8 a[] = {1, 2, 1, 2, 1, 1, 3, 5};
-
-    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(1) == 4);
-    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(2) == 2);
-    assert(Slice<u8>::init_unsafe(a, sizeof(a)).count(69) == 0);
-
-    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(1) == 4);
-    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(2) == 2);
-    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).count(69) == 0);
-}
-
-// Regression test for multi-byte ordering. `compare` currently delegates to
-// memcmp, which compares raw bytes in address order. That is only the same as
-// numeric element order for single-byte unsigned elements. On little-endian
-// machines the values below are chosen so byte-wise order disagrees with
-// numeric order, so this test fails until `compare` compares elements
-// numerically (or restricts itself to byte slices).
-template <template <typename T> class S>
-static void test_compare_multibyte_ordering_impl() {
-    // 256 > 255. In little-endian memory they are {0x00, 0x01} and
-    // {0xFF, 0x00}, so a byte-wise compare reports Less.
-    {
-        u16 a[] = {0x0100};
-        u16 b[] = {0x00FF};
-        assert(S<u16>::init_unsafe(a, 1).compare(S<u16>::init_unsafe(b, 1)) ==
-               Comparison::Greater);
-        assert(S<u16>::init_unsafe(b, 1).compare(S<u16>::init_unsafe(a, 1)) ==
-               Comparison::Less);
-    }
-
-    // 65536 > 65535, same failure mode with a wider element.
-    {
-        u32 a[] = {0x00010000};
-        u32 b[] = {0x0000FFFF};
-        assert(S<u32>::init_unsafe(a, 1).compare(S<u32>::init_unsafe(b, 1)) ==
-               Comparison::Greater);
-    }
-
-    {
-        u64 a[] = {0x0000000000010000};
-        u64 b[] = {0x000000000000FFFF};
-        assert(S<u64>::init_unsafe(a, 1).compare(S<u64>::init_unsafe(b, 1)) ==
-               Comparison::Greater);
-    }
-
-    // Signed elements are also mis-ordered: -1 < 0 numerically, but the bytes
-    // {0xFF, 0xFF} compare greater than {0x00, 0x00} byte-wise.
-    {
-        i16 a[] = {-1};
-        i16 b[] = {0};
-        assert(S<i16>::init_unsafe(a, 1).compare(S<i16>::init_unsafe(b, 1)) ==
-               Comparison::Less);
-    }
-
-    // The first differing element is reached after an equal prefix.
-    {
-        u16 a[] = {7, 0x0100};
-        u16 b[] = {7, 0x00FF};
-        assert(S<u16>::init_unsafe(a, 2).compare(S<u16>::init_unsafe(b, 2)) ==
-               Comparison::Greater);
-    }
-
-    // Equal contents and the length tie-break must continue to work.
-    {
-        u16 a[] = {1, 2, 3};
-        u16 b[] = {1, 2, 3};
-        assert(S<u16>::init_unsafe(a, 3).compare(S<u16>::init_unsafe(b, 3)) ==
-               Comparison::Equal);
-        assert(S<u16>::init_unsafe(a, 2).compare(S<u16>::init_unsafe(b, 3)) ==
-               Comparison::Less);
-        assert(S<u16>::init_unsafe(a, 3).compare(S<u16>::init_unsafe(b, 2)) ==
-               Comparison::Greater);
-    }
-}
-
-static void test_compare_multibyte_ordering() {
-    test_compare_multibyte_ordering_impl<Slice>();
-    test_compare_multibyte_ordering_impl<SliceMut>();
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).memcmp(
+               nullptr, SliceMut<u8>::init_unsafe(a, sizeof(a)), &res) ==
+           SliceMemcmpStatus::Ok);
+    assert(res == 0);
+    assert(SliceMut<u8>::init_unsafe(a, sizeof(a)).memcmp(
+               nullptr, SliceMut<u8>::init_unsafe(b, sizeof(b)), &res) ==
+           SliceMemcmpStatus::SizeMismatch);
 }
 
 int main(void) {
@@ -943,9 +860,7 @@ int main(void) {
     test_write_access(&err_bt);
     test_memfunctions(&err_bt);
     test_cstring();
-    test_equals_same_but_diff_len();
-    test_count();
-    test_compare_multibyte_ordering();
+    test_memcmp();
 
     return 0;
 }

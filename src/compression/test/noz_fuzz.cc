@@ -58,7 +58,7 @@ static void fuzz_one(void *usr_ctx, zx::FuzzInput *fuzz_input) {
         err_bt);
     zx::assert(bound <= compressed.len());
 
-    compressed.fill(0xaa);
+    compressed.memset(0xaa);
     zx::u64 n_written = zx::U64_MAX;
     zx::testing::assert_with_trace(
         noz::CompressStatus::Ok ==
@@ -77,7 +77,7 @@ static void fuzz_one(void *usr_ctx, zx::FuzzInput *fuzz_input) {
         err_bt);
     zx::assert(n_read == n_written);
     zx::assert(n_read == copy.len());
-    zx::assert(input.as_const().equals(output.as_const()));
+    zx::assert(input.as_const().memcmp_unsafe(output.as_const()) == 0);
 }
 
 zx::Alloc make_alloc(zx::Backtrace *err_bt, zx::u64 size) {

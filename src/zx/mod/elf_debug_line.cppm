@@ -346,7 +346,8 @@ struct DebugLine {
                     Slice<u8> other =
                         file_paths->written().read_unsafe(j).as_slice();
 
-                    if (other.equals(abs_file_path.as_slice())) {
+                    if (other.len() == abs_file_path.as_slice().len() &&
+                        other.memcmp_unsafe(abs_file_path.as_slice()) == 0) {
                         idx = u64_to_u16(j, &overflow);
                         assert(!overflow);
                         found = true;

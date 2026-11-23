@@ -23,7 +23,7 @@ static void testcase_unsigned(Backtrace *err_bt, Slice<u8> buf, u64 num) {
             leb128::encode_u64(err_bt, num, out, &offset),
         err_bt);
     assert(offset == buf.len());
-    assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
+    assert(out.as_const().slice_unsafe(0, buf.len()).memcmp_unsafe(buf) == 0);
 }
 
 static void testcase_signed(Backtrace *err_bt, Slice<u8> buf, i64 num) {
@@ -47,7 +47,7 @@ static void testcase_signed(Backtrace *err_bt, Slice<u8> buf, i64 num) {
             leb128::encode_i64(err_bt, num, out, &offset),
         err_bt);
     assert(offset == buf.len());
-    assert(out.as_const().slice_unsafe(0, buf.len()).equals(buf));
+    assert(out.as_const().slice_unsafe(0, buf.len()).memcmp_unsafe(buf) == 0);
 }
 
 static void test_unsigned(Backtrace *err_bt) {

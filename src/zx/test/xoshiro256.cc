@@ -136,7 +136,7 @@ static void fill_aligned() {
     constexpr u64 len = 69;
     u64 vals[len];
     SliceMut<u64> const data = SliceMut<u64>::init_unsafe(vals, len);
-    data.fill(69);
+    data.memset(69);
 
     Xoshiro256 rand = Xoshiro256::init(69);
 
@@ -152,7 +152,7 @@ static void fill_partial() {
     constexpr u64 n_bytes = 9;
     u8 bytes[n_bytes];
     SliceMut<u8> const data = SliceMut<u8>::init_unsafe(bytes, n_bytes);
-    data.fill(69);
+    data.memset(69);
 
     Xoshiro256 rand = Xoshiro256::init(69);
 
@@ -168,7 +168,7 @@ static void fill_long_and_partial() {
     constexpr u64 n_bytes = 69;
     u8 bytes[n_bytes];
     SliceMut<u8> const data = SliceMut<u8>::init_unsafe(bytes, n_bytes);
-    data.fill(69);
+    data.memset(69);
 
     Xoshiro256 rand = Xoshiro256::init(0);
 

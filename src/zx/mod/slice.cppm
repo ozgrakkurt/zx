@@ -34,6 +34,12 @@ enum class [[nodiscard]] SliceMemcpyStatus : u8_c {
     Overlapping,
 };
 
+enum class [[nodiscard]] SliceMemcmpStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    SizeMismatch,
+};
+
 enum class [[nodiscard]] SliceAlignedInitStatus : u8_c {
     Ok = 0,
     Nullptr,
@@ -502,17 +508,34 @@ template <typename T> struct Slice {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline i32 memcmp(Slice other) const {
-        if (this->m_len != other.m_len) {
-            return false;
+    [[nodiscard]] inline SliceMemcmpStatus memcmp(Backtrace *err_bt,
+                                                  Slice other, i32 *out) const {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceMemcmpStatus::Nullptr;
         }
-        u64 const len = this->m_len;
+
+        if (this->m_len != other.m_len) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceMemcmpStatus::SizeMismatch;
+        }
+
         // This should be ok because overflow condition is checked in the init
         // method.
-        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        i32 const res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                         (u8 const *)other.m_ptr, byte_count);
-        return res;
+        u64 const byte_count = mul_unsafe_u64(this->m_len, sizeof(T));
+        *out = __builtin_memcmp((u8 const *)this->m_ptr,
+                                (u8 const *)other.m_ptr, byte_count);
+        return SliceMemcmpStatus::Ok;
+    }
+
+    [[nodiscard]] inline i32 memcmp_unsafe(Slice other) const {
+        assert_dev(this->m_len == other.m_len);
+
+        // This should be ok because overflow condition is checked in the init
+        // method.
+        u64 const byte_count = mul_unsafe_u64(this->m_len, sizeof(T));
+        return __builtin_memcmp((u8 const *)this->m_ptr,
+                                (u8 const *)other.m_ptr, byte_count);
     }
 };
 
@@ -999,17 +1022,34 @@ template <typename T> struct SliceMut {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline i32 memcmp(SliceMut other) const {
-        if (this->m_len != other.m_len) {
-            return false;
+    [[nodiscard]] inline SliceMemcmpStatus
+    memcmp(Backtrace *err_bt, SliceMut other, i32 *out) const {
+        if (out == nullptr) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceMemcmpStatus::Nullptr;
         }
-        u64 const len = this->m_len;
+
+        if (this->m_len != other.m_len) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return SliceMemcmpStatus::SizeMismatch;
+        }
+
         // This should be ok because overflow condition is checked in the init
         // method.
-        u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        i32 const res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                         (u8 const *)other.m_ptr, byte_count);
-        return res;
+        u64 const byte_count = mul_unsafe_u64(this->m_len, sizeof(T));
+        *out = __builtin_memcmp((u8 const *)this->m_ptr,
+                                (u8 const *)other.m_ptr, byte_count);
+        return SliceMemcmpStatus::Ok;
+    }
+
+    [[nodiscard]] inline i32 memcmp_unsafe(SliceMut other) const {
+        assert_dev(this->m_len == other.m_len);
+
+        // This should be ok because overflow condition is checked in the init
+        // method.
+        u64 const byte_count = mul_unsafe_u64(this->m_len, sizeof(T));
+        return __builtin_memcmp((u8 const *)this->m_ptr,
+                                (u8 const *)other.m_ptr, byte_count);
     }
 
     inline Slice<T> as_const() const {

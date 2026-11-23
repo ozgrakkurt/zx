@@ -107,7 +107,7 @@ int main(void) {
 
     SliceMut<u8> const slice = SliceMut<u8>::init_unsafe(data, len);
 
-    slice.fill(76);
+    slice.memset(76);
 
     for (u64 sl = 0; sl < len; sl++) {
         SliceMut<u8> const s = slice.slice_unsafe(0, sl);

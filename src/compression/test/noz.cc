@@ -17,7 +17,7 @@ static void do_test(zx::Backtrace *err_bt, zx::SliceMut<zx::u8> input,
 
     zx::assert(bound == compressed.len());
 
-    compressed.fill(0xaa);
+    compressed.memset(0xaa);
     zx::u64 n_written = zx::U64_MAX;
     zx::testing::assert_with_trace(
         noz::CompressStatus::Ok ==
@@ -36,7 +36,7 @@ static void do_test(zx::Backtrace *err_bt, zx::SliceMut<zx::u8> input,
         err_bt);
     zx::assert(n_read == n_written);
     zx::assert(n_read == copy.len());
-    zx::assert(input.as_const().equals(output.as_const()));
+    zx::assert(input.as_const().memcmp_unsafe(output.as_const()) == 0);
 }
 
 static zx::SliceMut<zx::u8> make_alloc(zx::Backtrace *err_bt,

@@ -132,7 +132,8 @@ static void check_print(u128 uuid, bool upper_case, char const *expected) {
 
     assert(!fmt_overflow);
     assert(fmt.n_written() == 36);
-    assert(fmt.written().equals(CString::init_unsafe(expected).as_slice()));
+    assert(fmt.written().memcmp_unsafe(
+               CString::init_unsafe(expected).as_slice()) == 0);
 }
 
 static void known_answer_print() {
@@ -220,9 +221,9 @@ static void print_exact_fit() {
 
     assert(!fmt_overflow);
     assert(fmt.n_written() == 36);
-    assert(fmt.written().equals(
-        CString::init_unsafe("01234567-89ab-cdef-fedc-ba9876543210")
-            .as_slice()));
+    assert(fmt.written().memcmp_unsafe(
+               CString::init_unsafe("01234567-89ab-cdef-fedc-ba9876543210")
+                   .as_slice()) == 0);
 }
 
 static void print_truncated() {
@@ -235,9 +236,9 @@ static void print_truncated() {
 
     assert(fmt_overflow);
     assert(fmt.n_written() == 35);
-    assert(fmt.written().equals(
-        CString::init_unsafe("01234567-89ab-cdef-fedc-ba987654321")
-            .as_slice()));
+    assert(fmt.written().memcmp_unsafe(
+               CString::init_unsafe("01234567-89ab-cdef-fedc-ba987654321")
+                   .as_slice()) == 0);
 }
 
 static void print_no_capacity() {
@@ -265,10 +266,10 @@ static void print_accumulates() {
     assert(!fmt_overflow);
 
     assert(fmt.n_written() == 72);
-    assert(fmt.written().equals(
-        CString::init_unsafe("01234567-89ab-cdef-fedc-ba9876543210"
-                             "00000000-0000-0000-0000-000000000000")
-            .as_slice()));
+    assert(fmt.written().memcmp_unsafe(
+               CString::init_unsafe("01234567-89ab-cdef-fedc-ba9876543210"
+                                    "00000000-0000-0000-0000-000000000000")
+                   .as_slice()) == 0);
 }
 
 int main() {
