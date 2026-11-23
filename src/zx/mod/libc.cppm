@@ -27,9 +27,15 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     }
 
     u64 offset = count % 64;
-#pragma clang loop vectorize(disable) unroll(disable)
-    for (u64 i = 0; i < offset; i++) {
-        output[i] = input[i];
+    if (offset > 0) {
+        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, offset);
+        __asm__ volatile(
+            "vmovdqu8 (%[input]), %%zmm29 %{%[storemask]%}%{z%}\n\t"
+            "vmovdqu8 %%zmm29, (%[output]) %{%[storemask]%}\n\t"
+            :
+            : [input] "r"(input), [output] "r"(output),
+              [storemask] "Yk"(storemask)
+            : "memory", "zmm29");
     }
 
     for (; offset < count; offset += 64__wbu) {
