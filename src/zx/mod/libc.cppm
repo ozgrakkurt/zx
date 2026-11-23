@@ -10,22 +10,6 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u8 const *input = (u8 const *)src;
     u8 *output = (u8 *)dest;
 
-    u64 offset = count % 64;
-    if (offset > 0) {
-        u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, offset);
-        __asm__ volatile(
-            "vmovdqu8 (%[input]), %%zmm29 %{%[storemask]%}%{z%}\n\t"
-            "vmovdqu8 %%zmm29, (%[output]) %{%[storemask]%}\n\t"
-            :
-            : [input] "r"(input), [output] "r"(output),
-              [storemask] "Yk"(storemask)
-            : "memory", "zmm29");
-
-        if (count < 64) {
-            return dest;
-        }
-    }
-
     // Large copies: the CPU's rep movsb path streams better than our vector
     // loop. Only use it when the destination is 64 byte aligned or when source
     // and destination share the same 64 byte phase; otherwise rep movsb can hit
@@ -33,8 +17,8 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     if (count >= (u64{48} << 20__wbu) && ((((u64)dest ^ (u64)src) & 63) == 0 ||
                                           ((u64)dest & 63) == 0)) [[unlikely]] {
         u64_c n = count;
-        void *d = dest;
-        void const *s = src;
+        void *d = output;
+        void const *s = input;
         __asm__ __volatile__("rep movsb"
                              : "+D"(d), "+S"(s), "+c"(n)
                              :
@@ -42,7 +26,20 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
         return dest;
     }
 
-    for (; offset + 64__wbu <= count; offset += 64__wbu) {
+    u64 offset = count % 64;
+    u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, offset);
+    __asm__ volatile(
+        "vmovdqu8 (%[input]), %%zmm29 %{%[storemask]%}%{z%}\n\t"
+        "vmovdqu8 %%zmm29, (%[output]) %{%[storemask]%}\n\t"
+        :
+        : [input] "r"(input), [output] "r"(output), [storemask] "Yk"(storemask)
+        : "memory", "zmm29");
+
+    if (count < 64) {
+        return dest;
+    }
+
+    for (; offset < count; offset += 64__wbu) {
         __asm__ volatile(
             "vmovups (%[input]), %%ymm31\n\t"
             "vmovups 32(%[input]), %%ymm30\n\t"
