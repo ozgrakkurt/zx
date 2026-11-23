@@ -128,7 +128,7 @@ __attribute__((no_builtin)) i32_c memcmp(void const *lhs, void const *rhs,
             u8 const idx = (u8)__builtin_ctzg(nonzero_mask, 64);
             // idx can't be oob of the vector.
             assert_dev(idx < 64);
-            // idx can't be oob of remainder.
+            // idx can't be oob of unaligned part size.
             assert_dev(idx < offset);
             u64 const pos = idx;
             i32 const ret = i32{left[pos]} - i32{right[pos]};

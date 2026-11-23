@@ -22,19 +22,26 @@ struct Buf {
     u64 len;
 };
 
-// Maps `usable` bytes with a PROT_NONE page on each side. Any read or write one
-// byte before/after the buffer faults instead of silently touching a
+// Allocates `usable` bytes with a PROT_NONE page on each side. Any read or
+// write one byte before/after the buffer faults instead of silently touching a
 // neighbouring mapping.
+//
+// The page allocator only hands out power-of-two sizes, so the usable part is
+// rounded up to whatever the next power of two leaves after the two guard
+// pages.
 static Buf make_guarded(Backtrace *err_bt, u64 usable) {
     assert(usable > 0);
-    u64 const mapped = add_unsafe_u64(usable, 2 * PAGE);
+
+    bool overflow = false;
+    u64 const total =
+        next_pow_two_u64(add_unsafe_u64(usable, 2 * PAGE), &overflow);
+    assert(!overflow);
+    assert(total >= add_unsafe_u64(usable, 2 * PAGE));
 
     u8 *base = nullptr;
-    testing::assert_with_trace(
-        sys::MMapStatus::Ok ==
-            sys::mmap(err_bt, nullptr, mapped, sys::PROT_READ | sys::PROT_WRITE,
-                      sys::MAP_PRIVATE | sys::MAP_ANONYMOUS, -1, 0, &base),
-        err_bt);
+    testing::assert_with_trace(page_alloc::AllocStatus::Ok ==
+                                   page_alloc::alloc_4kb(err_bt, total, &base),
+                               err_bt);
     assert(base != nullptr);
 
     testing::assert_with_trace(
@@ -43,16 +50,17 @@ static Buf make_guarded(Backtrace *err_bt, u64 usable) {
         err_bt);
     testing::assert_with_trace(
         sys::MProtectStatus::Ok ==
-            sys::mprotect(err_bt, &base[mapped - PAGE], PAGE, sys::PROT_NONE),
+            sys::mprotect(err_bt, &base[sub_unsafe_u64(total, PAGE)], PAGE,
+                          sys::PROT_NONE),
         err_bt);
 
     return Buf{
         .ptr = &base[PAGE],
-        .len = usable,
+        .len = sub_unsafe_u64(total, 2 * PAGE),
     };
 }
 
-static void fill(u8 *ptr, u64 len, u8 val) {
+__attribute__((no_builtin)) static void fill(u8 *ptr, u64 len, u8 val) {
     for (u64 i = 0; i < len; i++) {
         ptr[i] = val;
     }
@@ -99,11 +107,18 @@ static void check_outside(Buf b, u64 off, u64 len, u8 val) {
     assert(is_all(&b.ptr[end], after, val));
 }
 
-static void check_memcpy(Buf dst, Buf src, u64 dst_off, u64 src_off, u64 len) {
+__attribute__((no_builtin)) static void
+check_memcpy(Buf dst, Buf src, u64 dst_off, u64 src_off, u64 len) {
     assert(add_unsafe_u64(dst_off, len) <= dst.len);
     assert(add_unsafe_u64(src_off, len) <= src.len);
 
     fill_pattern(&src.ptr[src_off], len);
+    // Dirty the destination with a value that differs from the expected
+    // pattern at every index so a copy that writes nothing (or skips a byte)
+    // can't pass by matching what was already there.
+    for (u64 i = 0; i < len; i++) {
+        dst.ptr[add_unsafe_u64(dst_off, i)] = (u8)(pattern(i) ^ 0xFF__wbu);
+    }
     paint_outside(dst, dst_off, len, OUTSIDE);
 
     void *const expected = &dst.ptr[dst_off];
@@ -113,11 +128,16 @@ static void check_memcpy(Buf dst, Buf src, u64 dst_off, u64 src_off, u64 len) {
     check_outside(dst, dst_off, len, OUTSIDE);
 }
 
-static void check_memset(Buf b, u64 off, u64 len, u8 byte) {
+__attribute__((no_builtin)) static void check_memset(Buf b, u64 off, u64 len,
+                                                     u8 byte) {
     assert(add_unsafe_u64(off, len) <= b.len);
     // The fill byte has to be distinguishable from the outside marker.
     assert(byte != OUTSIDE);
 
+    // Dirty the range with a byte that differs from the fill byte so a fill
+    // that writes nothing (or skips part of it) can't pass by matching what
+    // was already there.
+    fill(&b.ptr[off], len, (u8)(byte ^ 0xFF__wbu));
     paint_outside(b, off, len, OUTSIDE);
 
     void *const expected = &b.ptr[off];
@@ -129,8 +149,10 @@ static void check_memset(Buf b, u64 off, u64 len, u8 byte) {
 
 // `diff_at < len` means the first differing byte is at `diff_at`; the byte is
 // inverted so it never wraps around and the expected sign is obvious.
-static void check_memcmp(Buf left, Buf right, u64 left_off, u64 right_off,
-                         u64 len, u64 diff_at) {
+__attribute__((no_builtin)) static void check_memcmp(Buf left, Buf right,
+                                                     u64 left_off,
+                                                     u64 right_off, u64 len,
+                                                     u64 diff_at) {
     assert(add_unsafe_u64(left_off, len) <= left.len);
     assert(add_unsafe_u64(right_off, len) <= right.len);
     assert(diff_at <= len);
@@ -180,7 +202,7 @@ static void check_memcmp(Buf left, Buf right, u64 left_off, u64 right_off,
 }
 
 // Puts the string at `off` with its first zero byte at `off + pos`.
-static void check_strlen(Buf b, u64 off, u64 pos) {
+__attribute__((no_builtin)) static void check_strlen(Buf b, u64 off, u64 pos) {
     assert(add_unsafe_u64(off, pos) < b.len);
     u64 const end = add_unsafe_u64(off, pos);
 

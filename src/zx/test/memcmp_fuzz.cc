@@ -20,17 +20,23 @@ struct Ctx {
 // per 256 bytes.
 static u8 payload(u64 i) { return (u8)(i * 37 + 11); }
 
-// Maps `usable` bytes with a PROT_NONE page on each side so that any read or
-// write one byte outside of the returned slice faults.
+// Allocates `usable` bytes with a PROT_NONE page on each side so that any read
+// or write one byte outside of the returned slice faults.
+//
+// The page allocator only hands out power-of-two sizes, so the usable part is
+// rounded up to whatever the next power of two leaves after the two guard
+// pages.
 static SliceMut<u8> make_guarded(Backtrace *err_bt, u64 usable) {
-    u64 const mapped = add_unsafe_u64(usable, 2 * PAGE);
+    bool overflow = false;
+    u64 const total =
+        next_pow_two_u64(add_unsafe_u64(usable, 2 * PAGE), &overflow);
+    assert(!overflow);
+    assert(total >= add_unsafe_u64(usable, 2 * PAGE));
 
     u8 *base = nullptr;
-    testing::assert_with_trace(
-        sys::MMapStatus::Ok ==
-            sys::mmap(err_bt, nullptr, mapped, sys::PROT_READ | sys::PROT_WRITE,
-                      sys::MAP_PRIVATE | sys::MAP_ANONYMOUS, -1, 0, &base),
-        err_bt);
+    testing::assert_with_trace(page_alloc::AllocStatus::Ok ==
+                                   page_alloc::alloc_4kb(err_bt, total, &base),
+                               err_bt);
     assert(base != nullptr);
 
     testing::assert_with_trace(
@@ -39,10 +45,12 @@ static SliceMut<u8> make_guarded(Backtrace *err_bt, u64 usable) {
         err_bt);
     testing::assert_with_trace(
         sys::MProtectStatus::Ok ==
-            sys::mprotect(err_bt, &base[mapped - PAGE], PAGE, sys::PROT_NONE),
+            sys::mprotect(err_bt, &base[sub_unsafe_u64(total, PAGE)], PAGE,
+                          sys::PROT_NONE),
         err_bt);
 
-    return SliceMut<u8>::init_unsafe(&base[PAGE], usable);
+    return SliceMut<u8>::init_unsafe(&base[PAGE],
+                                     sub_unsafe_u64(total, 2 * PAGE));
 }
 
 // Picks an offset in `[0, max_off]`. Covers the placements that matter: the
@@ -75,7 +83,8 @@ static bool is_all(u8 const *ptr, u64 len, u8 val) {
     return ok;
 }
 
-static void paint_outside(SliceMut<u8> mem, u64 off, u64 len, u8 val) {
+__attribute__((no_builtin)) static void paint_outside(SliceMut<u8> mem, u64 off,
+                                                      u64 len, u8 val) {
     u8 *const ptr = mem.ptr();
     u64 const before = min_u64(off, OUTSIDE_MARGIN);
     for (u64 i = 1; i <= before; i++) {
@@ -99,7 +108,8 @@ static void check_outside(SliceMut<u8> mem, u64 off, u64 len, u8 val) {
     assert(is_all(&ptr[end], after, val));
 }
 
-static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
+__attribute__((no_builtin)) static void fuzz_one(void *usr_ctx,
+                                                 FuzzInput *fuzz_input) {
     assert(usr_ctx != nullptr);
     Ctx const *const ctx = (Ctx const *)usr_ctx;
     SliceMut<u8> const left = ctx->left;

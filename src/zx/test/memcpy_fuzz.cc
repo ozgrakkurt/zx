@@ -26,17 +26,27 @@ struct Ctx {
 // per 256 bytes.
 static u8 payload(u64 i) { return (u8)(i * 37 + 11); }
 
-// Maps `usable` bytes with a PROT_NONE page on each side so that any read or
-// write one byte outside of the returned slice faults.
+// `payload(i) ^ 0xFF` differs from `payload(i)` at every index, so dirtying a
+// destination with it catches a copy that writes nothing or skips a byte.
+static u8 dirty_payload(u64 i) { return (u8)(payload(i) ^ 0xFF__wbu); }
+
+// Allocates `usable` bytes with a PROT_NONE page on each side so that any read
+// or write one byte outside of the returned slice faults.
+//
+// The page allocator only hands out power-of-two sizes, so the usable part is
+// rounded up to whatever the next power of two leaves after the two guard
+// pages.
 static SliceMut<u8> make_guarded(Backtrace *err_bt, u64 usable) {
-    u64 const mapped = add_unsafe_u64(usable, 2 * PAGE);
+    bool overflow = false;
+    u64 const total =
+        next_pow_two_u64(add_unsafe_u64(usable, 2 * PAGE), &overflow);
+    assert(!overflow);
+    assert(total >= add_unsafe_u64(usable, 2 * PAGE));
 
     u8 *base = nullptr;
-    testing::assert_with_trace(
-        sys::MMapStatus::Ok ==
-            sys::mmap(err_bt, nullptr, mapped, sys::PROT_READ | sys::PROT_WRITE,
-                      sys::MAP_PRIVATE | sys::MAP_ANONYMOUS, -1, 0, &base),
-        err_bt);
+    testing::assert_with_trace(page_alloc::AllocStatus::Ok ==
+                                   page_alloc::alloc_4kb(err_bt, total, &base),
+                               err_bt);
     assert(base != nullptr);
 
     testing::assert_with_trace(
@@ -45,10 +55,12 @@ static SliceMut<u8> make_guarded(Backtrace *err_bt, u64 usable) {
         err_bt);
     testing::assert_with_trace(
         sys::MProtectStatus::Ok ==
-            sys::mprotect(err_bt, &base[mapped - PAGE], PAGE, sys::PROT_NONE),
+            sys::mprotect(err_bt, &base[sub_unsafe_u64(total, PAGE)], PAGE,
+                          sys::PROT_NONE),
         err_bt);
 
-    return SliceMut<u8>::init_unsafe(&base[PAGE], usable);
+    return SliceMut<u8>::init_unsafe(&base[PAGE],
+                                     sub_unsafe_u64(total, 2 * PAGE));
 }
 
 // Picks an offset in `[0, max_off]`. Covers the placements that matter: the
@@ -89,7 +101,8 @@ static bool is_all(u8 const *ptr, u64 len, u8 val) {
     return ok;
 }
 
-static void paint_outside(SliceMut<u8> mem, u64 off, u64 len, u8 val) {
+__attribute__((no_builtin)) static void paint_outside(SliceMut<u8> mem, u64 off,
+                                                      u64 len, u8 val) {
     u8 *const ptr = mem.ptr();
     u64 const before = min_u64(off, OUTSIDE_MARGIN);
     for (u64 i = 1; i <= before; i++) {
@@ -113,14 +126,18 @@ static void check_outside(SliceMut<u8> mem, u64 off, u64 len, u8 val) {
     assert(is_all(&ptr[end], after, val));
 }
 
-static void do_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off,
-                    u64 src_off, u64 len) {
+__attribute__((no_builtin)) static void
+do_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off, u64 src_off, u64 len) {
     assert(add_unsafe_u64(dst_off, len) <= dst.len());
     assert(add_unsafe_u64(src_off, len) <= src.len());
 
     u8 *const src_ptr = src.ptr();
+    u8 *const dst_ptr = dst.ptr();
     for (u64 i = 0; i < len; i++) {
         src_ptr[add_unsafe_u64(src_off, i)] = payload(i);
+        // Dirty the destination so a copy that writes nothing (or skips a
+        // byte) can't pass by matching what was already there.
+        dst_ptr[add_unsafe_u64(dst_off, i)] = dirty_payload(i);
     }
     paint_outside(dst, dst_off, len, OUTSIDE);
 
@@ -135,8 +152,10 @@ static void do_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off,
 // range. Filling and verifying all 48 MiB on every hit would dominate the
 // fuzzing time; the chunks still include the first and the last bytes, so a
 // short copy is caught.
-static void do_big_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off,
-                        u64 src_off, u64 len) {
+__attribute__((no_builtin)) static void do_big_copy(SliceMut<u8> dst,
+                                                    SliceMut<u8> src,
+                                                    u64 dst_off, u64 src_off,
+                                                    u64 len) {
     assert(len >= REP_MOVSB_MIN);
     assert(add_unsafe_u64(dst_off, len) <= dst.len());
     assert(add_unsafe_u64(src_off, len) <= src.len());
@@ -150,8 +169,11 @@ static void do_big_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off,
     for (u64 c = 0; c < 5; c++) {
         u64 const base = chunks[c];
         for (u64 i = 0; i < chunk; i++) {
-            src_ptr[add_unsafe_u64(src_off, add_unsafe_u64(base, i))] =
-                payload(base + i);
+            u64 const pos = add_unsafe_u64(base, i);
+            src_ptr[add_unsafe_u64(src_off, pos)] = payload(pos);
+            // Only the chunks that get verified are dirtied; filling the whole
+            // destination would dominate the fuzzing time.
+            dst_ptr[add_unsafe_u64(dst_off, pos)] = dirty_payload(pos);
         }
     }
 
@@ -173,7 +195,8 @@ static void do_big_copy(SliceMut<u8> dst, SliceMut<u8> src, u64 dst_off,
     check_outside(dst, dst_off, len, OUTSIDE);
 }
 
-static void fuzz_one(void *usr_ctx, FuzzInput *fuzz_input) {
+__attribute__((no_builtin)) static void fuzz_one(void *usr_ctx,
+                                                 FuzzInput *fuzz_input) {
     assert(usr_ctx != nullptr);
     Ctx const *const ctx = (Ctx const *)usr_ctx;
 
@@ -235,11 +258,24 @@ int main(void) {
     Backtrace err_bt = Backtrace::init();
 
     Alloc alloc = make_alloc(&err_bt, FUZZ_MEM_CAP);
+
+    // The `rep movsb` case needs buffers of at least `REP_MOVSB_MIN` bytes.
+    // Allocating (and populating) them is only worth it when fuzzing runs.
+#ifdef ZX_FUZZ
+    SliceMut<u8> const big_dst =
+        make_guarded(&err_bt, add_unsafe_u64(REP_MOVSB_MIN, PAGE));
+    SliceMut<u8> const big_src =
+        make_guarded(&err_bt, add_unsafe_u64(REP_MOVSB_MIN, PAGE));
+#else
+    SliceMut<u8> const big_dst = SliceMut<u8>::init_dangling();
+    SliceMut<u8> const big_src = SliceMut<u8>::init_dangling();
+#endif
+
     Ctx const ctx = Ctx{
         .dst = make_guarded(&err_bt, 8192),
         .src = make_guarded(&err_bt, 8192),
-        .big_dst = make_guarded(&err_bt, add_unsafe_u64(REP_MOVSB_MIN, PAGE)),
-        .big_src = make_guarded(&err_bt, add_unsafe_u64(REP_MOVSB_MIN, PAGE)),
+        .big_dst = big_dst,
+        .big_src = big_src,
     };
     fuzz(FuzzParams{
         .alloc = &alloc,
