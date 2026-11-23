@@ -27,8 +27,8 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     }
 
     u64 offset = count % 64;
-    #pragma clang loop vectorize(disable) unroll(disable)
-    for (u64 i=0; i<offset; i++) {
+#pragma clang loop vectorize(disable) unroll(disable)
+    for (u64 i = 0; i < offset; i++) {
         output[i] = input[i];
     }
 
