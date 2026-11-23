@@ -60,6 +60,13 @@ zxbs --time-trace test
 It will output a trace (.json) file in `build/out` folder. You can open it in `chrome://tracing` page of your chromium browser of choice.
 This trace view will show what is slowing the build down.
 
+Passing `--emit-asm` flag to `zxbs` makes it generaate one `.s` file per object file output in the build directory. This is useful for inspecting the assembly output.
+Something like this:
+```
+zxbs --opt-level=2 --no-dev-mode --emit-asm build
+```
+Notice that we don't disable debug info since that is needed to make clang annotate the `.s` file with source file locations.
+
 ### Directory structure
 
 Source code is put in folders under the src directory like so:
