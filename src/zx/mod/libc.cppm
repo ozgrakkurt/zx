@@ -29,27 +29,26 @@ memcpy(void *__restrict dest, void const *__restrict src, u64_c count) {
     u64 offset = 0;
 
     for (; offset + 64__wbu <= count; offset += 64__wbu) {
-        __asm__("vmovups (%[input]), %%ymm31\n\t"
-                "vmovups 32(%[input]), %%ymm30\n\t"
-                "vmovups %%ymm31, (%[output])\n\t"
-                "vmovups %%ymm30, 32(%[output])\n\t"
-                : "=m"(*(u8(*)[64]) & output[offset])
-                : "m"(*(u8 const(*)[64]) & input[offset]),
-                  [input] "r"(&input[offset]), [output] "r"(&output[offset])
-                : "ymm31", "ymm30");
+        __asm__ volatile(
+            "vmovups (%[input]), %%ymm31\n\t"
+            "vmovups 32(%[input]), %%ymm30\n\t"
+            "vmovups %%ymm31, (%[output])\n\t"
+            "vmovups %%ymm30, 32(%[output])\n\t"
+            :
+            : [input] "r"(&input[offset]), [output] "r"(&output[offset])
+            : "ymm31", "ymm30", "memory");
     }
 
     u64 const remainder = count - offset;
     if (remainder > 0) {
         u64_c const storemask = __builtin_ia32_bzhi_di(~(u64){0}, remainder);
-        v512_u8 scratch;
-        __asm__(
-            "vmovdqu8 %[input], %[scratch] %{%[storemask]%}%{z%}\n\t"
-            "vmovdqu8 %[scratch], %[output] %{%[storemask]%}\n\t"
-            : [output] "=m"(*(u8(*)[64]) & output[offset]), [scratch] "=v"(
-                                                                scratch)
-            : [input] "m"(*(u8 const(*)[64]) & input[offset]), [storemask] "Yk"(
-                                                                   storemask));
+        __asm__ volatile(
+            "vmovdqu8 (%[input]), %%zmm29 %{%[storemask]%}%{z%}\n\t"
+            "vmovdqu8 %%zmm29, (%[output]) %{%[storemask]%}\n\t"
+            :
+            : [input] "r"(&input[offset]), [output] "r"(&output[offset]),
+              [storemask] "Yk"(storemask)
+            : "memory", "zmm29");
     }
 
     return dest;
