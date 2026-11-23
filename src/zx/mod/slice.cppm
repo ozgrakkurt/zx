@@ -28,12 +28,6 @@ enum class [[nodiscard]] SliceStatus : u8_c {
     IntegerOverflow,
 };
 
-enum class Comparison : u8_c {
-    Equal = 0,
-    Greater,
-    Less,
-};
-
 enum class [[nodiscard]] SliceMemcpyStatus : u8_c {
     Ok = 0,
     SizeMismatch,
@@ -508,36 +502,7 @@ template <typename T> struct Slice {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline Comparison compare(Slice other) const {
-        u64 const len = min_u64(this->m_len, other.m_len);
-
-        T const *ptr = this->m_ptr;
-        T const *other_ptr = other.m_ptr;
-
-        for (u64 i = 0; i < len; i++) {
-            T const val = ptr[i];
-            T const other_val = other_ptr[i];
-            // This is slow because it can't be vectorized, changing it to use a
-            // SIMD function that finds the first differing position might
-            // perform a lot better.
-            if (val > other_val) {
-                return Comparison::Greater;
-            }
-            if (val < other_val) {
-                return Comparison::Less;
-            }
-        }
-
-        if (this->m_len > other.m_len) {
-            return Comparison::Greater;
-        } else if (this->m_len < other.m_len) {
-            return Comparison::Less;
-        } else {
-            return Comparison::Equal;
-        }
-    }
-
-    [[nodiscard]] inline bool equals(Slice other) const {
+    [[nodiscard]] inline i32 memcmp(Slice other) const {
         if (this->m_len != other.m_len) {
             return false;
         }
@@ -545,19 +510,9 @@ template <typename T> struct Slice {
         // This should be ok because overflow condition is checked in the init
         // method.
         u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                   (u8 const *)other.m_ptr, byte_count);
-        return res == 0;
-    }
-
-    [[nodiscard]] inline u64 count(T elem) const {
-        u64 cnt = 0;
-
-        for (u64 i = 0; i < this->m_len; i++) {
-            cnt += (this->m_ptr[i] == elem);
-        }
-
-        return cnt;
+        i32 const res = __builtin_memcmp((u8 const *)this->m_ptr,
+                                         (u8 const *)other.m_ptr, byte_count);
+        return res;
     }
 };
 
@@ -1044,57 +999,17 @@ template <typename T> struct SliceMut {
                other_start < self_end;
     }
 
-    [[nodiscard]] inline Comparison compare(SliceMut other) const {
-        u64 const len = min_u64(this->m_len, other.m_len);
-
-        T const *ptr = this->m_ptr;
-        T const *other_ptr = other.m_ptr;
-
-        for (u64 i = 0; i < len; i++) {
-            T const val = ptr[i];
-            T const other_val = other_ptr[i];
-            // This is slow because it can't be vectorized, changing it to use a
-            // SIMD function that finds the first differing position might
-            // perform a lot better.
-            if (val > other_val) {
-                return Comparison::Greater;
-            }
-            if (val < other_val) {
-                return Comparison::Less;
-            }
-        }
-
-        if (this->m_len > other.m_len) {
-            return Comparison::Greater;
-        } else if (this->m_len < other.m_len) {
-            return Comparison::Less;
-        } else {
-            return Comparison::Equal;
-        }
-    }
-
-    [[nodiscard]] inline bool equals(SliceMut other) const {
+    [[nodiscard]] inline i32 memcmp(SliceMut other) const {
         if (this->m_len != other.m_len) {
             return false;
         }
-        u64 const len = min_u64(this->m_len, other.m_len);
+        u64 const len = this->m_len;
         // This should be ok because overflow condition is checked in the init
         // method.
         u64 const byte_count = mul_unsafe_u64(len, sizeof(T));
-        // We are assuming little endian here.
-        i32 res = __builtin_memcmp((u8 const *)this->m_ptr,
-                                   (u8 const *)other.m_ptr, byte_count);
-        return res == 0;
-    }
-
-    [[nodiscard]] inline u64 count(T elem) const {
-        u64 cnt = 0;
-
-        for (u64 i = 0; i < this->m_len; i++) {
-            cnt += (this->m_ptr[i] == elem);
-        }
-
-        return cnt;
+        i32 const res = __builtin_memcmp((u8 const *)this->m_ptr,
+                                         (u8 const *)other.m_ptr, byte_count);
+        return res;
     }
 
     inline Slice<T> as_const() const {
@@ -1157,14 +1072,6 @@ template <typename T> struct SliceMut {
 #endif
 
         __builtin_memcpy(&this->m_ptr[offset], &val, sizeof(U));
-    }
-
-    inline void fill(T val) const {
-        u64 const len = this->m_len;
-        T *const ptr = this->m_ptr;
-        for (u64 i = 0; i < len; i++) {
-            ptr[i] = val;
-        }
     }
 
     inline void memset(u8 byte) const {
