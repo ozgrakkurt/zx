@@ -3,7 +3,7 @@ module zx;
 namespace zx {
 
 // this is implemented in start.cc
-extern "C" elf::EhFrame ZX_ELF_EH_FRAME_;
+extern "C" elf_eh_frame::EhFrame ZX_ELF_EH_FRAME_;
 
 #ifdef ZX_DEBUG_INFO
 
@@ -16,13 +16,13 @@ void Backtrace::collect(Backtrace *bt) {
     __builtin_memset(&cpu_ctx, 0, sizeof(cpu_ctx));
     zx_getcpucontext_(&cpu_ctx);
 
-    elf::EhFrame::BacktraceStatus const status =
+    elf_eh_frame::EhFrame::BacktraceStatus const status =
         ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, bt);
     switch (status) {
-    case elf::EhFrame::BacktraceStatus::Ok: {
+    case elf_eh_frame::EhFrame::BacktraceStatus::Ok: {
         break;
     }
-    case elf::EhFrame::BacktraceStatus::OutOfCapacity: {
+    case elf_eh_frame::EhFrame::BacktraceStatus::OutOfCapacity: {
         // we don't care if it truncated.
         break;
     }

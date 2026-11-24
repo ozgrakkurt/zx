@@ -41,7 +41,7 @@ import :def;
 
 export namespace zx {
 
-namespace sys {
+namespace io_uring {
 
 extern "C" {
 
@@ -1100,6 +1100,6 @@ struct ZcRxCtrl {
 
 } // extern "C"
 
-} // namespace sys
+} // namespace io_uring
 
 } // namespace zx

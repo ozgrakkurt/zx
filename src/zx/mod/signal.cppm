@@ -5,7 +5,7 @@ import :arith;
 
 export namespace zx {
 
-namespace sys {
+namespace signal {
 
 // echo '#define _GNU_SOURCE 1
 //   #include <signal.h>' | gcc -E -dM -xc - | grep -i "SA_"
@@ -214,6 +214,6 @@ struct Stack {
 
 } // extern C
 
-} // namespace sys
+} // namespace signal
 
 } // namespace zx

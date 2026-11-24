@@ -209,7 +209,7 @@ struct File {
 #ifdef ZX_DEBUG_INFO
 
 // this is implemented in start.cc
-extern "C" DebugLine ZX_ELF_DEBUG_LINE_;
+extern "C" elf_debug_line::DebugLine ZX_ELF_DEBUG_LINE_;
 
 inline void print_stack_trace_panic(Backtrace const *bt) {
     assert(bt != nullptr);
@@ -224,9 +224,11 @@ inline void print_stack_trace_panic(Backtrace const *bt) {
                  &fmt_overflow);
 
     constexpr u64 N_LINE_INFO = 8;
-    DebugLine::LineInfo line_info_mem[N_LINE_INFO];
-    List<DebugLine::LineInfo> line_infos = List<DebugLine::LineInfo>::init(
-        SliceMut<DebugLine::LineInfo>::init_unsafe(line_info_mem, N_LINE_INFO));
+    elf_debug_line::DebugLine::LineInfo line_info_mem[N_LINE_INFO];
+    List<elf_debug_line::DebugLine::LineInfo> line_infos =
+        List<elf_debug_line::DebugLine::LineInfo>::init(
+            SliceMut<elf_debug_line::DebugLine::LineInfo>::init_unsafe(
+                line_info_mem, N_LINE_INFO));
 
     for (u64 i = 0; i < Backtrace::LEN; i++) {
         u64 const pc = bt->program_counters[i];
@@ -235,19 +237,19 @@ inline void print_stack_trace_panic(Backtrace const *bt) {
             break;
         }
         line_infos.reset();
-        DebugLine::GetLineInfosStatus const gl_status =
+        elf_debug_line::DebugLine::GetLineInfosStatus const gl_status =
             ZX_ELF_DEBUG_LINE_.get_line_infos(pc, &line_infos);
 
         switch (gl_status) {
-        case DebugLine::GetLineInfosStatus::Ok: {
+        case elf_debug_line::DebugLine::GetLineInfosStatus::Ok: {
             break;
         }
-        case DebugLine::GetLineInfosStatus::OutOfCapacity: {
+        case elf_debug_line::DebugLine::GetLineInfosStatus::OutOfCapacity: {
             // don't matter if it truncated, it will be obvious from seeing the
             // trace as it won't contain `main`.
             break;
         }
-        case DebugLine::GetLineInfosStatus::NotFound: {
+        case elf_debug_line::DebugLine::GetLineInfosStatus::NotFound: {
             assert(line_infos.n_written() == 0);
             fmt.push_str(CString::init_unsafe("-??\n").as_slice(),
                          &fmt_overflow);
@@ -259,7 +261,7 @@ inline void print_stack_trace_panic(Backtrace const *bt) {
         }
 
         for (u64 j = 0; j < line_infos.n_written(); j++) {
-            DebugLine::LineInfo const line_info =
+            elf_debug_line::DebugLine::LineInfo const line_info =
                 line_infos.written().read_unsafe(j);
             fmt.push_char('-', &fmt_overflow);
             if (line_infos.n_written() > 1) {

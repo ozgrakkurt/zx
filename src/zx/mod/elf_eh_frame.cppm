@@ -13,7 +13,7 @@ import :backtrace;
 
 export namespace zx {
 
-namespace elf {
+namespace elf_eh_frame {
 
 constexpr u8 EH_VALUE_MASK = 0x0f;
 constexpr u8 EH_APP_MASK = 0xf0;
@@ -1413,6 +1413,6 @@ struct EhFrame {
     inline bool is_empty() const { return this->m_fd_entries.len() == 0; }
 };
 
-} // namespace elf
+} // namespace elf_eh_frame
 
 } // namespace zx

@@ -133,15 +133,15 @@ static void test_file(Backtrace *err_bt) {
 
     assert(out.memcmp_unsafe(data) == 0);
 
-    sys::StatX statx;
+    statx::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
     testing::assert_with_trace(sys::StatXStatus::Ok ==
                                    sys::statx(err_bt, fd, (u8 const *)"",
                                               sys::AT_EMPTY_PATH,
-                                              sys::STATX_MODE, &statx),
+                                              statx::STATX_MODE, &statx),
                                err_bt);
     assert(statx.stx_size == file_size);
-    assert((statx.stx_mask & sys::STATX_MODE) != 0);
+    assert((statx.stx_mask & statx::STATX_MODE) != 0);
 
     rand.fill(data);
     rand.fill(out);

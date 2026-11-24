@@ -12,11 +12,12 @@ struct TimeInfo {
     u64 m_time_shift;
     u64 m_time_mult;
 
-    static constexpr u64 MMAP_LEN = sizeof(sys::PerfEventMmapPage);
+    static constexpr u64 MMAP_LEN = sizeof(perf_event::PerfEventMmapPage);
 
     // function for cleaning up temporary resources that
     // are allocated in the `init` function.
-    inline static void cleanup_(sys::PerfEventMmapPage *mmap_page, i32 fd) {
+    inline static void cleanup_(perf_event::PerfEventMmapPage *mmap_page,
+                                i32 fd) {
         if (mmap_page != nullptr) {
             sys::MMapStatus const sys_status =
                 sys::munmap(nullptr, (u8 *)mmap_page, MMAP_LEN);
@@ -47,17 +48,17 @@ struct TimeInfo {
             return InitStatus::Nullptr;
         }
 
-        sys::PerfEventAttr pattr;
+        perf_event::PerfEventAttr pattr;
         __builtin_memset(&pattr, 0, sizeof(pattr));
-        pattr.type = (u32)sys::PerfEventTypeId::Hardware;
+        pattr.type = (u32)perf_event::PerfEventTypeId::Hardware;
         pattr.size = sizeof(pattr);
-        pattr.config = (u64)sys::PerfEventHwId::CountHwInstructions;
+        pattr.config = (u64)perf_event::PerfEventHwId::CountHwInstructions;
         pattr.disabled = 1;
         pattr.exclude_kernel = 1;
         pattr.exclude_hv = 1;
 
         i32 fd = -1;
-        sys::PerfEventMmapPage *mmap_page = nullptr;
+        perf_event::PerfEventMmapPage *mmap_page = nullptr;
 
         sys::PerfEventOpenStatus const pe_open_status =
             sys::perf_event_open(err_bt, &pattr, 0, -1, -1, 0, &fd);
