@@ -148,9 +148,18 @@ int main(void) {
     zx::SliceMut<zx::u8> const buf2 = make_alloc(&err_bt, capacity);
     zx::SliceMut<zx::u8> const buf3 = make_alloc(&err_bt, capacity);
 
-    constexpr zx::u64 lengths[] = {0,  1,  1023, 1024, 100, 1000, 13,
-                                   65, 63, 64,   128,  127, 129};
+    // Include the boundaries of every compression loop: the one-chunk tail,
+    // the 64/128/256 byte loops and the 256 byte unrolled loop.
+    constexpr zx::u64 lengths[] = {
+        0,    1,    13,   63,   64,   65,   100,  127,  128,  129,
+        191,  192,  193,  255,  256,  257,  383,  384,  385,  511,
+        512,  513,  767,  768,  769,  1000, 1023, 1024, 1025, 1535,
+        1536, 1537, 2047, 2048, 2049, 3071, 3072, 3073, 3583, 3584,
+    };
     constexpr zx::u64 n_lengths = sizeof(lengths) / sizeof(lengths[0]);
+
+    constexpr zx::u64 aligns[] = {0, 1, 7, 31, 63};
+    constexpr zx::u64 n_aligns = sizeof(aligns) / sizeof(aligns[0]);
 
     zx::Xoshiro256 rand = zx::Xoshiro256::init(69);
 
@@ -163,20 +172,26 @@ int main(void) {
                 noz::compress_bound(&err_bt, len, &bound),
             &err_bt);
 
-        zx::u64 const offset = zx::sub_unsafe_u64(capacity, len);
-        zx::SliceMut<zx::u8> b0 = buf0.slice_unsafe(offset, len);
-        zx::SliceMut<zx::u8> b1 = buf1.slice_unsafe(offset, len);
+        for (zx::u64 a = 0; a < n_aligns; a++) {
+            zx::u64 const align = aligns[a];
 
-        zx::u64 const compr_offset = zx::sub_unsafe_u64(capacity, bound);
-        zx::SliceMut<zx::u8> b2 = buf2.slice_unsafe(compr_offset, bound);
-        zx::SliceMut<zx::u8> b3 = buf3.slice_unsafe(compr_offset, bound);
+            zx::u64 const offset =
+                zx::sub_unsafe_u64(capacity, zx::add_unsafe_u64(len, align));
+            zx::SliceMut<zx::u8> b0 = buf0.slice_unsafe(offset, len);
+            zx::SliceMut<zx::u8> b1 = buf1.slice_unsafe(offset, len);
 
-        b0.memset(0);
-        do_test(&err_bt, b0, b1, b2, b3);
-        b0.memset(1);
-        do_test(&err_bt, b0, b1, b2, b3);
-        rand.fill(b0);
-        do_test(&err_bt, b0, b1, b2, b3);
+            zx::u64 const compr_offset =
+                zx::sub_unsafe_u64(capacity, zx::add_unsafe_u64(bound, align));
+            zx::SliceMut<zx::u8> b2 = buf2.slice_unsafe(compr_offset, bound);
+            zx::SliceMut<zx::u8> b3 = buf3.slice_unsafe(compr_offset, bound);
+
+            b0.memset(0);
+            do_test(&err_bt, b0, b1, b2, b3);
+            b0.memset(1);
+            do_test(&err_bt, b0, b1, b2, b3);
+            rand.fill(b0);
+            do_test(&err_bt, b0, b1, b2, b3);
+        }
     }
 
     test_compress_bound_errors();

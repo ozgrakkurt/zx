@@ -59,46 +59,114 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
         return CompressStatus::Ok;
     }
 
-    zx::u64 in_offset = 0;
-    zx::u64_c out_offset = 0;
     zx::u8 const *const in = input.ptr();
     zx::u8 *const out = output.ptr();
-    for (; zx::add_unsafe_u64(in_offset, 64) <= input.len();
-         in_offset = zx::add_unsafe_u64(in_offset, 64)) {
+
+    zx::u64 in_offset = 0;
+    zx::u64_c out_offset = 0;
+    for (; zx::add_unsafe_u64(in_offset, 256) <= input.len();
+         in_offset = zx::add_unsafe_u64(in_offset, 256)) {
         __asm__ volatile(
             // read input
-            "vmovdqu8 (%[input]), %%ymm31\n\t"
-            "vmovdqu8 32(%[input]), %%ymm30\n\t"
+            "vmovdqu8 (%[input]), %%zmm31\n\t"
+            "vmovdqu8 64(%[input]), %%zmm29\n\t"
+            "vmovdqu8 128(%[input]), %%zmm27\n\t"
+            "vmovdqu8 192(%[input]), %%zmm25\n\t"
             // check zeroes to create the masks
-            "vptestmb %%ymm31, %%ymm31, %%k7\n\t"
-            "vptestmb %%ymm30, %%ymm30, %%k6\n\t"
+            "vptestmb %%zmm31, %%zmm31, %%k7\n\t"
+            "vptestmb %%zmm29, %%zmm29, %%k6\n\t"
+            "vptestmb %%zmm27, %%zmm27, %%k5\n\t"
+            "vptestmb %%zmm25, %%zmm25, %%k4\n\t"
+            // compress to other registers
+            "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+            "vpcompressb %%zmm29, %%zmm28 %{%%k6%}\n\t"
+            "vpcompressb %%zmm27, %%zmm26 %{%%k5%}\n\t"
+            "vpcompressb %%zmm25, %%zmm24 %{%%k4%}\n\t"
+            // write the first chunk
+            "kmovq %%k7, %%r11\n\t"
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
+            "popcntq %%r11, %%r11\n\t"
+            "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
+            // write the second chunk
+            "kmovq %%k6, %%r11\n\t"
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%zmm28, 8(%[output], %[out_offset])\n\t"
+            "popcntq %%r11, %%r11\n\t"
+            "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
+            // write the third chunk
+            "kmovq %%k5, %%r11\n\t"
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%zmm26, 8(%[output], %[out_offset])\n\t"
+            "popcntq %%r11, %%r11\n\t"
+            "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
+            // write the fourth chunk
+            "kmovq %%k4, %%r11\n\t"
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%zmm24, 8(%[output], %[out_offset])\n\t"
+            "popcntq %%r11, %%r11\n\t"
+            "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
+            : [out_offset] "+&r"(out_offset)
+            : [input] "r"(&in[in_offset]), [output] "r"(out)
+            : "zmm31", "zmm29", "zmm27", "zmm25", "zmm30", "zmm28", "zmm26",
+              "zmm24", "k7", "k6", "k5", "k4", "r11", "memory");
+    }
+
+    if (zx::sub_unsafe_u64(input.len(), in_offset) >= 128) {
+        __asm__ volatile(
+            // read input
+            "vmovdqu8 (%[input]), %%zmm31\n\t"
+            "vmovdqu8 64(%[input]), %%zmm29\n\t"
+            // check zeroes to create the masks
+            "vptestmb %%zmm31, %%zmm31, %%k7\n\t"
+            "vptestmb %%zmm29, %%zmm29, %%k6\n\t"
             // move masks to gpr
             "kmovq %%k7, %%r11\n\t"
             "kmovq %%k6, %%r10\n\t"
             // compress to other registers
-            "vpcompressb %%ymm31, %%ymm29 %{%%k7%}\n\t"
-            "vpcompressb %%ymm30, %%ymm28 %{%%k6%}\n\t"
-            // calculate offset for second write
+            "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+            "vpcompressb %%zmm29, %%zmm28 %{%%k6%}\n\t"
+            // calculate the output offset of the second chunk
             "popcntq %%r11, %%r9\n\t"
             "addq %[out_offset], %%r9\n\t"
-            // write data
-            "vmovdqu8 %%ymm29, 8(%[output], %[out_offset])\n\t"
-            "vmovdqu8 %%ymm28, 8(%[output], %%r9)\n\t"
-            // combine two control masks into one
-            "movq %%r10, %%r9\n\t"
-            "shlq $32, %%r9\n\t"
-            "orq %%r11, %%r9\n\t"
-            // write the combined 8 byte control mask
-            "movq %%r9, (%[output], %[out_offset])\n\t"
-            // calculate num total bytes written
-            "popcntq %%r9, %%r9\n\t"
-            // update output offset
-            "addq %%r9, %[out_offset]\n\t"
-            "addq $8, %[out_offset]\n\t"
+            // write the first control mask and data
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
+            // write the second control mask and data
+            "movq %%r10, 8(%[output], %%r9)\n\t"
+            "vmovdqu8 %%zmm28, 16(%[output], %%r9)\n\t"
+            // calculate the new output offset
+            "popcntq %%r10, %%r10\n\t"
+            "leaq 16(%%r9, %%r10), %[out_offset]\n\t"
             : [out_offset] "+&r"(out_offset)
             : [input] "r"(&in[in_offset]), [output] "r"(out)
-            : "ymm31", "ymm30", "ymm29", "ymm28", "k7", "k6", "r9", "r10",
+            : "zmm31", "zmm29", "zmm30", "zmm28", "k7", "k6", "r9", "r10",
               "r11", "memory");
+        in_offset = zx::add_unsafe_u64(in_offset, 128);
+    }
+
+    if (zx::sub_unsafe_u64(input.len(), in_offset) >= 64) {
+        __asm__ volatile(
+            // read input
+            "vmovdqu8 (%[input]), %%zmm31\n\t"
+            // check zeroes to create the mask
+            "vptestmb %%zmm31, %%zmm31, %%k7\n\t"
+            // move mask to gpr
+            "kmovq %%k7, %%r11\n\t"
+            // compress to another register
+            "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+            // write data
+            "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
+            // write the 8 byte control mask
+            "movq %%r11, (%[output], %[out_offset])\n\t"
+            // calculate num total bytes written
+            "popcntq %%r11, %%r11\n\t"
+            // update output offset
+            "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
+            : [out_offset] "+&r"(out_offset)
+            : [input] "r"(&in[in_offset]), [output] "r"(out)
+            : "zmm31", "zmm30", "k7", "r11", "memory");
+        in_offset = zx::add_unsafe_u64(in_offset, 64);
     }
 
     zx::u64 const remainder = zx::sub_unsafe_u64(input.len(), in_offset);
@@ -112,8 +180,7 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
                          "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
                          "movq %%r11, (%[output], %[out_offset])\n\t"
                          "popcntq %%r11, %%r11\n\t"
-                         "addq %%r11, %[out_offset]\n\t"
-                         "addq $8, %[out_offset]\n\t"
+                         "leaq 8(%[out_offset], %%r11), %[out_offset]\n\t"
                          : [out_offset] "+&r"(out_offset)
                          : [input] "r"(&in[in_offset]), [output] "r"(out),
                            [loadmask] "Yk"(loadmask)
@@ -165,28 +232,17 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
         }
 
         __asm__ volatile(
-            // split the control mask into two 32-bit masks
-            "movq %[control], %%r11\n\t"
-            "movl %%r11d, %%r9d\n\t"
-            "shrq $32, %%r11\n\t"
-            "kmovd %%r9d, %%k6\n\t"
-            "kmovd %%r11d, %%k5\n\t"
-            // calculate the input offset of the second half
-            "popcntq %%r9, %%r9\n\t"
-            "addq %[control_end], %%r9\n\t"
-            // expand the first 32 bytes
-            "vpexpandb (%[input], %[control_end]), %%ymm31 %{%%k6%}%{z%}\n\t"
-            // expand the second 32 bytes
-            "vpexpandb (%[input], %%r9), %%ymm30 %{%%k5%}%{z%}\n\t"
-            // write the first 32 bytes
-            "vmovdqu8 %%ymm31, (%[output], %[out_offset])\n\t"
-            // write the second 32 bytes
-            "vmovdqu8 %%ymm30, 32(%[output], %[out_offset])\n\t"
+            // move the control mask to a vector mask register
+            "kmovq %[control], %%k5\n\t"
+            // expand all 64 bytes
+            "vpexpandb (%[input], %[control_end]), %%zmm31 %{%%k5%}%{z%}\n\t"
+            // write all 64 bytes
+            "vmovdqu8 %%zmm31, (%[output], %[out_offset])\n\t"
             :
             : [input] "r"(in), [output] "r"(out),
               [control_end] "r"(control_end), [out_offset] "r"(out_offset),
               [control] "r"(control)
-            : "ymm31", "ymm30", "k6", "k5", "r9", "r11", "memory");
+            : "zmm31", "k5", "memory");
 
         in_offset = step_end;
     }

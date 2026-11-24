@@ -94,11 +94,30 @@ struct BenchCtx {
     Xoshiro256 m_rand;
 };
 
+// The partial-chunk sizes exercise the tail path and the 64/128/256 byte
+// loop boundaries. The larger sizes cover cache and memory bandwidth effects.
 constexpr SizeCase SIZE_CASES[] = {
-    {10, "10B"},           {1 * KIB, "1KiB"},     {64 * KIB, "64KiB"},
-    {1 * MIB, "1MiB"},     {4 * MIB, "4MiB"},     {8 * MIB, "8MiB"},
-    {16 * MIB, "16MiB"},   {32 * MIB, "32MiB"},   {64 * MIB, "64MiB"},
-    {128 * MIB, "128MiB"}, {256 * MIB, "256MiB"}, {1 * GIB, "1GiB"},
+    {10, "10B"},
+    {63, "63B"},
+    {64, "64B"},
+    {65, "65B"},
+    {127, "127B"},
+    {128, "128B"},
+    {129, "129B"},
+    {1023, "1023B"},
+    {1 * KIB, "1KiB"},
+    {1 * KIB + 1, "1KiB+1"},
+    {64 * KIB, "64KiB"},
+    {1 * MIB, "1MiB"},
+    {1 * MIB + 1, "1MiB+1"},
+    {4 * MIB, "4MiB"},
+    {8 * MIB, "8MiB"},
+    {16 * MIB, "16MiB"},
+    {32 * MIB, "32MiB"},
+    {64 * MIB, "64MiB"},
+    {128 * MIB, "128MiB"},
+    {256 * MIB, "256MiB"},
+    {1 * GIB, "1GiB"},
 };
 
 constexpr u64 N_SIZE_CASES = sizeof(SIZE_CASES) / sizeof(SIZE_CASES[0]);
