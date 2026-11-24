@@ -90,7 +90,7 @@ inline CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             // move masks to gpr
             "kmovq %%k7, %%r11\n\t"
             "kmovq %%k6, %%r10\n\t"
-            // compress to other register
+            // compress to other registers
             "vpcompressb %%ymm31, %%ymm29 %{%%k7%}\n\t"
             "vpcompressb %%ymm30, %%ymm28 %{%%k6%}\n\t"
             // calculate offset for second write
