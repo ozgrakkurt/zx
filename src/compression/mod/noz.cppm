@@ -74,55 +74,65 @@ inline CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
         return CompressStatus::Ok;
     }
 
-    zx::v512_u8 zeros;
-    __asm__("vxorps %[zeros], %[zeros], %[zeros]\n\t" : [zeros] "=&v"(zeros));
-
     zx::u64 in_offset = 0;
-    zx::u64 out_offset = 0;
+    zx::u64_c out_offset = 0;
+    zx::u8 const *const in = input.ptr();
+    zx::u8 *const out = output.ptr();
     for (; zx::add_unsafe_u64(in_offset, 64) <= input.len();
          in_offset = zx::add_unsafe_u64(in_offset, 64)) {
-        zx::u64 const data_offset =
-            zx::add_unsafe_u64(out_offset, sizeof(zx::u64));
-        zx::u64_c n_w;
-        __asm__("vmovdqu8 %[input], %%zmm31\n\t"
-                "vpcmpub $4, %%zmm31, %[zeros], %%k7\n\t"
-                "kmovq %%k7, %[out0]\n\t"
-                "kmovq %%k7, %[n_w]\n\t"
-                "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
-                "vmovdqu8 %%zmm30, %[out1]\n\t"
-                "popcntq %[n_w], %[n_w]\n\t"
-                : [out0] "=&m"(*(zx::u8(*)[8]) & output.ptr()[out_offset]),
-                  [out1] "=&m"(*(zx::u8(*)[64]) & output.ptr()[data_offset]),
-                  [n_w] "=&r"(n_w)
-                : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[in_offset]),
-                  [zeros] "v"(zeros)
-                : "zmm30", "zmm31", "k7");
-
-        out_offset = zx::add_unsafe_u64(data_offset, n_w);
+        __asm__ volatile(
+            // read input
+            "vmovdqu8 (%[input]), %%ymm31\n\t"
+            "vmovdqu8 32(%[input]), %%ymm30\n\t"
+            // check zeroes to create the masks
+            "vptestmb %%ymm31, %%ymm31, %%k7\n\t"
+            "vptestmb %%ymm30, %%ymm30, %%k6\n\t"
+            // move masks to gpr
+            "kmovq %%k7, %%r11\n\t"
+            "kmovq %%k6, %%r10\n\t"
+            // compress to other registers
+            "vpcompressb %%ymm31, %%ymm29 %{%%k7%}\n\t"
+            "vpcompressb %%ymm30, %%ymm28 %{%%k6%}\n\t"
+            // calculate offset for second write
+            "popcntq %%r11, %%r9\n\t"
+            "addq %[out_offset], %%r9\n\t"
+            // write data
+            "vmovdqu8 %%ymm29, 8(%[output], %[out_offset])\n\t"
+            "vmovdqu8 %%ymm28, 8(%[output], %%r9)\n\t"
+            // combine two control masks into one
+            "movq %%r10, %%r9\n\t"
+            "shlq $32, %%r9\n\t"
+            "orq %%r11, %%r9\n\t"
+            // write the combined 8 byte control mask
+            "movq %%r9, (%[output], %[out_offset])\n\t"
+            // calculate num total bytes written
+            "popcntq %%r9, %%r9\n\t"
+            // update output offset
+            "addq %%r9, %[out_offset]\n\t"
+            "addq $8, %[out_offset]\n\t"
+            : [out_offset] "+&r"(out_offset)
+            : [input] "r"(&in[in_offset]), [output] "r"(out)
+            : "ymm31", "ymm30", "ymm29", "ymm28", "k7", "k6", "r9", "r10",
+              "r11", "memory");
     }
 
     zx::u64 const remainder = zx::sub_unsafe_u64(input.len(), in_offset);
     if (remainder > 0) {
-        register zx::u64_c const loadmask __asm__("k6") =
+        zx::u64_c const loadmask =
             __builtin_ia32_bzhi_di(~(zx::u64){0}, remainder);
-        zx::u64 const data_offset =
-            zx::add_unsafe_u64(out_offset, sizeof(zx::u64));
-        zx::u64_c n_w;
-        __asm__("vmovdqu8 %[input], %%zmm31 %{%[loadmask]%}%{z%}\n\t"
-                "vpcmpub $4, %%zmm31, %[zeros], %%k7\n\t"
-                "kmovq %%k7, %[out0]\n\t"
-                "kmovq %%k7, %[n_w]\n\t"
-                "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
-                "vmovdqu8 %%zmm30, %[out1]\n\t"
-                "popcntq %[n_w], %[n_w]\n\t"
-                : [out0] "=&m"(*(zx::u8(*)[8]) & output.ptr()[out_offset]),
-                  [out1] "=&m"(*(zx::u8(*)[64]) & output.ptr()[data_offset]),
-                  [n_w] "=&r"(n_w)
-                : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[in_offset]),
-                  [zeros] "v"(zeros), [loadmask] "k"(loadmask)
-                : "zmm31", "zmm30", "k7");
-
-        out_offset = zx::add_unsafe_u64(data_offset, n_w);
+        __asm__ volatile("vmovdqu8 (%[input]), %%zmm31 %{%[loadmask]%}%{z%}\n\t"
+                         "vptestmb %%zmm31, %%zmm31, %%k7\n\t"
+                         "kmovq %%k7, %%r11\n\t"
+                         "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
+                         "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
+                         "movq %%r11, (%[output], %[out_offset])\n\t"
+                         "popcntq %%r11, %%r11\n\t"
+                         "addq %%r11, %[out_offset]\n\t"
+                         "addq $8, %[out_offset]\n\t"
+                         : [out_offset] "+&r"(out_offset)
+                         : [input] "r"(&in[in_offset]), [output] "r"(out),
+                           [loadmask] "Yk"(loadmask)
+                         : "zmm31", "zmm30", "k7", "r10", "r11", "memory");
     }
 
     *n_written = out_offset;
