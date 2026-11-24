@@ -98,16 +98,18 @@ inline CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             "addq %[out_offset], %%r9\n\t"
             // write data
             "vmovdqu8 %%ymm29, 8(%[output], %[out_offset])\n\t"
-            "vmovdqu8 %%ymm29, 8(%[output], %%r9)\n\t"
+            "vmovdqu8 %%ymm28, 8(%[output], %%r9)\n\t"
             // combine two control masks into one
-            "shlq $32, %%r10, %%r9\n\t"
+            "movq %%r10, %%r9\n\t"
+            "shlq $32, %%r9\n\t"
             "orq %%r11, %%r9\n\t"
             // write the combined 8 byte control mask
-            "movq %%r8, (%[output], %[out_offset])\n\t"
+            "movq %%r9, (%[output], %[out_offset])\n\t"
             // calculate num total bytes written
             "popcntq %%r9, %%r9\n\t"
             // update output offset
             "addq %%r9, %[out_offset]\n\t"
+            "addq $8, %[out_offset]\n\t"
             : [out_offset] "+&r"(out_offset)
             : [input] "r"(&in[in_offset]), [output] "r"(out)
             : "ymm31", "ymm30", "ymm29", "ymm28", "k7", "k6", "r9", "r10",
@@ -123,9 +125,10 @@ inline CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
                          "kmovq %%k7, %%r11\n\t"
                          "vpcompressb %%zmm31, %%zmm30 %{%%k7%}\n\t"
                          "vmovdqu8 %%zmm30, 8(%[output], %[out_offset])\n\t"
-                         "popcntq %%r11, %%r11\n\t"
                          "movq %%r11, (%[output], %[out_offset])\n\t"
+                         "popcntq %%r11, %%r11\n\t"
                          "addq %%r11, %[out_offset]\n\t"
+                         "addq $8, %[out_offset]\n\t"
                          : [out_offset] "+&r"(out_offset)
                          : [input] "r"(&in[in_offset]), [output] "r"(out),
                            [loadmask] "Yk"(loadmask)
