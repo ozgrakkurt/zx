@@ -124,8 +124,10 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
     return CompressStatus::Ok;
 }
 
-DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
-                            zx::SliceMut<zx::u8> output, zx::u64 *n_read) {
+DecompressStatus decompress(zx::Backtrace *err_bt,
+                                   zx::Slice<zx::u8> input,
+                                   zx::SliceMut<zx::u8> output,
+                                   zx::u64 *n_read) {
     if (n_read == nullptr) [[unlikely]] {
         zx::Backtrace::collect(err_bt);
         return DecompressStatus::Nullptr;
@@ -142,47 +144,65 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
     }
 
     zx::u64 in_offset = 0;
-    zx::u64 out_offset = 0;
+    zx::u64_c out_offset = 0;
+    zx::u8 const *const in = input.ptr();
+    zx::u8 *const out = output.ptr();
     for (; zx::add_unsafe_u64(out_offset, 64) <= output.len();
          out_offset = zx::add_unsafe_u64(out_offset, 64)) {
-        zx::u64 const control_end =
+        zx::u64_c const control_end =
             zx::add_unsafe_u64(in_offset, sizeof(zx::u64));
         if (control_end > input.len()) [[unlikely]] {
             zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
-        register zx::u64_c control __asm__("k7") =
-            input.read_unaligned_unsafe<zx::u64>(in_offset);
+        zx::u64_c const control =
+            input.read_unaligned_unsafe<zx::u64_c>(in_offset);
 
-        zx::u64 const step_end =
+        zx::u64_c const step_end =
             zx::add_unsafe_u64(control_end, zx::popcount_u64(control));
         if (step_end > input.len()) [[unlikely]] {
             zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
-        __asm__(
-            "vpexpandb %[input], %%zmm31 %{%[control]%}%{z%}\n\t"
-            "vmovdqu8 %%zmm31, %[output]\n\t"
-            : [output] "=&m"(*(zx::u8(*)[64]) & output.ptr()[out_offset])
-            : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[control_end]),
-              [control] "k"(control)
-            : "zmm31");
+        __asm__ volatile(
+            // split the control mask into two 32-bit masks
+            "movq %[control], %%r11\n\t"
+            "movl %%r11d, %%r9d\n\t"
+            "shrq $32, %%r11\n\t"
+            "kmovd %%r9d, %%k6\n\t"
+            "kmovd %%r11d, %%k5\n\t"
+            // calculate the input offset of the second half
+            "popcntq %%r9, %%r9\n\t"
+            "addq %[control_end], %%r9\n\t"
+            // expand the first 32 bytes
+            "vpexpandb (%[input], %[control_end]), %%ymm31 %{%%k6%}%{z%}\n\t"
+            // expand the second 32 bytes
+            "vpexpandb (%[input], %%r9), %%ymm30 %{%%k5%}%{z%}\n\t"
+            // write the first 32 bytes
+            "vmovdqu8 %%ymm31, (%[output], %[out_offset])\n\t"
+            // write the second 32 bytes
+            "vmovdqu8 %%ymm30, 32(%[output], %[out_offset])\n\t"
+            :
+            : [input] "r"(in), [output] "r"(out),
+              [control_end] "r"(control_end), [out_offset] "r"(out_offset),
+              [control] "r"(control)
+            : "ymm31", "ymm30", "k6", "k5", "r9", "r11", "memory");
 
         in_offset = step_end;
     }
 
     zx::u64 const remainder = zx::sub_unsafe_u64(output.len(), out_offset);
     if (remainder > 0) {
-        zx::u64 const control_end =
+        zx::u64_c const control_end =
             zx::add_unsafe_u64(in_offset, sizeof(zx::u64));
         if (control_end > input.len()) [[unlikely]] {
             zx::Backtrace::collect(err_bt);
             return DecompressStatus::InputTooShort;
         }
 
-        register zx::u64_c control __asm__("k7") =
+        zx::u64_c const control =
             input.read_unaligned_unsafe<zx::u64>(in_offset);
 
         zx::u64 const step_end =
@@ -192,16 +212,18 @@ DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
             return DecompressStatus::InputTooShort;
         }
 
-        register zx::u64_c const storemask __asm__("k6") =
-            __builtin_ia32_bzhi_di(~(zx::u64){0}, remainder);
+        zx::u64_c const storemask =
+            __builtin_ia32_bzhi_di(zx::U64_MAX, remainder);
 
-        __asm__(
-            "vpexpandb %[input], %%zmm31 %{%[control]%}%{z%}\n\t"
-            "vmovdqu8 %%zmm31, %[output] %{%[storemask]%}\n\t"
-            : [output] "=&m"(*(zx::u8(*)[64]) & output.ptr()[out_offset])
-            : [input] "m"(*(zx::u8 const(*)[64]) & input.ptr()[control_end]),
-              [control] "k"(control), [storemask] "k"(storemask)
-            : "zmm31");
+        __asm__ volatile(
+            "vpexpandb (%[input], %[control_end]), %%zmm31 "
+            "%{%[control]}%{z%}\n\t"
+            "vmovdqu8 %%zmm31, (%[output], %[out_offset]) %{%[storemask]%}\n\t"
+            :
+            : [output] "r"(out), [input] "r"(in), [out_offset] "r"(out_offset),
+              [control_end] "r"(control_end), [control] "Yk"(control),
+              [storemask] "Yk"(storemask)
+            : "zmm31", "memory");
 
         in_offset = step_end;
     }
