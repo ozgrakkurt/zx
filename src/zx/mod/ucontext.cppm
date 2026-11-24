@@ -3,7 +3,7 @@ import :def;
 
 export namespace zx {
 
-namespace sys {
+namespace ucontext {
 
 // Use this command to get real C definitions:
 // echo '#include <ucontext.h>' | gcc -E -P -x c - | less
@@ -48,6 +48,6 @@ struct UContext {
     u64 uc_sigmask[16];
 };
 
-} // namespace sys
+} // namespace ucontext
 
 } // namespace zx

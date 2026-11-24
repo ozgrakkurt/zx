@@ -12,7 +12,7 @@ import :def;
 
 export namespace zx {
 
-namespace sys {
+namespace statx {
 
 extern "C" {
 
@@ -239,6 +239,6 @@ constexpr u32 STATX_ATTR_WRITE_ATOMIC =
 
 } // extern "C"
 
-} // namespace sys
+} // namespace statx
 
 } // namespace zx

@@ -13,7 +13,7 @@ import :backtrace;
 
 export namespace zx {
 
-namespace elf {
+namespace elf_debug_line {
 
 // These are defined in the DWARF5 spec. Can search by name in there and should
 // find the tables that define them.
@@ -964,6 +964,6 @@ struct DebugLine {
     }
 };
 
-} // namespace elf
+} // namespace elf_debug_line
 
 } // namespace zx
