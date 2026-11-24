@@ -34,11 +34,10 @@ constexpr u64 MAX_ALIGN = 63;
 constexpr u64 INPUT_ARENA_SIZE = MAX_INPUT_SIZE + MAX_ALIGN + 1;
 constexpr u64 OUTPUT_ARENA_SIZE = MAX_INPUT_SIZE + MAX_ALIGN + 1;
 
-// The hot cache cases target this many bytes per measurement. Small sizes are
+// The sweep cases target this many bytes per measurement. Small sizes are
 // also bounded by the iteration cap so the benchmark doesn't spend forever
 // there.
-constexpr u64 HOT_TARGET_BYTES = 512 * MIB;
-constexpr u64 COLD_TARGET_BYTES = 512 * MIB;
+constexpr u64 TARGET_BYTES = 512 * MIB;
 constexpr u64 ALIGN_TARGET_BYTES = 128 * MIB;
 
 // This caps the number of loop iterations for tiny inputs. It still gives
@@ -50,7 +49,8 @@ constexpr u64 OFFSET_SCRATCH_SIZE = 2 * MAX_ITERS * sizeof(u64);
 
 enum class Pattern : u8_c {
     Zero,   // Best case for noz: every control bit is zero.
-    Half,   // Average case: about half of the bytes are zero.
+    Half,   // About half of the bytes are zero: ~62.5% compressed size.
+    R50,    // Three of every eight bytes are nonzero: ~50% compressed size.
     Random, // Random data: virtually no zero bytes.
     Ones,   // Worst case for noz: absolutely no zero bytes.
 };
@@ -95,18 +95,17 @@ struct BenchCtx {
 };
 
 constexpr SizeCase SIZE_CASES[] = {
-    {10, "10B"},       {1 * KIB, "1KiB"},   {64 * KIB, "64KiB"},
-    {1 * MIB, "1MiB"}, {16 * MIB, "16MiB"}, {256 * MIB, "256MiB"},
-    {1 * GIB, "1GiB"},
+    {10, "10B"},           {1 * KIB, "1KiB"},     {64 * KIB, "64KiB"},
+    {1 * MIB, "1MiB"},     {4 * MIB, "4MiB"},     {8 * MIB, "8MiB"},
+    {16 * MIB, "16MiB"},   {32 * MIB, "32MiB"},   {64 * MIB, "64MiB"},
+    {128 * MIB, "128MiB"}, {256 * MIB, "256MiB"}, {1 * GIB, "1GiB"},
 };
 
 constexpr u64 N_SIZE_CASES = sizeof(SIZE_CASES) / sizeof(SIZE_CASES[0]);
 
 constexpr PatternCase PATTERN_CASES[] = {
-    {Pattern::Zero, "zero"},
-    {Pattern::Half, "half"},
-    {Pattern::Random, "random"},
-    {Pattern::Ones, "ones"},
+    {Pattern::Zero, "zero"},     {Pattern::Half, "half"}, {Pattern::R50, "r50"},
+    {Pattern::Random, "random"}, {Pattern::Ones, "ones"},
 };
 
 constexpr u64 N_PATTERN_CASES =
@@ -332,6 +331,25 @@ static SliceMut<u8> alloc_arena(Backtrace *err_bt, u64 len) {
     return SliceMut<u8>::init_unsafe(mem, len);
 }
 
+// Fills dst with random bytes masked to keep only the bytes selected by mask.
+// The mask repeats every 8 bytes.
+static void fill_masked(SliceMut<u8> dst, u64 mask, Xoshiro256 *rand) {
+    u64 *const words = (u64 *)dst.ptr();
+    u64 const n_words = dst.len() / sizeof(u64);
+    for (u64 i = 0; i < n_words; i++) {
+        words[i] = rand->next() & mask;
+    }
+
+    u64 const words_end = mul_unsafe_u64(n_words, sizeof(u64));
+    if (words_end < dst.len()) {
+        u64 const remainder = sub_unsafe_u64(dst.len(), words_end);
+        u64 const last = rand->next() & mask;
+        SliceMut<u8> const tail = dst.slice_unsafe(words_end, remainder);
+        tail.memcpy_from_unsafe(
+            Slice<u8>::init_unsafe((u8 const *)&last, remainder));
+    }
+}
+
 static void fill_pattern(SliceMut<u8> dst, Pattern pattern, Xoshiro256 *rand) {
     switch (pattern) {
     case Pattern::Zero: {
@@ -347,23 +365,14 @@ static void fill_pattern(SliceMut<u8> dst, Pattern pattern, Xoshiro256 *rand) {
         break;
     }
     case Pattern::Half: {
-        // Keep the nonzero bytes random and zero out every other byte.
-        constexpr u64 MASK = u64{0x00ff00ff00ff00ff};
-
-        u64 *const words = (u64 *)dst.ptr();
-        u64 const n_words = dst.len() / sizeof(u64);
-        for (u64 i = 0; i < n_words; i++) {
-            words[i] = rand->next() & MASK;
-        }
-
-        u64 const words_end = mul_unsafe_u64(n_words, sizeof(u64));
-        if (words_end < dst.len()) {
-            u64 const remainder = sub_unsafe_u64(dst.len(), words_end);
-            u64 const last = rand->next() & MASK;
-            SliceMut<u8> const tail = dst.slice_unsafe(words_end, remainder);
-            tail.memcpy_from_unsafe(
-                Slice<u8>::init_unsafe((u8 const *)&last, remainder));
-        }
+        // Keep every other byte: about half of the input bytes are zero.
+        fill_masked(dst, u64{0x00ff00ff00ff00ff}, rand);
+        break;
+    }
+    case Pattern::R50: {
+        // Keep three bytes out of every eight, which gives about a 50%
+        // compressed size with the noz format.
+        fill_masked(dst, u64{0x0000000000ffffff}, rand);
         break;
     }
     default: {
@@ -638,12 +647,9 @@ int main(void) {
             for (u64 c = 0; c < 2; c++) {
                 CacheMode const cache =
                     (c == 0) ? CacheMode::Hot : CacheMode::Cold;
-                u64 const target = (cache == CacheMode::Hot)
-                                       ? HOT_TARGET_BYTES
-                                       : COLD_TARGET_BYTES;
 
-                PointResult const result =
-                    run_point(&ctx, size_case, AlignCase{0, 0}, cache, target);
+                PointResult const result = run_point(
+                    &ctx, size_case, AlignCase{0, 0}, cache, TARGET_BYTES);
                 print_result(err_bt, line_buf, sizeof(line_buf), size_case,
                              pattern_case, AlignCase{0, 0}, cache, result);
             }
