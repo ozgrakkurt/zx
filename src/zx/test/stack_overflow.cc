@@ -2,11 +2,11 @@ import zx;
 
 using namespace zx;
 
-static void handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
+static void handler(i32_c signum, signal::SigInfo *info, void *ucontext) {
     (void)info;
     (void)ucontext;
 
-    assert((u32)signum == (u32)sys::SIG::SEGV);
+    assert((u32)signum == (u32)signal::SIG::SEGV);
     sys::exit_group(0);
 }
 
@@ -31,7 +31,7 @@ int main() {
     assert(AllocStatus::Ok == alloc.aligned_alloc<u8>(nullptr, 16, u64{1} << 20,
                                                       &signal_stack_mem));
 
-    sys::Stack const signal_stack = sys::Stack{
+    signal::Stack const signal_stack = signal::Stack{
         .ss_sp = signal_stack_mem.ptr(),
         .ss_flags = 0,
         .ss_size = signal_stack_mem.len(),
@@ -39,15 +39,15 @@ int main() {
     assert(sys::SigAltStackStatus::Ok ==
            sys::sigaltstack(nullptr, &signal_stack, nullptr));
 
-    sys::SigAction act = sys::SigAction{
+    signal::SigAction act = signal::SigAction{
         .sigaction = handler,
-        .flags = sys::SA_SIGINFO | sys::SA_RESETHAND | sys::SA_NODEFER |
-                 sys::SA_ONSTACK,
-        .mask = sys::SigSet::init(),
+        .flags = signal::SA_SIGINFO | signal::SA_RESETHAND |
+                 signal::SA_NODEFER | signal::SA_ONSTACK,
+        .mask = signal::SigSet::init(),
     };
 
     assert(sys::SigActionStatus::Ok ==
-           sys::sigaction(nullptr, sys::SIG::SEGV, &act, nullptr));
+           sys::sigaction(nullptr, signal::SIG::SEGV, &act, nullptr));
 
     zx_test_cause_stack_overflow_();
 

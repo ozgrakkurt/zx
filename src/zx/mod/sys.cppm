@@ -840,9 +840,9 @@ enum class [[nodiscard]] PerfEventOpenStatus : u8_c {
 };
 
 inline PerfEventOpenStatus perf_event_open(Backtrace *err_bt,
-                                           PerfEventAttr *attr, i32 pid,
-                                           i32 cpu, i32 group_fd, u64 flags,
-                                           i32 *fd) {
+                                           perf_event::PerfEventAttr *attr,
+                                           i32 pid, i32 cpu, i32 group_fd,
+                                           u64 flags, i32 *fd) {
     if (attr == nullptr || fd == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return PerfEventOpenStatus::Nullptr;
@@ -952,12 +952,12 @@ enum class [[nodiscard]] StatXStatus : u8_c {
 };
 
 inline StatXStatus statx(Backtrace *err_bt, i32 dirfd, u8 const *path,
-                         i32 flags, u32 mask, StatX *statxbuf) {
+                         i32 flags, u32 mask, statx::StatX *statxbuf) {
     if (statxbuf == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return StatXStatus::Nullptr;
     }
-    __builtin_memset(statxbuf, 0, sizeof(StatX));
+    __builtin_memset(statxbuf, 0, sizeof(statx::StatX));
     u64 const res = syscall5(NR_STATX, (u64)dirfd, (u64)path, (u64)flags,
                              (u64)mask, (u64)statxbuf);
     u64 const errno = errno_(res);
@@ -1023,7 +1023,8 @@ enum class [[nodiscard]] IoUringSetupStatus : u8_c {
 };
 
 inline IoUringSetupStatus io_uring_setup(Backtrace *err_bt, u32 n_entries,
-                                         IoUringParams *params, i32 *fd) {
+                                         io_uring::IoUringParams *params,
+                                         i32 *fd) {
     if (fd == nullptr || params == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return IoUringSetupStatus::Nullptr;
@@ -1723,23 +1724,23 @@ enum class [[nodiscard]] SigActionStatus : u8_c {
     EInval,
 };
 
-inline SigActionStatus sigaction(Backtrace *err_bt, SIG signum,
-                                 SigAction const *__restrict act,
-                                 SigAction *__restrict oldact) {
-    SigAction_ k_act;
+inline SigActionStatus sigaction(Backtrace *err_bt, signal::SIG signum,
+                                 signal::SigAction const *__restrict act,
+                                 signal::SigAction *__restrict oldact) {
+    signal::SigAction_ k_act;
     if (act != nullptr) {
-        k_act = SigAction_{
+        k_act = signal::SigAction_{
             .sa_sigaction = act->sigaction,
             .sa_mask = act->mask,
-            .sa_flags = act->flags | SA_RESTORER | SA_SIGINFO,
+            .sa_flags = act->flags | signal::SA_RESTORER | signal::SA_SIGINFO,
             .sa_restorer = sigreturn_,
         };
     }
-    SigAction_ k_oldact;
-    SigAction_ const *new_ptr = (act == nullptr) ? nullptr : &k_act;
-    SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
+    signal::SigAction_ k_oldact;
+    signal::SigAction_ const *new_ptr = (act == nullptr) ? nullptr : &k_act;
+    signal::SigAction_ *old_ptr = (oldact == nullptr) ? nullptr : &k_oldact;
     u64 const res = syscall4(NR_RT_SIGACTION, u64{(u32)signum}, (u64)new_ptr,
-                             (u64)old_ptr, sizeof(SigSet));
+                             (u64)old_ptr, sizeof(signal::SigSet));
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
         switch (errno) {
@@ -1759,7 +1760,7 @@ inline SigActionStatus sigaction(Backtrace *err_bt, SIG signum,
     }
 
     if (oldact != nullptr) {
-        *oldact = SigAction{
+        *oldact = signal::SigAction{
             .sigaction = k_oldact.sa_sigaction,
             .mask = k_oldact.sa_mask,
             .flags = k_oldact.sa_flags,
@@ -1779,8 +1780,8 @@ enum class [[nodiscard]] SigAltStackStatus : u8_c {
 };
 
 inline SigAltStackStatus sigaltstack(Backtrace *err_bt,
-                                     Stack const *__restrict ss,
-                                     Stack *__restrict old_ss) {
+                                     signal::Stack const *__restrict ss,
+                                     signal::Stack *__restrict old_ss) {
     u64 const res = syscall2(NR_RT_SIGALTSTACK, (u64)ss, (u64)old_ss);
     u64 const errno = errno_(res);
 

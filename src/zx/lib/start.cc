@@ -36,8 +36,8 @@ static void run_init_array_() {
 //
 // These values are expected to be just 0 initialized at the point of program
 // entry into _start.
-extern "C" elf::EhFrame ZX_ELF_EH_FRAME_{};
-extern "C" elf::DebugLine ZX_ELF_DEBUG_LINE_{};
+extern "C" elf_eh_frame::EhFrame ZX_ELF_EH_FRAME_{};
+extern "C" elf_debug_line::DebugLine ZX_ELF_DEBUG_LINE_{};
 
 static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     i32 fd = -1;
@@ -46,12 +46,12 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
                                             sys::O_RDONLY, 0, &fd));
     assert(fd != -1);
 
-    sys::StatX statx;
+    statx::StatX statx;
     __builtin_memset(&statx, 0, sizeof(statx));
     assert(sys::StatXStatus::Ok == sys::statx(nullptr, fd, (u8 const *)"",
                                               sys::AT_EMPTY_PATH,
-                                              sys::STATX_SIZE, &statx));
-    assert((statx.stx_mask & sys::STATX_SIZE) != 0);
+                                              statx::STATX_SIZE, &statx));
+    assert((statx.stx_mask & statx::STATX_SIZE) != 0);
 
     u64 const file_size = statx.stx_size;
 
@@ -82,12 +82,13 @@ static void print_panic_(char const *message) {
     assert(n_written == len);
 }
 
-static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
+static void signal_handler(i32_c signum, signal::SigInfo *info,
+                           void *ucontext) {
     (void)info;
 
-    if (signum == (i32)sys::SIG::ILL) {
+    if (signum == (i32)signal::SIG::ILL) {
         print_panic_("Printing stack trace for SIGILL(4) in signal handler.\n");
-    } else if (signum == (i32)sys::SIG::SEGV) {
+    } else if (signum == (i32)signal::SIG::SEGV) {
         print_panic_(
             "Printing stack trace for SIGSEGV(11) in signal handler.\n");
     } else {
@@ -96,7 +97,7 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
                      "is setup in start.cc\n");
     }
 
-    sys::UContext const *uctx = (sys::UContext const *)ucontext;
+    ucontext::UContext const *uctx = (ucontext::UContext const *)ucontext;
 
     CPUContext cpu_ctx = CPUContext{
         .r12 = uctx->uc_mcontext.r12,
@@ -118,13 +119,13 @@ static void signal_handler(i32_c signum, sys::SigInfo *info, void *ucontext) {
     };
 
     Backtrace bt;
-    elf::EhFrame::BacktraceStatus const status =
+    elf_eh_frame::EhFrame::BacktraceStatus const status =
         ZX_ELF_EH_FRAME_.backtrace_panic(&cpu_ctx, &bt);
     switch (status) {
-    case elf::EhFrame::BacktraceStatus::Ok: {
+    case elf_eh_frame::EhFrame::BacktraceStatus::Ok: {
         break;
     }
-    case elf::EhFrame::BacktraceStatus::OutOfCapacity: {
+    case elf_eh_frame::EhFrame::BacktraceStatus::OutOfCapacity: {
         // we don't care if it truncated.
         break;
     }
@@ -168,12 +169,12 @@ extern "C" void zx_setup_() {
     elf::Section const debug_line_str_section = file.get_section_panic(
         CString::init_unsafe(".debug_line_str").as_slice());
 
-    ZX_ELF_EH_FRAME_ = elf::EhFrame::init_panic(&alloc, &tmp_alloc,
-                                                eh_frame_section.header->addr,
-                                                eh_frame_section.body);
-    ZX_ELF_DEBUG_LINE_ =
-        elf::DebugLine::init_panic(&alloc, &tmp_alloc, debug_line_section.body,
-                                   debug_line_str_section.body);
+    ZX_ELF_EH_FRAME_ = elf_eh_frame::EhFrame::init_panic(
+        &alloc, &tmp_alloc, eh_frame_section.header->addr,
+        eh_frame_section.body);
+    ZX_ELF_DEBUG_LINE_ = elf_debug_line::DebugLine::init_panic(
+        &alloc, &tmp_alloc, debug_line_section.body,
+        debug_line_str_section.body);
 
     tmp_alloc.reset();
 
@@ -181,7 +182,7 @@ extern "C" void zx_setup_() {
     assert(AllocStatus::Ok == alloc.aligned_alloc<u8>(nullptr, 16, u64{1} << 20,
                                                       &signal_stack_mem));
 
-    sys::Stack const signal_stack = sys::Stack{
+    signal::Stack const signal_stack = signal::Stack{
         .ss_sp = signal_stack_mem.ptr(),
         .ss_flags = 0,
         .ss_size = signal_stack_mem.len(),
@@ -189,17 +190,17 @@ extern "C" void zx_setup_() {
     assert(sys::SigAltStackStatus::Ok ==
            sys::sigaltstack(nullptr, &signal_stack, nullptr));
 
-    sys::SigAction act = sys::SigAction{
+    signal::SigAction act = signal::SigAction{
         .sigaction = signal_handler,
-        .flags = sys::SA_SIGINFO | sys::SA_RESETHAND | sys::SA_NODEFER |
-                 sys::SA_ONSTACK,
-        .mask = sys::SigSet::init(),
+        .flags = signal::SA_SIGINFO | signal::SA_RESETHAND |
+                 signal::SA_NODEFER | signal::SA_ONSTACK,
+        .mask = signal::SigSet::init(),
     };
 
     assert(sys::SigActionStatus::Ok ==
-           sys::sigaction(nullptr, sys::SIG::ILL, &act, nullptr));
+           sys::sigaction(nullptr, signal::SIG::ILL, &act, nullptr));
     assert(sys::SigActionStatus::Ok ==
-           sys::sigaction(nullptr, sys::SIG::SEGV, &act, nullptr));
+           sys::sigaction(nullptr, signal::SIG::SEGV, &act, nullptr));
 }
 
 #else // ifdef ZX_DEBUG_INFO
