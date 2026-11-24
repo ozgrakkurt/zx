@@ -124,10 +124,8 @@ CompressStatus compress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
     return CompressStatus::Ok;
 }
 
-DecompressStatus decompress(zx::Backtrace *err_bt,
-                                   zx::Slice<zx::u8> input,
-                                   zx::SliceMut<zx::u8> output,
-                                   zx::u64 *n_read) {
+DecompressStatus decompress(zx::Backtrace *err_bt, zx::Slice<zx::u8> input,
+                            zx::SliceMut<zx::u8> output, zx::u64 *n_read) {
     if (n_read == nullptr) [[unlikely]] {
         zx::Backtrace::collect(err_bt);
         return DecompressStatus::Nullptr;

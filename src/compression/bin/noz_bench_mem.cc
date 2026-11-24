@@ -95,7 +95,9 @@ struct BenchCtx {
 };
 
 constexpr SizeCase SIZE_CASES[] = {
-    {64 * MIB, "64MiB"}, {256 * MIB, "256MiB"}, {1 * GIB, "1GiB"},
+    {64 * MIB, "64MiB"},
+    {256 * MIB, "256MiB"},
+    {1 * GIB, "1GiB"},
 };
 
 constexpr u64 N_SIZE_CASES = sizeof(SIZE_CASES) / sizeof(SIZE_CASES[0]);
