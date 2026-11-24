@@ -12,13 +12,13 @@ inline u32 wrapping_add_u32(u32 a, u32 b) { return a + b; }
 
 inline u64 wrapping_add_u64(u64 a, u64 b) { return a + b; }
 
-inline i8 wrapping_add_i8(i8 a, i8 b) { return a + b; }
+inline i8 wrapping_add_i8(i8 a, i8 b) { return (i8)((u8)a + (u8)b); }
 
-inline i16 wrapping_add_i16(i16 a, i16 b) { return a + b; }
+inline i16 wrapping_add_i16(i16 a, i16 b) { return (i16)((u16)a + (u16)b); }
 
-inline i32 wrapping_add_i32(i32 a, i32 b) { return a + b; }
+inline i32 wrapping_add_i32(i32 a, i32 b) { return (i32)((u32)a + (u32)b); }
 
-inline i64 wrapping_add_i64(i64 a, i64 b) { return a + b; }
+inline i64 wrapping_add_i64(i64 a, i64 b) { return (i64)((u64)a + (u64)b); }
 
 inline u8 saturating_add_u8(u8 a, u8 b) {
     return __builtin_elementwise_add_sat(a, b);
@@ -156,13 +156,13 @@ inline u32 wrapping_sub_u32(u32 a, u32 b) { return a - b; }
 
 inline u64 wrapping_sub_u64(u64 a, u64 b) { return a - b; }
 
-inline i8 wrapping_sub_i8(i8 a, i8 b) { return a - b; }
+inline i8 wrapping_sub_i8(i8 a, i8 b) { return (i8)((u8)a - (u8)b); }
 
-inline i16 wrapping_sub_i16(i16 a, i16 b) { return a - b; }
+inline i16 wrapping_sub_i16(i16 a, i16 b) { return (i16)((u16)a - (u16)b); }
 
-inline i32 wrapping_sub_i32(i32 a, i32 b) { return a - b; }
+inline i32 wrapping_sub_i32(i32 a, i32 b) { return (i32)((u32)a - (u32)b); }
 
-inline i64 wrapping_sub_i64(i64 a, i64 b) { return a - b; }
+inline i64 wrapping_sub_i64(i64 a, i64 b) { return (i64)((u64)a - (u64)b); }
 
 inline u8 saturating_sub_u8(u8 a, u8 b) {
     return __builtin_elementwise_sub_sat(a, b);
