@@ -268,6 +268,22 @@ constexpr u64 NR_RT_SIGALTSTACK = 131;
 constexpr u64 NR_PRCTL = 157;
 constexpr u64 NR_GETPPID = 110;
 
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -E "__NR_(clone|exit)\b"
+constexpr u64 NR_CLONE = 56;
+constexpr u64 NR_EXIT = 60;
+
+// echo '#include <linux/sched.h>' | gcc -E -dM -xc - | grep -E "#define CLONE_"
+constexpr u64 CLONE_VM = 0x00000100;
+constexpr u64 CLONE_FS = 0x00000200;
+constexpr u64 CLONE_FILES = 0x00000400;
+constexpr u64 CLONE_SIGHAND = 0x00000800;
+constexpr u64 CLONE_THREAD = 0x00010000;
+constexpr u64 CLONE_SYSVSEM = 0x00040000;
+constexpr u64 CLONE_SETTLS = 0x00080000;
+constexpr u64 CLONE_PARENT_SETTID = 0x00100000;
+constexpr u64 CLONE_CHILD_CLEARTID = 0x00200000;
+constexpr u64 CLONE_CHILD_SETTID = 0x01000000;
+
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
 
@@ -815,6 +831,15 @@ inline MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length,
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
     // about the [[noreturn]] annotation.
+    __builtin_trap();
+}
+
+// Raw exit syscall. Unlike exit_group, which terminates the whole thread
+// group (process), this terminates only the calling thread. This is what a
+// spawned thread has to call when it is done so it doesn't take the whole
+// process down with it.
+[[noreturn]] inline void exit(i32 status) {
+    syscall1(NR_EXIT, (u64)status);
     __builtin_trap();
 }
 
@@ -1824,6 +1849,116 @@ inline SigAltStackStatus sigaltstack(Backtrace *err_bt,
     }
 
     return SigAltStackStatus::Ok;
+}
+
+// The clone syscall is the only syscall that doesn't return in the thread
+// that calls it, so it needs special treatment:
+//
+// It returns in the spawning (parent) thread like a normal syscall. But the
+// spawned (child) thread starts executing at the instruction right after the
+// syscall instruction with a copy of the parent's registers, except:
+//   - %rax is 0 in the child. The parent instead gets the child's thread id
+//     (gettid) in %rax.
+//   - %rsp is the `child_stack` argument in the child, which is a brand new
+//     stack with no valid return address on it.
+//
+// So the child can never return from this function. Instead the caller is
+// expected to stage the child's entry on the new stack before calling clone:
+//   - `child_stack` must be 16 byte aligned.
+//   - `*(void (**) (void *)) child_stack` is the child's entry function.
+//   - `*(void **) (child_stack + 8)` is the entry function's argument.
+//
+// The child pops both of them and calls the entry function, which is expected
+// to never return (e.g. terminate the thread with sys::exit when it is done).
+// This is the same thing the libc clone wrapper and musl do.
+//
+// %rbp is zeroed in the child before the call, the same thing _start in
+// start.cc does for the main thread, so the eh_frame based stack unwinder
+// knows where the bottom of the thread's stack is.
+//
+// The spawned thread shares the signal handlers with the spawning thread when
+// CLONE_SIGHAND is set, but it does not inherit the spawning thread's
+// sigaltstack setting since sigaltstack is per thread. It is up to the entry
+// function to call sys::sigaltstack if that is needed.
+enum class [[nodiscard]] CloneStatus : u8_c {
+    Ok = 0,
+    Nullptr,
+    UnexpectedErr,
+    EAgain,
+    EFault,
+    EInval,
+    ENoMem,
+    EPerm,
+};
+
+inline CloneStatus clone(Backtrace *err_bt, u64 flags, u8 *child_stack,
+                         i32 *parent_tid, i32 *child_tid, u64 tls, i32 *tid) {
+    if (tid == nullptr) [[unlikely]] {
+        Backtrace::collect(err_bt);
+        return CloneStatus::Nullptr;
+    }
+
+    register u64_c r10 __asm__("r10") = (u64_c)child_tid;
+    register u64_c r8 __asm__("r8") = (u64_c)tls;
+
+    u64_c ret;
+    __asm__ volatile(
+        "syscall\n\t"
+        // the child thread starts executing here with %rax = 0 and %rsp =
+        // child_stack. there is no valid return address on the new stack so
+        // returning from this function is impossible. hand over control to
+        // the entry function the caller staged at the top of the new stack
+        // instead.
+        "testq %%rax, %%rax\n\t"
+        "jnz 1f\n\t"
+        "popq %%r9\n\t"
+        "popq %%rdi\n\t"
+        // mark the bottom of the new stack for the stack unwinder
+        "xorq %%rbp, %%rbp\n\t"
+        // the entry function never returns but just in case:
+        "callq *%%r9\n\t"
+        "ud2\n\t"
+        "1:\n\t"
+        : "=a"(ret)
+        : "a"((u64_c)NR_CLONE), "D"((u64_c)flags), "S"(child_stack),
+          "d"(parent_tid), "r"(r10), "r"(r8)
+        : "rcx", "r11", "memory");
+
+    u64 const res = ret;
+    u64 const errno = errno_(res);
+    if (errno != SUCCESS) [[unlikely]] {
+        *tid = -1;
+
+        switch (errno) {
+        case EAGAIN: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::EAgain;
+        }
+        case EFAULT: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::EFault;
+        }
+        case EINVAL: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::EInval;
+        }
+        case ENOMEM: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::ENoMem;
+        }
+        case EPERM: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::EPerm;
+        }
+        default: {
+            Backtrace::collect(err_bt);
+            return CloneStatus::UnexpectedErr;
+        }
+        }
+    }
+
+    *tid = (i32)res;
+    return CloneStatus::Ok;
 }
 
 // echo '#include <linux/prctl.h>' | gcc -E -dM -xc - | grep -E "PR_"
