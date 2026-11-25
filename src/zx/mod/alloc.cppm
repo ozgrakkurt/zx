@@ -15,6 +15,11 @@ enum class [[nodiscard]] AllocStatus : u8_c {
     InvalidAlign,
 };
 
+enum class [[nodiscard]] AllocResizeStatus : u8_c {
+    Ok = 0,
+    OutOfBounds,
+};
+
 struct Alloc {
     SliceMut<u8> m_mem;
     u64 m_offset;
@@ -40,15 +45,10 @@ struct Alloc {
         this->m_offset = 0;
     }
 
-    enum class [[nodiscard]] ResizeStatus : u8_c {
-        Ok = 0,
-        OutOfBounds,
-    };
-
-    inline ResizeStatus resize(Backtrace *err_bt, u64 offset) {
+    inline AllocResizeStatus resize(Backtrace *err_bt, u64 offset) {
         if (offset > this->m_mem.len()) [[unlikely]] {
             Backtrace::collect(err_bt);
-            return ResizeStatus::OutOfBounds;
+            return AllocResizeStatus::OutOfBounds;
         }
 
 #ifdef ZX_DEV
@@ -65,7 +65,7 @@ struct Alloc {
 
         this->m_offset = offset;
 
-        return ResizeStatus::Ok;
+        return AllocResizeStatus::Ok;
     }
 
     inline u64 offset() const { return this->m_offset; }
