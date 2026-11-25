@@ -936,7 +936,7 @@ struct DebugLine {
 
         u64 const row_pc = this->rows.read_unsafe(row_idx).pc;
 
-        // Keep going forwards while row PC is same.
+        // Keep going backwards while row PC is same.
         // We do this to collect all source locations that correspond
         // to this PC.
         while (row_idx >= rows_begin) {

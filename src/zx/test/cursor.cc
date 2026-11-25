@@ -53,9 +53,9 @@ void test_write_cursor(Backtrace *err_bt) {
     assert(wc.written().len() == 10);
 
     // OutOfBounds
-    for (int i = 0; i < 90; i++) {
+    for (u8 i = 0; i < 90; i++) {
         testing::assert_with_trace(
-            WriteCursor::Status::Ok == wc.write<u8>(err_bt, (u8)i), err_bt);
+            WriteCursor::Status::Ok == wc.write<u8>(err_bt, i), err_bt);
     }
     assert(wc.offset() == 100);
     assert(wc.is_finished());
@@ -63,7 +63,7 @@ void test_write_cursor(Backtrace *err_bt) {
 
     // IntegerOverflow
     WriteCursor wc2 = WriteCursor::init(mut_slice);
-    wc2.m_offset = ~0ull - 2;
+    wc2.m_offset = ~u64{0} - 2;
     assert(WriteCursor::Status::IntegerOverflow == wc2.write(err_bt, u32{0}));
 }
 
@@ -101,7 +101,7 @@ void test_cursor(Backtrace *err_bt) {
     testing::assert_with_trace(WriteCursor::Status::Ok ==
                                    wc.write(err_bt, u8{0x7e}),
                                err_bt); // sleb128 -2 (1 byte)
-    for (int i = 0; i < 10; i++) {
+    for (u8 i = 0; i < 10; i++) {
         testing::assert_with_trace(
             WriteCursor::Status::Ok == wc.write(err_bt, u8{0xaa}), err_bt);
     }
@@ -186,7 +186,7 @@ void test_cursor(Backtrace *err_bt) {
 
     // IntegerOverflow on skip
     Cursor cur2 = Cursor::init(written);
-    cur2.m_offset = ~0ull - 2;
+    cur2.m_offset = ~u64{0} - 2;
     assert(Cursor::Status::IntegerOverflow == cur2.skip(err_bt, 10));
 
     // is_finished

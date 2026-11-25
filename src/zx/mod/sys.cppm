@@ -1076,6 +1076,7 @@ inline IoUringSetupStatus io_uring_setup(Backtrace *err_bt, u32 n_entries,
 
 enum class [[nodiscard]] IoUringEnterStatus : u8_c {
     Ok = 0,
+    Nullptr,
     UnexpectedErr,
     EAgain,
     EBadF,
@@ -1093,11 +1094,19 @@ enum class [[nodiscard]] IoUringEnterStatus : u8_c {
 
 inline IoUringEnterStatus io_uring_enter(Backtrace *err_bt, i32 fd,
                                          u32 to_submit, u32 min_complete,
-                                         u32 flags, void *arg, u64 sz) {
+                                         u32 flags, void *arg, u64 sz,
+                                         u32 *n_submitted) {
+    if (n_submitted == nullptr) [[unlikely]] {
+        Backtrace::collect(err_bt);
+        return IoUringEnterStatus::Nullptr;
+    }
+
     u64 const res = syscall6(NR_IO_URING_ENTER, (u64)fd, to_submit,
                              min_complete, flags, (u64)arg, sz);
     u64 const errno = errno_(res);
     if (errno != SUCCESS) [[unlikely]] {
+        *n_submitted = U32_MAX;
+
         switch (errno) {
         case EAGAIN: {
             Backtrace::collect(err_bt);
@@ -1153,6 +1162,8 @@ inline IoUringEnterStatus io_uring_enter(Backtrace *err_bt, i32 fd,
         }
         }
     }
+
+    *n_submitted = (u32)res;
     return IoUringEnterStatus::Ok;
 }
 

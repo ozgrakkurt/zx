@@ -112,7 +112,7 @@ struct Timer {
     u64 m_start;
 
     inline static u64 now_() {
-        unsigned int aux;
+        u32_c aux;
         u64 const ticker = __builtin_ia32_rdtscp(&aux);
         (void)aux;
 

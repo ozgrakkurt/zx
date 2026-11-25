@@ -135,7 +135,7 @@ struct IoUringSQE {
 };
 
 /* sqe->attr_type_mask flags */
-constexpr u8 IORING_RW_ATTR_FLAG_PI = (1U << 0);
+constexpr u64 IORING_RW_ATTR_FLAG_PI = (1U << 0);
 /* PI attribute information */
 struct IoUringAttrPI {
     u16 flags;
@@ -271,7 +271,7 @@ constexpr u32 IORING_SETUP_SQE_MIXED = (1U << 19);
  */
 constexpr u32 IORING_SETUP_SQ_REWIND = (1U << 20);
 
-enum class IoUringOp : u32_c {
+enum class IoUringOp : u8_c {
     Nop,
     ReadV,
     WriteV,
@@ -393,10 +393,10 @@ constexpr u32 SPLICE_F_FD_IN_FIXED = (1U << 31); /* the last bit of u32 */
  *
  * IORING_POLL_LEVEL		Level triggered poll.
  */
-constexpr u16 IORING_POLL_ADD_MULTI = (1U << 0);
-constexpr u16 IORING_POLL_UPDATE_EVENTS = (1U << 1);
-constexpr u16 IORING_POLL_UPDATE_USER_DATA = (1U << 2);
-constexpr u16 IORING_POLL_ADD_LEVEL = (1U << 3);
+constexpr u32 IORING_POLL_ADD_MULTI = (1U << 0);
+constexpr u32 IORING_POLL_UPDATE_EVENTS = (1U << 1);
+constexpr u32 IORING_POLL_UPDATE_USER_DATA = (1U << 2);
+constexpr u32 IORING_POLL_ADD_LEVEL = (1U << 3);
 
 /*
  * ASYNC_CANCEL flags.
@@ -409,12 +409,12 @@ constexpr u16 IORING_POLL_ADD_LEVEL = (1U << 3);
  * IORING_ASYNC_CANCEL_USERDATA	Match on user_data, default for no other key
  * IORING_ASYNC_CANCEL_OP	Match request based on opcode
  */
-constexpr u16 IORING_ASYNC_CANCEL_ALL = (1U << 0);
-constexpr u16 IORING_ASYNC_CANCEL_FD = (1U << 1);
-constexpr u16 IORING_ASYNC_CANCEL_ANY = (1U << 2);
-constexpr u16 IORING_ASYNC_CANCEL_FD_FIXED = (1U << 3);
-constexpr u16 IORING_ASYNC_CANCEL_USERDATA = (1U << 4);
-constexpr u16 IORING_ASYNC_CANCEL_OP = (1U << 5);
+constexpr u32 IORING_ASYNC_CANCEL_ALL = (1U << 0);
+constexpr u32 IORING_ASYNC_CANCEL_FD = (1U << 1);
+constexpr u32 IORING_ASYNC_CANCEL_ANY = (1U << 2);
+constexpr u32 IORING_ASYNC_CANCEL_FD_FIXED = (1U << 3);
+constexpr u32 IORING_ASYNC_CANCEL_USERDATA = (1U << 4);
+constexpr u32 IORING_ASYNC_CANCEL_OP = (1U << 5);
 
 /*
  * send/sendmsg and recv/recvmsg flags (sqe->ioprio)
@@ -450,12 +450,12 @@ constexpr u16 IORING_ASYNC_CANCEL_OP = (1U << 5);
  * IORING_SEND_VECTORIZED	If set, SEND[_ZC] will take a pointer to a
  * io_vec to allow vectorized send operations.
  */
-constexpr u32 IORING_RECVSEND_POLL_FIRST = (1U << 0);
-constexpr u32 IORING_RECV_MULTISHOT = (1U << 1);
-constexpr u32 IORING_RECVSEND_FIXED_BUF = (1U << 2);
-constexpr u32 IORING_SEND_ZC_REPORT_USAGE = (1U << 3);
-constexpr u32 IORING_RECVSEND_BUNDLE = (1U << 4);
-constexpr u32 IORING_SEND_VECTORIZED = (1U << 5);
+constexpr u16 IORING_RECVSEND_POLL_FIRST = (1U << 0);
+constexpr u16 IORING_RECV_MULTISHOT = (1U << 1);
+constexpr u16 IORING_RECVSEND_FIXED_BUF = (1U << 2);
+constexpr u16 IORING_SEND_ZC_REPORT_USAGE = (1U << 3);
+constexpr u16 IORING_RECVSEND_BUNDLE = (1U << 4);
+constexpr u16 IORING_SEND_VECTORIZED = (1U << 5);
 
 /*
  * cqe.res for IORING_CQE_F_NOTIF if
@@ -469,9 +469,9 @@ constexpr u32 IORING_NOTIF_USAGE_ZC_COPIED = (1U << 31);
 /*
  * accept flags stored in sqe->ioprio
  */
-constexpr u32 IORING_ACCEPT_MULTISHOT = (1U << 0);
-constexpr u32 IORING_ACCEPT_DONTWAIT = (1U << 1);
-constexpr u32 IORING_ACCEPT_POLL_FIRST = (1U << 2);
+constexpr u16 IORING_ACCEPT_MULTISHOT = (1U << 0);
+constexpr u16 IORING_ACCEPT_DONTWAIT = (1U << 1);
+constexpr u16 IORING_ACCEPT_POLL_FIRST = (1U << 2);
 
 /*
  * IORING_OP_MSG_RING command types, stored in sqe->addr
