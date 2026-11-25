@@ -31,11 +31,23 @@ static void set_deathsig_() {
     // system process is aborted because of some other test failing. It is just
     // good hygene to do this in general. Revise if some other behavior is ever
     // needed.
+    u64 const original_ppid = sys::getppid();
+
     u64 prctl_ret = 0;
     assert(sys::PrctlStatus::Ok == sys::prctl(nullptr, sys::PR_SET_PDEATHSIG,
                                               (u64)signal::SIG::KILL, 0, 0, 0,
                                               &prctl_ret));
     (void)prctl_ret;
+
+    // The kernel doesn't send the death signal if the parent thread is already
+    // dead when PR_SET_PDEATHSIG is set. It only sends it for a parent death
+    // that happens after the prctl call. Check if we got reparented in between
+    // and exit if so, since the death signal would never arrive.
+    if (sys::getppid() != original_ppid) [[unlikely]] {
+        // there is no meaningful exit status to return here since the parent
+        // is already dead.
+        sys::exit_group(69);
+    }
 }
 
 #ifdef ZX_DEBUG_INFO

@@ -266,6 +266,7 @@ constexpr u64 NR_RT_SIGRETURN = 15;
 constexpr u64 NR_RT_SIGACTION = 13;
 constexpr u64 NR_RT_SIGALTSTACK = 131;
 constexpr u64 NR_PRCTL = 157;
+constexpr u64 NR_GETPPID = 110;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -2070,6 +2071,11 @@ inline PrctlStatus prctl(Backtrace *err_bt, i32 option, u64 arg0, u64 arg1,
     *ret = res;
     return PrctlStatus::Ok;
 }
+
+// Raw getppid syscall. This syscall cannot fail. If the parent already died
+// then this returns the pid of the process the caller was reparented to (the
+// nearest subreaper or init), not an error and not 0.
+inline u64 getppid() { return syscall1(NR_GETPPID, 0); }
 
 } // namespace sys
 
