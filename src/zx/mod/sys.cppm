@@ -1825,6 +1825,7 @@ inline SigAltStackStatus sigaltstack(Backtrace *err_bt,
     return SigAltStackStatus::Ok;
 }
 
+// echo '#include <linux/prctl.h>' | gcc -E -dM -xc - | grep -E "PR_"
 constexpr u64 PR_SET_MM_END_DATA = 4;
 constexpr u64 PR_SPEC_INDIRECT_BRANCH = 1;
 constexpr u64 PR_SYS_DISPATCH_EXCLUSIVE_ON = 1;
@@ -1963,7 +1964,7 @@ constexpr u64 PR_MTE_TCF_MASK = (PR_MTE_TCF_SYNC | PR_MTE_TCF_ASYNC);
 constexpr i32 PR_GET_TSC = 25;
 constexpr u64 PR_PMLEN_MASK = (0x7fUL << PR_PMLEN_SHIFT);
 constexpr i32 PR_GET_TAGGED_ADDR_CTRL = 56;
-constexpr u64 PR_SET_PTRACER_ANY = ((unsigned long)-1);
+constexpr u64 PR_SET_PTRACER_ANY = (u64)-1;
 constexpr i32 PR_SET_MDWE = 65;
 constexpr u64 PR_TIMER_CREATE_RESTORE_IDS_ON = 1;
 constexpr u64 PR_SET_MM_ARG_END = 9;
