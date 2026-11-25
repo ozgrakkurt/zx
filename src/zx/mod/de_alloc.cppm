@@ -42,9 +42,8 @@ struct DEAlloc {
     }
 
     inline void left_reset() {
-        SliceMut<u8> const mem = this->m_mem;
-
 #ifdef ZX_DEV
+        SliceMut<u8> const mem = this->m_mem;
         mem.slice_unsafe(0, this->m_left_offset).memset(0xaa);
 #endif
         this->m_left_offset = 0;
@@ -55,7 +54,7 @@ struct DEAlloc {
 
 #ifdef ZX_DEV
         u64 const right_len = sub_unsafe_u64(mem.len(), this->m_right_offset);
-        m_mem.slice_unsafe(this->m_right_offset, right_len).memset(0xaa);
+        mem.slice_unsafe(this->m_right_offset, right_len).memset(0xaa);
 #endif
         this->m_right_offset = mem.len();
     }
