@@ -154,7 +154,8 @@ struct FuzzResult {
 };
 
 static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
-                               void *usr_ctx, fuzz_one_fn fuzz_one) {
+                               void *usr_ctx, fuzz_one_fn fuzz_one,
+                               bool push_to_slotset) {
     FuzzInput fuzz_input = FuzzInput::init_(ctx->fuzz_input.as_const());
     u32 *coverage = ctx->coverage.ptr();
     u64 coverage_len = ctx->coverage.len();
@@ -174,7 +175,7 @@ static FuzzResult fuzz_wrapper(FuzzCtx *ctx, u64 base_score, u64 mut_idx,
     bool const score_improvement = score > base_score;
     bool const improvement = new_coverage || score_improvement;
 
-    if (improvement) {
+    if (push_to_slotset && improvement) {
         fuzz_slot_set_push(ctx->slot_sets.offset_mut_unsafe(mut_idx),
                            ctx->fuzz_input.read_unsafe(mut_idx));
     }
@@ -227,7 +228,7 @@ void fuzz(FuzzParams params) {
 
         // do a baseline run
         FuzzResult const baseline_result = fuzz_wrapper(
-            &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one);
+            &ctx, U64_MAX, mut_idx, params.usr_ctx, params.fuzz_one, true);
         // select a random position to mutate
         mut_idx =
             rand_mulshift_mod_u64(rand.next(), baseline_result.consumed_count);
@@ -236,7 +237,7 @@ void fuzz(FuzzParams params) {
         for (u64 i = 0; i < FUZZ_N_MAGIC; i++) {
             ctx.fuzz_input.write_unsafe(mut_idx, FUZZ_MAGIC[i]);
             fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
-                         params.fuzz_one);
+                         params.fuzz_one, false);
         }
 
         // try previous interesting values for this mut_idx
@@ -244,7 +245,7 @@ void fuzz(FuzzParams params) {
         for (u32 i = 0; i < slot_set->n_filled; i++) {
             ctx.fuzz_input.write_unsafe(mut_idx, slot_set->values[i]);
             fuzz_wrapper(&ctx, baseline_result.score, mut_idx, params.usr_ctx,
-                         params.fuzz_one);
+                         params.fuzz_one, false);
         }
 
         // try some random values in this position
@@ -259,7 +260,7 @@ void fuzz(FuzzParams params) {
 
             FuzzResult const result =
                 fuzz_wrapper(&ctx, baseline_result.score, mut_idx,
-                             params.usr_ctx, params.fuzz_one);
+                             params.usr_ctx, params.fuzz_one, true);
             if (result.improvement) {
                 stall = 0;
             } else {
