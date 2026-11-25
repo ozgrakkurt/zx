@@ -777,7 +777,7 @@ struct DebugLine {
         // we should have reached the unit end by now.
         assert(input->offset() == expected_unit_end_offset);
 
-        assert(Alloc::ResizeStatus::Ok ==
+        assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
     }
 
@@ -852,7 +852,7 @@ struct DebugLine {
                alloc->copy_from<Row>(nullptr, rows.written(), &rows_out));
 
         // discard tmp memory
-        assert(Alloc::ResizeStatus::Ok ==
+        assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
 
         return DebugLine{

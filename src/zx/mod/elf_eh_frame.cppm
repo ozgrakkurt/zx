@@ -990,7 +990,7 @@ struct Instructions {
                data_out.memcpy_from(nullptr, data_writer.written()));
 
         // dealloc temporary memory we used
-        assert(Alloc::ResizeStatus::Ok ==
+        assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
 
         return Instructions{
@@ -1402,7 +1402,7 @@ struct EhFrame {
                out_fdes.memcpy_from(nullptr, fde_list.written()));
 
         // dealloc temporary memory that we used for this function
-        assert(Alloc::ResizeStatus::Ok ==
+        assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
 
         return EhFrame{

@@ -103,7 +103,7 @@ static void do_test_resize(Backtrace *err_bt, SliceMut<u8> mem) {
            alloc.alloc<u8>(err_bt, BUF_LEN, &nums3));
 
     testing::assert_with_trace(
-        Alloc::ResizeStatus::Ok == alloc.resize(err_bt, resize_offset), err_bt);
+        AllocResizeStatus::Ok == alloc.resize(err_bt, resize_offset), err_bt);
 
     testing::assert_with_trace(
         AllocStatus::Ok == alloc.alloc<u8>(err_bt, BUF_LEN, &nums3), err_bt);
