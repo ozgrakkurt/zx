@@ -26,6 +26,18 @@ static void run_init_array_() {
     }
 }
 
+static void set_deathsig_() {
+    // Added this to avoid having zombie fuzz tests running if the parent build
+    // system process is aborted because of some other test failing. It is just
+    // good hygene to do this in general. Revise if some other behavior is ever
+    // needed.
+    u64 prctl_ret = 0;
+    assert(sys::PrctlStatus::Ok == sys::prctl(nullptr, sys::PR_SET_PDEATHSIG,
+                                              (u64)signal::SIG::KILL, 0, 0, 0,
+                                              &prctl_ret));
+    (void)prctl_ret;
+}
+
 #ifdef ZX_DEBUG_INFO
 
 // The curlies are to indicate that these are actual definitions are the
@@ -145,6 +157,7 @@ static void signal_handler(i32_c signum, signal::SigInfo *info,
 
 extern "C" void zx_setup_() {
     run_init_array_();
+    set_deathsig_();
 
     constexpr u64 MEM_SIZE = u64{1} << 25;
     u8 *mem = nullptr;
@@ -205,7 +218,10 @@ extern "C" void zx_setup_() {
 
 #else // ifdef ZX_DEBUG_INFO
 
-extern "C" void zx_setup_() { run_init_array_(); }
+extern "C" void zx_setup_() {
+    run_init_array_();
+    set_deathsig_();
+}
 
 #endif // ifdef ZX_DEBUG_INFO
 
