@@ -50,19 +50,24 @@ static void do_test(Backtrace *err_bt, DEAlloc *alloc) {
            sub_unsafe_u64(MEMORY_SIZE, mul_unsafe_u64(2, used_per_side)));
 
     // zero length allocations from both ends
-    SliceMut<u256> left_zero;
+    //
+    // initialize with a sentinel so we can tell that the allocator actually
+    // wrote to the out parameter.
+    SliceMut<u256> left_zero =
+        SliceMut<u256>::init_unsafe((u256 *)u64{0x1000}, 4);
     testing::assert_with_trace(
         AllocStatus::Ok == alloc->left_alloc<u256>(err_bt, 0, &left_zero),
         err_bt);
     assert(left_zero.len() == 0);
-    assert(__builtin_is_aligned(left_zero.ptr(), alignof(u256)));
+    assert(left_zero.ptr() == (u256 *)alignof(u256));
 
-    SliceMut<u256> right_zero;
+    SliceMut<u256> right_zero =
+        SliceMut<u256>::init_unsafe((u256 *)u64{0x1000}, 4);
     testing::assert_with_trace(
         AllocStatus::Ok == alloc->right_alloc<u256>(err_bt, 0, &right_zero),
         err_bt);
     assert(right_zero.len() == 0);
-    assert(__builtin_is_aligned(right_zero.ptr(), alignof(u256)));
+    assert(right_zero.ptr() == (u256 *)alignof(u256));
 
     // alignment must be honored on both ends even when align > sizeof(T)
     SliceMut<u8> left_aligned;
@@ -170,19 +175,21 @@ static void do_test(Backtrace *err_bt, DEAlloc *alloc) {
     assert(small_right.ptr() == dangling);
     assert(small_right.len() == 0);
 
-    SliceMut<u256> left_zero2 = SliceMut<u256>::init_dangling();
+    SliceMut<u256> left_zero2 =
+        SliceMut<u256>::init_unsafe((u256 *)u64{0x1000}, 4);
     testing::assert_with_trace(
         AllocStatus::Ok == alloc->left_alloc<u256>(err_bt, 0, &left_zero2),
         err_bt);
-    assert(left_zero2.ptr() != (u256 *)dangling);
-    assert(__builtin_is_aligned(left_zero2.ptr(), alignof(u256)));
+    assert(left_zero2.ptr() == (u256 *)alignof(u256));
+    assert(left_zero2.len() == 0);
 
-    SliceMut<u256> right_zero2 = SliceMut<u256>::init_dangling();
+    SliceMut<u256> right_zero2 =
+        SliceMut<u256>::init_unsafe((u256 *)u64{0x1000}, 4);
     testing::assert_with_trace(
         AllocStatus::Ok == alloc->right_alloc<u256>(err_bt, 0, &right_zero2),
         err_bt);
-    assert(right_zero2.ptr() != (u256 *)dangling);
-    assert(__builtin_is_aligned(right_zero2.ptr(), alignof(u256)));
+    assert(right_zero2.ptr() == (u256 *)alignof(u256));
+    assert(right_zero2.len() == 0);
 }
 
 static void do_test_nocap(Backtrace *err_bt) {
@@ -338,13 +345,114 @@ static void do_test_resize(Backtrace *err_bt, SliceMut<u8> mem) {
         assert(right_again.read_unsafe(i) == 0xbb);
     }
 
-    // resizing past the other end or out of the buffer must fail
+    // resizing past the other end or out of the buffer must fail and must not
+    // change either offset
+    u64 const left_before_failed_resizes = alloc.left_offset();
+    u64 const right_before_failed_resizes = alloc.right_offset();
+
     assert(AllocResizeStatus::OutOfBounds ==
            alloc.left_resize(err_bt, add_unsafe_u64(alloc.right_offset(), 1)));
+    assert(alloc.left_offset() == left_before_failed_resizes);
+    assert(alloc.right_offset() == right_before_failed_resizes);
+
     assert(AllocResizeStatus::OutOfBounds ==
            alloc.right_resize(err_bt, sub_unsafe_u64(alloc.left_offset(), 1)));
+    assert(alloc.left_offset() == left_before_failed_resizes);
+    assert(alloc.right_offset() == right_before_failed_resizes);
+
     assert(AllocResizeStatus::OutOfBounds ==
            alloc.right_resize(err_bt, add_unsafe_u64(CAP, 1)));
+    assert(alloc.left_offset() == left_before_failed_resizes);
+    assert(alloc.right_offset() == right_before_failed_resizes);
+
+    assert(AllocResizeStatus::OutOfBounds ==
+           alloc.left_resize(err_bt, add_unsafe_u64(CAP, 1)));
+    assert(alloc.left_offset() == left_before_failed_resizes);
+    assert(alloc.right_offset() == right_before_failed_resizes);
+}
+
+static void do_test_right_align_padding_oom(Backtrace *err_bt,
+                                            SliceMut<u8> mem) {
+    constexpr u64 CAP = 256;
+    assert(mem.len() >= CAP);
+    DEAlloc alloc = DEAlloc::init(mem.slice_unsafe(0, CAP));
+
+    // leave 9 bytes in the middle. the right allocation is 8 bytes so its size
+    // would fit, but it needs 64 byte alignment which pushes it below the left
+    // end.
+    SliceMut<u8> left;
+    testing::assert_with_trace(AllocStatus::Ok ==
+                                   alloc.left_alloc<u8>(err_bt, CAP - 9, &left),
+                               err_bt);
+    assert(alloc.left_offset() == CAP - 9);
+    assert(alloc.right_offset() == CAP);
+    assert(alloc.capacity_left() == 9);
+
+    u64 *const sentinel = (u64 *)u64{0x1000};
+    SliceMut<u64> right = SliceMut<u64>::init_unsafe(sentinel, 4);
+    assert(AllocStatus::OutOfMemory ==
+           alloc.right_aligned_alloc<u64>(err_bt, 64, 1, &right));
+    assert(right.ptr() == sentinel);
+    assert(right.len() == 4);
+
+    // failed allocations must not change the allocator state
+    assert(alloc.left_offset() == CAP - 9);
+    assert(alloc.right_offset() == CAP);
+    assert(alloc.capacity_left() == 9);
+}
+
+static void do_test_misaligned_base(Backtrace *err_bt, SliceMut<u8> mem) {
+    constexpr u64 CAP = 256;
+    assert(mem.len() > CAP);
+
+    // shift the base by one byte so it is not aligned to 64
+    SliceMut<u8> const misaligned = mem.slice_unsafe(1, CAP);
+
+    {
+        DEAlloc alloc = DEAlloc::init(misaligned);
+
+        SliceMut<u8> left;
+        testing::assert_with_trace(
+            AllocStatus::Ok ==
+                alloc.left_aligned_alloc<u8>(err_bt, 64, 1, &left),
+            err_bt);
+        assert(left.len() == 1);
+        assert(__builtin_is_aligned(left.ptr(), 64));
+        // the first 64 aligned address is at offset 63
+        assert(alloc.left_offset() == 64);
+    }
+
+    {
+        DEAlloc alloc = DEAlloc::init(misaligned);
+
+        SliceMut<u8> right;
+        testing::assert_with_trace(
+            AllocStatus::Ok ==
+                alloc.right_aligned_alloc<u8>(err_bt, 64, 192, &right),
+            err_bt);
+        assert(right.len() == 192);
+        assert(__builtin_is_aligned(right.ptr(), 64));
+        // the slice starts at offset 63 and ends at the end of the buffer
+        assert(alloc.right_offset() == 63);
+    }
+
+    {
+        // the size equals the whole capacity so it would fit without alignment
+        // padding. with a misaligned base there is no 64 byte aligned start,
+        // and computing the padding underflows.
+        DEAlloc alloc = DEAlloc::init(misaligned);
+
+        u8 *const sentinel = (u8 *)u64{0x1000};
+        SliceMut<u8> whole = SliceMut<u8>::init_unsafe(sentinel, 4);
+        assert(AllocStatus::OutOfMemory ==
+               alloc.right_aligned_alloc<u8>(err_bt, 64, CAP, &whole));
+        assert(whole.ptr() == sentinel);
+        assert(whole.len() == 4);
+
+        assert(alloc.left_offset() == 0);
+        assert(alloc.right_offset() == CAP);
+        assert(alloc.capacity_left() == CAP);
+    }
 }
 
 int main() {
@@ -364,6 +472,8 @@ int main() {
     do_test(&err_bt, &alloc);
 
     do_test_resize(&err_bt, slice);
+    do_test_right_align_padding_oom(&err_bt, slice);
+    do_test_misaligned_base(&err_bt, slice);
 
     testing::assert_with_trace(page_alloc::FreeStatus::Ok ==
                                    page_alloc::free(&err_bt, mem, MEMORY_SIZE),
