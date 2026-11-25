@@ -9,6 +9,16 @@ import :alloc;
 
 export namespace zx {
 
+// This is a double ended version of `Alloc`. It is intended to be useful in
+// cases where one permanent and one temporary allocator is needed.
+//
+// It is possible to use the left end of this allocator for the permanent
+// allocations and right end for temporary allocations. Then the right side can
+// be reset without invalidating the left size.
+//
+// The advantage over using two seperate allocators comes from the ability of
+// left and right sides to use the same memory at different times.
+//
 // Casing is DEA so it looks like drugs.
 struct DEAlloc {
     SliceMut<u8> m_mem;
@@ -20,22 +30,39 @@ struct DEAlloc {
         mem.memset(0xaa);
 #endif
         return DEAlloc{
-            .m_mem = mem, .m_left_offset = 0, .m_right_offset = mem.len()};
+            .m_mem = mem,
+            .m_left_offset = 0,
+            .m_right_offset = mem.len(),
+        };
     }
 
-    inline void reset() {
+    inline u64 capacity_left() const {
+        assert_dev(this->m_mem.len() >= this->m_right_offset);
+        return sub_unsafe_u64(this->m_right_offset, this->m_left_offset);
+    }
+
+    inline void left_reset() {
         SliceMut<u8> const mem = this->m_mem;
 
 #ifdef ZX_DEV
         mem.slice_unsafe(0, this->m_left_offset).memset(0xaa);
 #endif
         this->m_left_offset = 0;
+    }
+
+    inline void right_reset() {
+        SliceMut<u8> const mem = this->m_mem;
 
 #ifdef ZX_DEV
         u64 const right_len = sub_unsafe_u64(mem.len(), this->m_right_offset);
         m_mem.slice_unsafe(this->m_right_offset, right_len).memset(0xaa);
 #endif
         this->m_right_offset = mem.len();
+    }
+
+    inline void full_reset() {
+        this->left_reset();
+        this->right_reset();
     }
 
     inline AllocResizeStatus left_resize(Backtrace *err_bt, u64 offset) {
@@ -72,11 +99,11 @@ struct DEAlloc {
 #ifdef ZX_DEV
         u64 const right_offset = this->m_right_offset;
         if (right_offset > offset) {
-            // shrinking forwards
+            // extending backwards
             u64 const len = right_offset - offset;
             this->m_mem.slice_unsafe(offset, len).memset(0xaa);
         } else {
-            // shrinking backwards
+            // shrinking forwards
             u64 const len = offset - right_offset;
             this->m_mem.slice_unsafe(right_offset, len).memset(0xaa);
         }
@@ -190,11 +217,24 @@ struct DEAlloc {
 
         bool overflow = false;
 
-        u64 const mem_pos = add_u64((u64)mem.ptr(), right_offset, &overflow);
+        u64 const size = mul_u64(len, sizeof(T), &overflow);
+
+        if (overflow) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::IntegerOverflow;
+        }
+
+        if (size > right_offset) [[unlikely]] {
+            Backtrace::collect(err_bt);
+            return AllocStatus::OutOfMemory;
+        }
+        // checked in the if above
+        u64 const back_offset = sub_unsafe_u64(right_offset, size);
+
+        u64 const mem_pos = add_u64((u64)mem.ptr(), back_offset, &overflow);
         u64 const mem_aligned = align_down_u64(mem_pos, align, &overflow);
         u64 const padding = sub_u64(mem_pos, mem_aligned, &overflow);
 
-        u64 const size = mul_u64(len, sizeof(T), &overflow);
         u64 const alloc_size = add_u64(size, padding, &overflow);
 
         if (overflow) [[unlikely]] {
