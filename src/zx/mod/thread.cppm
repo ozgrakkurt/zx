@@ -26,6 +26,8 @@ constexpr u64 STACK_ALIGN = 16;
 
 typedef void thread_fn(void *usr_ctx);
 
+extern "C" zx_thread_spawn_();
+
 SpawnStatus spawn(thread_fn, void *usr_ctx, SliceMut<u8> stack);
 
 } // namespace thread

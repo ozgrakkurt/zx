@@ -267,8 +267,6 @@ constexpr u64 NR_RT_SIGACTION = 13;
 constexpr u64 NR_RT_SIGALTSTACK = 131;
 constexpr u64 NR_PRCTL = 157;
 constexpr u64 NR_GETPPID = 110;
-constexpr u64 NR_CLONE = 56;
-constexpr u64 NR_EXIT = 60;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -817,11 +815,6 @@ inline MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length,
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
     // about the [[noreturn]] annotation.
-    __builtin_trap();
-}
-
-[[noreturn]] inline void exit(i32 status) {
-    syscall1(NR_EXIT, (u64)status);
     __builtin_trap();
 }
 
