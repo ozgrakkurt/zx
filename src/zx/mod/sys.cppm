@@ -2072,9 +2072,6 @@ inline PrctlStatus prctl(Backtrace *err_bt, i32 option, u64 arg0, u64 arg1,
     return PrctlStatus::Ok;
 }
 
-// Raw getppid syscall. This syscall cannot fail. If the parent already died
-// then this returns the pid of the process the caller was reparented to (the
-// nearest subreaper or init), not an error and not 0.
 inline u64 getppid() { return syscall1(NR_GETPPID, 0); }
 
 } // namespace sys

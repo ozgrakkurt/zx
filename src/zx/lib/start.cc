@@ -28,9 +28,10 @@ static void run_init_array_() {
 
 static void set_deathsig_() {
     // Added this to avoid having zombie fuzz tests running if the parent build
-    // system process is aborted because of some other test failing. It is just
-    // good hygene to do this in general. Revise if some other behavior is ever
-    // needed.
+    // system process is aborted because of some other test failing.
+    //
+    // It is just good hygiene to do this in general. Revise if some other
+    // behavior is ever needed.
     u64 const original_ppid = sys::getppid();
 
     u64 prctl_ret = 0;
