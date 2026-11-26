@@ -33,7 +33,16 @@ extern "C" void sigaltstack_() {
 extern "C" void sigaltstack_() {}
 #endif // ifdef ZX_DEV
 
-extern "C" void thread_wrapper_(thread_fn tfn) { sigaltstack_(); }
+extern "C" [[noreturn]] void thread_wrapper_(thread_fn tfn) {
+    sigaltstack_();
+
+    // This exits the thread but doesn't exit the whole process like exit_group does.
+    // We can't normally return here because there is no return address on the stack.
+    sys::exit();
+}
+
+constexpr u64 RED_ZONE_SIZE = 16;
+constexpr u64 MIN_STACK_SIZE = u64{1} << 17;
 
 inline SpawnStatus spawn(thread_fn, void *usr_ctx, SliceMut<u8> stack) {
     if (!__builtin_is_aligned(stack.ptr(), STACK_ALIGN)) {
@@ -43,6 +52,18 @@ inline SpawnStatus spawn(thread_fn, void *usr_ctx, SliceMut<u8> stack) {
     if (MIN_STACK_SIZE > stack.len()) {
         return SpawnStatus::StackTooSmall;
     }
+
+    u64 const stack_offset = sub_unsafe_u64(stack.len(), RED_ZONE_SIZE + sizeof(u64));
+    u8* stack_ptr = stack.offset_unsafe(stack_offset);
+
+    u64_c res;
+    __asm__ volatile(
+        "\n\t"
+        "\n\t"
+        : [res]"=a"(res)
+        : [stack_ptr] "r"(stack_ptr)
+        : "memory"
+    );
 
     return SpawnStatus::Ok;
 }
