@@ -223,7 +223,7 @@ struct BasicCtx {
     u64 self_seen;
     u64 stack_probe;
     u64 deep_stack_ok;
-    u64 ppid;
+    i32 ppid;
 #ifdef ZX_DEBUG_INFO
     u64 altstack_ok;
 #endif

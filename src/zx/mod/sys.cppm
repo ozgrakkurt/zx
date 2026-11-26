@@ -267,6 +267,8 @@ constexpr u64 NR_RT_SIGACTION = 13;
 constexpr u64 NR_RT_SIGALTSTACK = 131;
 constexpr u64 NR_PRCTL = 157;
 constexpr u64 NR_GETPPID = 110;
+constexpr u64 NR_GETTID = 186;
+constexpr u64 NR_SCHED_YIELD = 24;
 
 // echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -i "statx"
 constexpr u64 NR_STATX = 332;
@@ -2072,7 +2074,11 @@ inline PrctlStatus prctl(Backtrace *err_bt, i32 option, u64 arg0, u64 arg1,
     return PrctlStatus::Ok;
 }
 
-inline u64 getppid() { return syscall1(NR_GETPPID, 0); }
+inline i32 getppid() { return (i32)syscall0(NR_GETPPID); }
+
+inline i32 gettid() { return (i32)syscall0(NR_GETTID); }
+
+inline void sched_yield() { (void)syscall0(NR_SCHED_YIELD); }
 
 } // namespace sys
 

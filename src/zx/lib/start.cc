@@ -32,7 +32,7 @@ static void set_deathsig_() {
     //
     // It is just good hygiene to do this in general. Revise if some other
     // behavior is ever needed.
-    u64 const original_ppid = sys::getppid();
+    i32 const original_ppid = sys::getppid();
 
     u64 prctl_ret = 0;
     assert(sys::PrctlStatus::Ok == sys::prctl(nullptr, sys::PR_SET_PDEATHSIG,
