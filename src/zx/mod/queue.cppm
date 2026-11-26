@@ -3,7 +3,6 @@ import :def;
 import :slice;
 import :arith;
 import :alloc;
-import :assert;
 import :backtrace;
 
 export namespace zx {

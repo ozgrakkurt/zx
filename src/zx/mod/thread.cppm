@@ -1,11 +1,10 @@
 export module zx:thread;
-import :signal;
 import :page_alloc;
 import :def;
+import :assert;
 import :sys;
-import :slice;
+import :arith;
 import :backtrace;
-import :testing;
 
 export namespace zx {
 

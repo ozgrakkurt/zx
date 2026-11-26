@@ -2,7 +2,6 @@ export module zx:fmt;
 import :def;
 import :assert;
 import :slice;
-import :libc;
 import :arith;
 
 export namespace zx {

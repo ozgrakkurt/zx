@@ -2,7 +2,6 @@ export module zx:cursor;
 import :def;
 import :slice;
 import :arith;
-import :assert;
 import :leb128;
 import :backtrace;
 

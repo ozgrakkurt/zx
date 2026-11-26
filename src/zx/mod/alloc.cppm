@@ -1,6 +1,5 @@
 export module zx:alloc;
 import :def;
-import :assert;
 import :slice;
 import :arith;
 import :backtrace;

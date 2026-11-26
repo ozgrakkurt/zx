@@ -9,7 +9,6 @@ import :leb128;
 import :cursor;
 import :list;
 import :fmt;
-import :backtrace;
 
 export namespace zx {
 

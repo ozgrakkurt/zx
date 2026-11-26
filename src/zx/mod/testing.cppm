@@ -1,4 +1,5 @@
 export module zx:testing;
+import :def;
 import :assert;
 import :elf;
 import :panic;

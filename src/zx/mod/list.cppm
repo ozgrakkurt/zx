@@ -1,6 +1,6 @@
 export module zx:list;
 import :def;
-import :arith;
+import :assert;
 import :slice;
 import :backtrace;
 

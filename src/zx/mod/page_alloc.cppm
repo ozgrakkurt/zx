@@ -1,7 +1,6 @@
 export module zx:page_alloc;
 import :sys;
 import :def;
-import :assert;
 import :backtrace;
 
 export namespace zx {

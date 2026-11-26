@@ -5,9 +5,11 @@ import :arith;
 import :slice;
 import :alloc;
 import :panic;
-import :elf_eh_frame;
+import :fmt;
+import :list;
 import :elf_debug_line;
 import :sys;
+import :backtrace;
 
 export namespace zx {
 

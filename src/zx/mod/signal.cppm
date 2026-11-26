@@ -1,6 +1,6 @@
 export module zx:signal;
 import :def;
-import :syscall;
+import :assert;
 import :arith;
 
 export namespace zx {

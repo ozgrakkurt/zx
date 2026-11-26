@@ -23,7 +23,6 @@
 
 export module zx:perf_event;
 import :def;
-import :syscall;
 
 export namespace zx {
 

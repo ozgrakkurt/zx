@@ -1,4 +1,5 @@
 export module zx:tmp_file;
+import :def;
 import :sys;
 import :backtrace;
 
