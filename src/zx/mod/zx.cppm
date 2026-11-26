@@ -35,3 +35,4 @@ export import :fuzz;
 export import :slab;
 export import :queue;
 export import :de_alloc;
+export import :thread;
