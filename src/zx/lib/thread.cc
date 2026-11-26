@@ -69,19 +69,35 @@ __asm__(".text\n"
         ".global zx_spawn_thread_\n"
         "zx_spawn_thread_:\n\t"
         ".cfi_startproc\n\t"
-        // child_tid
+        // rbx is callee-saved so preserve the caller's value. the child never
+        // returns to the caller so it doesn't need to pop it.
+        "pushq %rbx\n\t"
+        // clone(2) expects (flags, stack, parent_tid, child_tid, tls) in
+        // (rdi, rsi, rdx, r10, r8). flags is already in rdi and stack is
+        // already in rsi. save usr_fn and usr_ctx because rdx/rcx are needed
+        // for the clone arguments and syscall clobbers rcx.
+        "movq %rdx, %r9\n\t"
+        "movq %rcx, %rbx\n\t"
+        // parent_tid = nullptr
+        "xorq %rdx, %rdx\n\t"
+        // child_tid = nullptr
         "xorq %r10, %r10\n\t"
-        // tls
+        // tls = 0
         "xorq %r8, %r8\n\t"
         // syscall number for clone is 56
         "movq $56, %rax\n\t"
         "syscall\n\t"
         // The parent gets the tid of the new thread, the child gets 0.
-        "testq %%rax, %%rax\n\t"
-        "jnz 1f\n\t"
-        ""
-        "1:\n\t"
+        "testq %rax, %rax\n\t"
+        "jz 1f\n\t"
+        // parent: return the tid (or -errno) to the caller.
+        "popq %rbx\n\t"
         "retq\n\t"
+        "1:\n\t"
+        // child: enter the thread trampoline with the user context in rdi and
+        // the user function in rsi.
+        "movq %r9, %rsi\n\t"
+        "movq %rbx, %rdi\n\t"
+        "jmp zx_thread_entry_\n\t"
         ".cfi_endproc\n\t"
         ".size zx_spawn_thread_, .-zx_spawn_thread_\n\t");
-);

@@ -11,6 +11,11 @@ export namespace zx {
 
 namespace thread {
 
+constexpr u64 RED_ZONE_SIZE = 16;
+constexpr u64 STACK_SIZE = u64{1} << 20;
+constexpr u64 STACK_ALIGN = 16;
+constexpr u64 GUARD_PAGE_SIZE = u64{1} << 10;
+
 // echo '#include <linux/sched.h>' | gcc -E -dM -xc - | grep -E "#define CLONE_"
 constexpr u64 CLONE_VM = 0x00000100;
 constexpr u64 CLONE_FS = 0x00000200;
@@ -47,10 +52,6 @@ extern "C" u64 zx_spawn_thread_(u64 flags, u64 stack_ptr, u64 usr_fn,
 
 // It is expected that spawned threads will run until the program ends.
 inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
-    constexpr u64 RED_ZONE_SIZE = 16;
-    constexpr u64 STACK_SIZE = u64{1} << 20;
-    constexpr u64 STACK_ALIGN = 16;
-    constexpr u64 GUARD_PAGE_SIZE = u64{1} << 10;
 
     if (usr_fn == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
@@ -96,7 +97,7 @@ inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
                       CLONE_THREAD | CLONE_SYSVSEM;
 
     u64 const res =
-        zx_spawn_thread_(flags, (u64)stack_ptr, (u64)thread_fn, (u64)usr_ctx);
+        zx_spawn_thread_(flags, (u64)stack_ptr, (u64)usr_fn, (u64)usr_ctx);
     u64 const errno = sys::errno_(res);
     if (errno != sys::SUCCESS) [[unlikely]] {
         switch (errno) {
