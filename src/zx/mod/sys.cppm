@@ -256,6 +256,7 @@ constexpr u64 NR_MPROTECT = 10;
 constexpr u64 NR_MUNMAP = 11;
 constexpr u64 NR_MADVISE = 28;
 constexpr u64 NR_EXIT_GROUP = 231;
+constexpr u64 NR_EXIT = 60;
 constexpr u64 NR_UNLINKAT = 263;
 constexpr u64 NR_PREAD64 = 17;
 constexpr u64 NR_PWRITE64 = 18;
@@ -814,6 +815,14 @@ inline MProtectStatus mprotect(Backtrace *err_bt, u8 *addr, u64 length,
 
 [[noreturn]] inline void exit_group(i32 status) {
     syscall1(NR_EXIT_GROUP, (u64)status);
+    // should never reach this but we put it to make sure
+    // that this function doesn't return and the compiler is happy
+    // about the [[noreturn]] annotation.
+    __builtin_trap();
+}
+
+[[noreturn]] inline void exit(i32 status) {
+    syscall1(NR_EXIT, (u64)status);
     // should never reach this but we put it to make sure
     // that this function doesn't return and the compiler is happy
     // about the [[noreturn]] annotation.

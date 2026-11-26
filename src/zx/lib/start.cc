@@ -96,28 +96,61 @@ static Slice<u8> read_self_exe_panic_(Alloc *alloc) {
     return buf.as_const();
 }
 
-static void print_panic_(char const *message) {
+static void print_lossy_(char const *message) {
     assert(message != nullptr);
 
     u64 const len = __builtin_strlen(message);
     u64 n_written = 0;
-    assert(sys::WriteStatus::Ok == sys::write(nullptr, sys::STDERR,
-                                              (u8 const *)message, len,
-                                              &n_written));
-    assert(n_written == len);
+    (void)sys::write(nullptr, sys::STDERR, (u8 const *)message, len,
+                     &n_written);
+    (void)n_written;
+}
+
+// Holds the tid of the thread that is currently printing a stack trace. A
+// zero value means that no thread is handling a signal yet.
+static i32_c signal_handler_owner_tid_ = 0;
+
+static i32 signum_to_exit_code(i32 signum) {
+    return (i32)add_unsafe_u64(128, (u64)signum);
 }
 
 static void signal_handler(i32_c signum, signal::SigInfo *info,
                            void *ucontext) {
     (void)info;
 
+    // Only one thread should print a stack trace. The other threads that panic
+    // at the same time have to wait for this thread to finish and terminate the
+    // process, otherwise they could interrupt the stack trace by exiting early.
+    i32_c const tid = sys::gettid();
+    i32_c owner_tid = 0;
+    if (!__atomic_compare_exchange_n(&signal_handler_owner_tid_, &owner_tid,
+                                     tid, false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE)) {
+        i32 const exit_code = signum_to_exit_code(signum);
+        if (owner_tid == tid) {
+            // We panicked inside the signal handler, most likely in the ELF
+            // code. Don't try to print another stack trace or unwind again,
+            // just exit directly. These functions will be made fallible later.
+            print_lossy_("Recursive panic inside signal handler. Exiting the "
+                         "process..\n");
+            sys::exit_group(exit_code);
+        } else {
+            // Another thread owns the stack trace printing. Just print a
+            // message and exit this thread.
+            print_lossy_("Warning: There were multiple panics at the same time "
+                         "and another thread is running the signal handler. "
+                         "This thread will just exit.\n");
+            sys::exit(exit_code);
+        }
+    }
+
     if (signum == (i32)signal::SIG::ILL) {
-        print_panic_("Printing stack trace for SIGILL(4) in signal handler.\n");
+        print_lossy_("Printing stack trace for SIGILL(4) in signal handler.\n");
     } else if (signum == (i32)signal::SIG::SEGV) {
-        print_panic_(
+        print_lossy_(
             "Printing stack trace for SIGSEGV(11) in signal handler.\n");
     } else {
-        print_panic_("Printing stack trace for signal with unexpected signum. "
+        print_lossy_("Printing stack trace for signal with unexpected signum. "
                      "THIS SHOULD NEVER HAPPEN, check how the signal handler "
                      "is setup in start.cc\n");
     }
@@ -162,10 +195,7 @@ static void signal_handler(i32_c signum, signal::SigInfo *info,
 
     elf::print_stack_trace_panic(&bt);
 
-    // control will fall back to the instruction that raised the signal,
-    // it will raise the same signal again and the default handler for that
-    // signal will run, which should cause the kernel to end the process with
-    // the correspoding error code.
+    sys::exit_group(signum_to_exit_code(signum));
 }
 
 extern "C" void zx_setup_() {
@@ -221,8 +251,7 @@ extern "C" void zx_setup_() {
 
     signal::SigAction act = signal::SigAction{
         .sigaction = signal_handler,
-        .flags = signal::SA_SIGINFO | signal::SA_RESETHAND |
-                 signal::SA_NODEFER | signal::SA_ONSTACK,
+        .flags = signal::SA_SIGINFO | signal::SA_NODEFER | signal::SA_ONSTACK,
         .mask = signal::SigSet::init(),
     };
 

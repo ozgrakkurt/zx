@@ -2,13 +2,6 @@ import zx;
 
 using namespace zx;
 
-// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -E
-// "__NR_sched_yield\b"
-constexpr u64 NR_SCHED_YIELD = 24;
-
-// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -E "__NR_exit\b"
-constexpr u64 NR_EXIT = 60;
-
 // a spawned thread should start running almost immediately, if it doesn't run
 // within this many yields then something is wrong.
 constexpr u64 SPIN_LIMIT = 100000;
@@ -23,20 +16,10 @@ static void wait_value(u64_c const *value, u64_c expected) {
 
         // yield so a spawned thread gets cpu time even on a machine with fewer
         // cpus than threads.
-        syscall0(NR_SCHED_YIELD);
+        sys::sched_yield();
     }
 
     assert(false);
-}
-
-// terminate only the calling thread, exit_group would kill the whole test
-// process.
-[[noreturn]] static void exit_thread() {
-    syscall1(NR_EXIT, 0);
-
-    // the syscall never returns, this is only here for the noreturn
-    // annotation.
-    __builtin_trap();
 }
 
 struct MapsEntry {
@@ -252,7 +235,7 @@ __attribute__((noreturn)) static void basic_fn(void *usr_ctx) {
 
     __atomic_store_n(&ctx->done, 1, __ATOMIC_RELEASE);
 
-    exit_thread();
+    sys::exit(0);
 }
 
 static void test_invalid_args() {
@@ -322,7 +305,7 @@ __attribute__((noreturn)) static void multi_fn(void *usr_ctx) {
 
     __atomic_fetch_add(&item->shared->done, 1, __ATOMIC_ACQ_REL);
 
-    exit_thread();
+    sys::exit(0);
 }
 
 static void test_multiple_threads() {
