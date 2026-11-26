@@ -204,14 +204,17 @@ extern "C" void zx_setup_() {
 
     tmp_alloc.reset();
 
-    SliceMut<u8> signal_stack_mem;
-    assert(AllocStatus::Ok == alloc.aligned_alloc<u8>(nullptr, 16, u64{1} << 20,
-                                                      &signal_stack_mem));
+    u8 *signal_stack_mem = nullptr;
+    u8 *signal_stack_ptr = nullptr;
+    assert(thread::SetupStackStatus::Ok ==
+           thread::setup_stack(nullptr, &signal_stack_mem, &signal_stack_ptr));
+    (void)signal_stack_mem;
 
     signal::Stack const signal_stack = signal::Stack{
-        .ss_sp = signal_stack_mem.ptr(),
+        .ss_sp =
+            (void *)sub_unsafe_u64((u64)signal_stack_ptr, thread::STACK_SIZE),
         .ss_flags = 0,
-        .ss_size = signal_stack_mem.len(),
+        .ss_size = thread::STACK_SIZE,
     };
     assert(sys::SigAltStackStatus::Ok ==
            sys::sigaltstack(nullptr, &signal_stack, nullptr));

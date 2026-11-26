@@ -6,21 +6,18 @@ using namespace zx;
 extern "C" void zx_setup_sigaltstack_() {
     Backtrace err_bt = Backtrace::init();
 
-    constexpr u64 STACK_SIZE = u64{1} << 20;
-
-    u8 *mem = nullptr;
+    u8 *stack_mem = nullptr;
+    u8 *stack_ptr = nullptr;
     testing::assert_with_trace(
-        page_alloc::AllocStatus::Ok ==
-            page_alloc::alloc_4kb(&err_bt, STACK_SIZE, &mem),
+        thread::SetupStackStatus::Ok ==
+            thread::setup_stack(&err_bt, &stack_mem, &stack_ptr),
         &err_bt);
-
-    assert(mem != nullptr);
-    assert(__builtin_is_aligned(mem, thread::STACK_ALIGN));
+    (void)stack_mem;
 
     signal::Stack const signal_stack = signal::Stack{
-        .ss_sp = mem,
+        .ss_sp = (void *)sub_unsafe_u64((u64)stack_ptr, thread::STACK_SIZE),
         .ss_flags = 0,
-        .ss_size = STACK_SIZE,
+        .ss_size = thread::STACK_SIZE,
     };
     testing::assert_with_trace(
         sys::SigAltStackStatus::Ok ==
