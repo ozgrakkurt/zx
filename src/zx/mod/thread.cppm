@@ -78,8 +78,8 @@ inline SpawnStatus spawn(Backtrace *err_bt, thread_fn fn, void *usr_ctx,
     register u64_c child_tid __asm__("r10") = 0;
     register u64_c tls __asm__("r8") = 0;
 
-    register u64_c usr_ctx_reg __asm__("r9") = (u64)usr_ctx;
-    register u64_c fn_reg __asm__("r12") = (u64)fn;
+    register u64_c usr_ctx_reg __asm__("r9") = (u64_c)usr_ctx;
+    register u64_c fn_reg __asm__("r12") = (u64_c)fn;
 
     u64_c res;
     __asm__ volatile(
