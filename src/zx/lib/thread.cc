@@ -15,7 +15,7 @@ extern "C" void zx_setup_sigaltstack_() {
         &err_bt);
 
     assert(mem != nullptr);
-    assert(__builtin_is_aligned(mem, STACK_ALIGN));
+    assert(__builtin_is_aligned(mem, thread::STACK_ALIGN));
 
     signal::Stack const signal_stack = signal::Stack{
         .ss_sp = mem,
