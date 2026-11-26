@@ -44,16 +44,20 @@ enum class [[nodiscard]] SpawnStatus : u8_c {
     EPerm,
 };
 
-inline SpawnStatus spawn(thread_fn fn, void *usr_ctx, SliceMut<u8> stack) {
+inline SpawnStatus spawn(Backtrace *err_bt, thread_fn fn, void *usr_ctx,
+                         SliceMut<u8> stack) {
     if (fn == nullptr) [[unlikely]] {
+        Backtrace::collect(err_bt);
         return SpawnStatus::Nullptr;
     }
 
     if (!__builtin_is_aligned(stack.ptr(), STACK_ALIGN)) {
+        Backtrace::collect(err_bt);
         return SpawnStatus::StackUnaligned;
     }
 
     if (MIN_STACK_SIZE > stack.len()) {
+        Backtrace::collect(err_bt);
         return SpawnStatus::StackTooSmall;
     }
 
@@ -74,6 +78,9 @@ inline SpawnStatus spawn(thread_fn fn, void *usr_ctx, SliceMut<u8> stack) {
     register u64_c child_tid __asm__("r10") = 0;
     register u64_c tls __asm__("r8") = 0;
 
+    register u64_c usr_ctx_reg __asm__("r9") = (u64)usr_ctx;
+    register u64_c fn_reg __asm__("r12") = (u64)fn;
+
     u64_c res;
     __asm__ volatile(
         "syscall\n\t"
@@ -87,29 +94,37 @@ inline SpawnStatus spawn(thread_fn fn, void *usr_ctx, SliceMut<u8> stack) {
         "movq %[fn], %%rsi\n\t"
         "movq %[usr_ctx], %%rdi\n\t"
         "jmp zx_thread_entry_\n\t"
+        // That function should never return so this should never be hit, but
+        // put it here anyway.
+        "ud2\n\t"
         "1:\n\t"
         : [res] "=a"(res)
         : "a"((u64_c)NR_CLONE), "D"((u64_c)flags), "S"((u64_c)stack_ptr),
           "d"(0), "r"(child_tid),
-          "r"(tls), [fn] "r"((u64_c)fn), [usr_ctx] "r"((u64_c)usr_ctx)
+          "r"(tls), [fn] "r"(fn_reg), [usr_ctx] "r"(usr_ctx_reg)
         : "rcx", "r11", "memory");
 
     u64 const errno = sys::errno_(res);
     if (errno != sys::SUCCESS) [[unlikely]] {
         switch (errno) {
         case sys::EAGAIN: {
+            Backtrace::collect(err_bt);
             return SpawnStatus::EAgain;
         }
         case sys::EINVAL: {
+            Backtrace::collect(err_bt);
             return SpawnStatus::EInval;
         }
         case sys::ENOMEM: {
+            Backtrace::collect(err_bt);
             return SpawnStatus::ENoMem;
         }
         case sys::EPERM: {
+            Backtrace::collect(err_bt);
             return SpawnStatus::EPerm;
         }
         default: {
+            Backtrace::collect(err_bt);
             return SpawnStatus::UnexpectedErr;
         }
         }

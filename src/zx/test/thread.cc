@@ -71,18 +71,18 @@ static void test_invalid_args() {
 
     // a null thread function is rejected.
     assert(thread::SpawnStatus::Nullptr ==
-           thread::spawn(nullptr, nullptr,
+           thread::spawn(&err_bt, nullptr, nullptr,
                          SliceMut<u8>::init_unsafe(mem, STACK_SIZE)));
 
     // an unaligned stack start is rejected, keep the slice inside the mapping.
     assert(thread::SpawnStatus::StackUnaligned ==
-           thread::spawn(basic_fn, nullptr,
+           thread::spawn(&err_bt, basic_fn, nullptr,
                          SliceMut<u8>::init_unsafe(
                              mem + 1, sub_unsafe_u64(STACK_SIZE, 1))));
 
     // anything smaller than MIN_STACK_SIZE is rejected.
     assert(thread::SpawnStatus::StackTooSmall ==
-           thread::spawn(basic_fn, nullptr,
+           thread::spawn(&err_bt, basic_fn, nullptr,
                          SliceMut<u8>::init_unsafe(
                              mem, sub_unsafe_u64(thread::MIN_STACK_SIZE,
                                                  thread::STACK_ALIGN))));
@@ -110,7 +110,7 @@ static void test_basic_spawn() {
 
     testing::assert_with_trace(
         thread::SpawnStatus::Ok ==
-            thread::spawn(basic_fn, &ctx,
+            thread::spawn(&err_bt, basic_fn, &ctx,
                           SliceMut<u8>::init_unsafe(mem, stack_len)),
         &err_bt);
 
@@ -179,7 +179,7 @@ static void test_multiple_threads() {
 
         testing::assert_with_trace(
             thread::SpawnStatus::Ok ==
-                thread::spawn(multi_fn, &items[i],
+                thread::spawn(&err_bt, multi_fn, &items[i],
                               SliceMut<u8>::init_unsafe(stacks[i], STACK_SIZE)),
             &err_bt);
     }
