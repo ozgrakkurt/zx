@@ -55,15 +55,33 @@ __asm__(".text\n"
         // call user function, the user context argument should already be in
         // rdi so don't need to touch that.
         "callq *%rsi\n\t"
-        // set exit() code to 0
-        "xorq %rdi, %rdi\n\t"
-        // exit(), syscall number for exit is 60, use exit instead of exit_group
-        // since we only want to terminate this thread.
-        "movq $60, %rax\n\t"
-        "syscall\n\t"
-        // will never reach here becasue of the exit() above but just put it
-        // here as a safeguard
+        // will never reach here because the user thread function has to be
+        // noreturn.
         "ud2\n\t"
         // mark function boundary for eh_frame debug info
         ".cfi_endproc\n\t"
         ".size zx_thread_entry_, .-zx_thread_entry_\n\t");
+
+// extern "C" u64 zx_spawn_thread_(u64 flags, u64 stack_ptr, u64 usr_fn, u64
+// usr_ctx);
+__asm__(".text\n"
+        ".type zx_spawn_thread_, @function\n"
+        ".global zx_spawn_thread_\n"
+        "zx_spawn_thread_:\n\t"
+        ".cfi_startproc\n\t"
+        // child_tid
+        "xorq %r10, %r10\n\t"
+        // tls
+        "xorq %r8, %r8\n\t"
+        // syscall number for clone is 56
+        "movq $56, %rax\n\t"
+        "syscall\n\t"
+        // The parent gets the tid of the new thread, the child gets 0.
+        "testq %%rax, %%rax\n\t"
+        "jnz 1f\n\t"
+        ""
+        "1:\n\t"
+        "retq\n\t"
+        ".cfi_endproc\n\t"
+        ".size zx_spawn_thread_, .-zx_spawn_thread_\n\t");
+);

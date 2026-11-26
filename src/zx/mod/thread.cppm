@@ -11,12 +11,6 @@ export namespace zx {
 
 namespace thread {
 
-typedef void (*thread_fn)(void *usr_ctx);
-
-constexpr u64 RED_ZONE_SIZE = 16;
-constexpr u64 MIN_STACK_SIZE = u64{1} << 17;
-constexpr u64 STACK_ALIGN = 16;
-
 // echo '#include <linux/sched.h>' | gcc -E -dM -xc - | grep -E "#define CLONE_"
 constexpr u64 CLONE_VM = 0x00000100;
 constexpr u64 CLONE_FS = 0x00000200;
@@ -35,39 +29,65 @@ constexpr u64 NR_CLONE = 56;
 enum class [[nodiscard]] SpawnStatus : u8_c {
     Ok = 0,
     Nullptr,
-    StackTooSmall,
-    StackUnaligned,
     UnexpectedErr,
     EAgain,
     EInval,
     ENoMem,
     EPerm,
+    StackAllocFail,
 };
 
-inline SpawnStatus spawn(Backtrace *err_bt, thread_fn fn, void *usr_ctx,
-                         SliceMut<u8> stack) {
-    if (fn == nullptr) [[unlikely]] {
+// This is marked noreturn since we expect spawned threads to always run until
+// the program ends.
+typedef void (*thread_fn)(void *usr_ctx) __attribute__((noreturn));
+
+// This is implemented in lib/thread.cc
+extern "C" u64 zx_spawn_thread_(u64 flags, u64 stack_ptr, u64 usr_fn,
+                                u64 usr_ctx);
+
+// It is expected that spawned threads will run until the program ends.
+inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
+    constexpr u64 RED_ZONE_SIZE = 16;
+    constexpr u64 STACK_SIZE = u64{1} << 20;
+    constexpr u64 STACK_ALIGN = 16;
+    constexpr u64 GUARD_PAGE_SIZE = u64{1} << 10;
+
+    if (usr_fn == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
         return SpawnStatus::Nullptr;
     }
 
-    if (!__builtin_is_aligned(stack.ptr(), STACK_ALIGN)) {
-        Backtrace::collect(err_bt);
-        return SpawnStatus::StackUnaligned;
+    u8 *stack_mem = nullptr;
+    if (page_alloc::AllocStatus::Ok !=
+        page_alloc::alloc_4kb(err_bt, STACK_SIZE, &stack_mem)) [[unlikely]] {
+        return SpawnStatus::StackAllocFail;
     }
 
-    if (MIN_STACK_SIZE > stack.len()) {
+    if (stack_mem == nullptr) [[unlikely]] {
         Backtrace::collect(err_bt);
-        return SpawnStatus::StackTooSmall;
+        return SpawnStatus::UnexpectedErr;
     }
 
-    // the stack grows down, use the highest 16 aligned address as the initial
-    // stack pointer and reserve RED_ZONE_SIZE at the very top. the child's
-    // entry function jumps to the user function without a return address on
-    // the stack so the stack pointer has to be 16 aligned here.
-    u64 const stack_len = stack.len() & ~(u64)(STACK_ALIGN - 1);
-    u8 *stack_ptr =
-        stack.offset_mut_unsafe(sub_unsafe_u64(stack_len, RED_ZONE_SIZE));
+    if (!__builtin_is_aligned(stack_mem, STACK_ALIGN)) {
+        Backtrace::collect(err_bt);
+        return SpawnStatus::UnexpectedErr;
+    }
+
+    // [guard page] ---- stack ---- [red zone]
+    //                <-- stack grows down
+
+    if (sys::MProtectStatus::Ok !=
+        sys::mprotect(err_bt, stack_mem, GUARD_PAGE_SIZE, sys::PROT_NONE)) {
+        return SpawnStatus::UnexpectedErr;
+    }
+
+    u64 const stack_offset = sub_unsafe_u64(STACK_SIZE, RED_ZONE_SIZE);
+    u8 *stack_ptr = &stack_mem[stack_offset];
+
+    if (!__builtin_is_aligned(stack_ptr, STACK_ALIGN)) {
+        Backtrace::collect(err_bt);
+        return SpawnStatus::UnexpectedErr;
+    }
 
     // share the address space, filesystem info, file descriptor table and
     // signal handlers with the spawning thread and put the new thread in the
@@ -75,35 +95,8 @@ inline SpawnStatus spawn(Backtrace *err_bt, thread_fn fn, void *usr_ctx,
     u64 const flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
                       CLONE_THREAD | CLONE_SYSVSEM;
 
-    register u64_c child_tid __asm__("r10") = 0;
-    register u64_c tls __asm__("r8") = 0;
-
-    register u64_c usr_ctx_reg __asm__("r9") = (u64_c)usr_ctx;
-    register u64_c fn_reg __asm__("r12") = (u64_c)fn;
-
-    u64_c res;
-    __asm__ volatile(
-        "syscall\n\t"
-        // The parent gets the tid of the new thread, the child gets 0.
-        "testq %%rax, %%rax\n\t"
-        "jnz 1f\n\t"
-        // Jump to the thread entry function implemented with assembly in
-        // lib/thread.cc. It wraps the user function and provides the
-        // necessary setup for the thread to run. It expects the user context
-        // in rdi and the user function in rsi.
-        "movq %[fn], %%rsi\n\t"
-        "movq %[usr_ctx], %%rdi\n\t"
-        "jmp zx_thread_entry_\n\t"
-        // That function should never return so this should never be hit, but
-        // put it here anyway.
-        "ud2\n\t"
-        "1:\n\t"
-        : [res] "=a"(res)
-        : "a"((u64_c)NR_CLONE), "D"((u64_c)flags), "S"((u64_c)stack_ptr),
-          "d"(0), "r"(child_tid),
-          "r"(tls), [fn] "r"(fn_reg), [usr_ctx] "r"(usr_ctx_reg)
-        : "rcx", "r11", "memory");
-
+    u64 const res =
+        zx_spawn_thread_(flags, (u64)stack_ptr, (u64)thread_fn, (u64)usr_ctx);
     u64 const errno = sys::errno_(res);
     if (errno != sys::SUCCESS) [[unlikely]] {
         switch (errno) {
