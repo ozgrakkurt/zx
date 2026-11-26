@@ -176,8 +176,7 @@ static void check_thread_stack(u64 stack_probe) {
     assert(!stack.can_exec);
     assert(stack.is_private);
 
-    assert(sub_unsafe_u64(stack.end, stack.start) ==
-           sub_unsafe_u64(thread::STACK_SIZE, 2 * thread::GUARD_PAGE_SIZE));
+    assert(sub_unsafe_u64(stack.end, stack.start) == thread::STACK_SIZE);
 
     MapsEntry lower_guard = {};
     assert(find_maps_entry(sub_unsafe_u64(stack.start, 1), &lower_guard));
