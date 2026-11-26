@@ -107,9 +107,41 @@ static void print_panic_(char const *message) {
     assert(n_written == len);
 }
 
+// Holds the tid of the thread that is currently printing a stack trace. A
+// zero value means that no thread is handling a signal yet.
+static u64_c signal_handler_owner_tid_ = 0;
+
+// echo '#include <sys/syscall.h>' | gcc -E -dM -xc - | grep -E
+// "__NR_(gettid|sched_yield)\b"
+constexpr u64 NR_GETTID = 186;
+constexpr u64 NR_SCHED_YIELD = 24;
+
 static void signal_handler(i32_c signum, signal::SigInfo *info,
                            void *ucontext) {
     (void)info;
+
+    // Only one thread should print a stack trace. The other threads that panic
+    // at the same time have to wait for this thread to finish and terminate the
+    // process, otherwise they could interrupt the stack trace by exiting early.
+    u64_c const tid = syscall0(NR_GETTID);
+    u64_c owner_tid = 0;
+    if (!__atomic_compare_exchange_n(&signal_handler_owner_tid_, &owner_tid,
+                                     tid, false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE)) {
+        if (owner_tid == tid) {
+            // We panicked inside the signal handler, most likely in the ELF
+            // code. Don't try to print another stack trace or unwind again,
+            // just exit directly. These functions will be made fallible later.
+            sys::exit_group((i32)add_unsafe_u64(128, (u64)signum));
+        }
+
+        // Another thread owns the stack trace printing. Wait until it returns
+        // to the faulting instruction, which re-raises the signal with the
+        // default action and terminates the whole process.
+        for (;;) {
+            syscall0(NR_SCHED_YIELD);
+        }
+    }
 
     if (signum == (i32)signal::SIG::ILL) {
         print_panic_("Printing stack trace for SIGILL(4) in signal handler.\n");
@@ -161,6 +193,18 @@ static void signal_handler(i32_c signum, signal::SigInfo *info,
     }
 
     elf::print_stack_trace_panic(&bt);
+
+    // We don't use SA_RESETHAND when registering the handler because that
+    // resets the handler for the whole process as soon as it is entered. A
+    // second thread panicking at the same time would then be killed by the
+    // default action before this thread could finish printing the stack trace.
+    // Reset the handler now that printing is done instead.
+    signal::SigAction const default_action = signal::SigAction{
+        .sigaction = nullptr,
+        .flags = 0,
+        .mask = signal::SigSet::init(),
+    };
+    (void)sys::sigaction(nullptr, (signal::SIG)signum, &default_action, nullptr);
 
     // control will fall back to the instruction that raised the signal,
     // it will raise the same signal again and the default handler for that
@@ -221,8 +265,7 @@ extern "C" void zx_setup_() {
 
     signal::SigAction act = signal::SigAction{
         .sigaction = signal_handler,
-        .flags = signal::SA_SIGINFO | signal::SA_RESETHAND |
-                 signal::SA_NODEFER | signal::SA_ONSTACK,
+        .flags = signal::SA_SIGINFO | signal::SA_NODEFER | signal::SA_ONSTACK,
         .mask = signal::SigSet::init(),
     };
 
