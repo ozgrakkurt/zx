@@ -72,6 +72,11 @@ __asm__(".text\n"
         // rbx is callee-saved so preserve the caller's value. the child never
         // returns to the caller so it doesn't need to pop it.
         "pushq %rbx\n\t"
+        ".cfi_adjust_cfa_offset 8\n\t"
+        // the entry CFA is rsp + 8 because rsp points at the return address
+        // that the call pushed. after this push rsp moves down by 8 so the
+        // CFA becomes rsp + 16 and the saved rbx is at CFA - 16.
+        ".cfi_offset %rbx, -16\n\t"
         // clone(2) expects (flags, stack, parent_tid, child_tid, tls) in
         // (rdi, rsi, rdx, r10, r8). flags is already in rdi and stack is
         // already in rsi. save usr_fn and usr_ctx because rdx/rcx are needed
@@ -92,8 +97,15 @@ __asm__(".text\n"
         "jz 1f\n\t"
         // parent: return the tid (or -errno) to the caller.
         "popq %rbx\n\t"
+        ".cfi_adjust_cfa_offset -8\n\t"
+        ".cfi_restore %rbx\n\t"
         "retq\n\t"
         "1:\n\t"
+        // the child never returns through this frame and its stack does not
+        // contain the return address and saved rbx described above, so mark
+        // this as the outermost frame. otherwise an unwinder would read past
+        // the child's stack into the top guard page.
+        ".cfi_undefined %rip\n\t"
         // child: enter the thread trampoline with the user context in rdi and
         // the user function in rsi.
         "movq %r9, %rsi\n\t"

@@ -11,10 +11,9 @@ export namespace zx {
 
 namespace thread {
 
-constexpr u64 RED_ZONE_SIZE = 16;
 constexpr u64 STACK_SIZE = u64{1} << 20;
 constexpr u64 STACK_ALIGN = 16;
-constexpr u64 GUARD_PAGE_SIZE = u64{1} << 10;
+constexpr u64 GUARD_PAGE_SIZE = u64{1} << 12;
 
 // echo '#include <linux/sched.h>' | gcc -E -dM -xc - | grep -E "#define CLONE_"
 constexpr u64 CLONE_VM = 0x00000100;
@@ -50,6 +49,12 @@ typedef void (*thread_fn)(void *usr_ctx) __attribute__((noreturn));
 extern "C" u64 zx_spawn_thread_(u64 flags, u64 stack_ptr, u64 usr_fn,
                                 u64 usr_ctx);
 
+inline void cleanup_(u8 *stack_mem) {
+    if (stack_mem != nullptr) {
+        (void)page_alloc::free(nullptr, stack_mem, STACK_SIZE);
+    }
+}
+
 // It is expected that spawned threads will run until the program ends.
 inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
 
@@ -65,27 +70,37 @@ inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
     }
 
     if (stack_mem == nullptr) [[unlikely]] {
+        cleanup_(stack_mem);
         Backtrace::collect(err_bt);
         return SpawnStatus::UnexpectedErr;
     }
 
     if (!__builtin_is_aligned(stack_mem, STACK_ALIGN)) {
+        cleanup_(stack_mem);
         Backtrace::collect(err_bt);
         return SpawnStatus::UnexpectedErr;
     }
 
-    // [guard page] ---- stack ---- [red zone]
+    // [guard page] ---- stack ---- [guard page]
     //                <-- stack grows down
 
     if (sys::MProtectStatus::Ok !=
         sys::mprotect(err_bt, stack_mem, GUARD_PAGE_SIZE, sys::PROT_NONE)) {
+        cleanup_(stack_mem);
         return SpawnStatus::UnexpectedErr;
     }
 
-    u64 const stack_offset = sub_unsafe_u64(STACK_SIZE, RED_ZONE_SIZE);
+    u64 const stack_offset = sub_unsafe_u64(STACK_SIZE, GUARD_PAGE_SIZE);
     u8 *stack_ptr = &stack_mem[stack_offset];
 
+    if (sys::MProtectStatus::Ok !=
+        sys::mprotect(err_bt, stack_ptr, GUARD_PAGE_SIZE, sys::PROT_NONE)) {
+        cleanup_(stack_mem);
+        return SpawnStatus::UnexpectedErr;
+    }
+
     if (!__builtin_is_aligned(stack_ptr, STACK_ALIGN)) {
+        cleanup_(stack_mem);
         Backtrace::collect(err_bt);
         return SpawnStatus::UnexpectedErr;
     }
@@ -100,6 +115,10 @@ inline SpawnStatus spawn(Backtrace *err_bt, thread_fn usr_fn, void *usr_ctx) {
         zx_spawn_thread_(flags, (u64)stack_ptr, (u64)usr_fn, (u64)usr_ctx);
     u64 const errno = sys::errno_(res);
     if (errno != sys::SUCCESS) [[unlikely]] {
+
+        // cleanup the allocated memory since spawning failed
+        cleanup_(stack_mem);
+
         switch (errno) {
         case sys::EAGAIN: {
             Backtrace::collect(err_bt);
