@@ -121,9 +121,10 @@ static void signal_handler(i32_c signum, signal::SigInfo *info,
     // process, otherwise they could interrupt the stack trace by exiting early.
     i32_c const tid = sys::gettid();
 
-    if (tid == 0) {
-        print_lossy_("gettid returned 0, this should never happen. Exiting "
-                     "program.\b\n");
+    if (tid <= 0) {
+        print_lossy_("gettid returned an unexpected value, this should never "
+                     "happen. Exiting "
+                     "program.\n");
         sys::exit_group(exit_code);
     }
 
