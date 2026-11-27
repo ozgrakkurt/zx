@@ -46,28 +46,6 @@ constexpr u8 DW_LNE_set_discriminator = 0x04;
 constexpr u8 DW_LNE_lo_user = 0x80;
 constexpr u8 DW_LNE_hi_user = 0xff;
 
-// Macro information entry type encodings (DWARF5, Section 8.23, Table 8.28)
-constexpr u8 DW_MACRO_padding = 0x00;
-constexpr u8 DW_MACRO_define = 0x01;
-constexpr u8 DW_MACRO_undef = 0x02;
-constexpr u8 DW_MACRO_start_file = 0x03;
-constexpr u8 DW_MACRO_end_file = 0x04;
-constexpr u8 DW_MACRO_define_strp = 0x05;
-constexpr u8 DW_MACRO_undef_strp = 0x06;
-constexpr u8 DW_MACRO_import = 0x07;
-
-constexpr u8 DW_MACRO_define_strx = 0x0b;
-constexpr u8 DW_MACRO_undef_strx = 0x0c;
-constexpr u8 DW_MACRO_define_sup4 = 0x0d;
-constexpr u8 DW_MACRO_define_sup8 = 0x0e;
-constexpr u8 DW_MACRO_undef_sup4 = 0x0f;
-constexpr u8 DW_MACRO_undef_sup8 = 0x10;
-constexpr u8 DW_MACRO_import_sup4 = 0x11;
-constexpr u8 DW_MACRO_import_sup8 = 0x12;
-
-constexpr u8 DW_MACRO_lo_user = 0xe0;
-constexpr u8 DW_MACRO_hi_user = 0xff;
-
 inline u64 strnlen_panic_(u8 const *str, u64 max_len) {
     for (u64 i = 0; i < max_len; i++) {
         if (str[i] == 0) {
@@ -853,6 +831,33 @@ struct DebugLine {
         // discard tmp memory
         assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
+
+        SliceMut<u32> sequence_index;
+        assert(AllocStatuas::Ok == alloc->alloc<u32>(sequences_out.len(), &sequence_index));
+
+        {
+            bool overflow = false;
+            u32 const num_seqs = u64_to_u32(sequences_out.len(), &overflow);
+            assert(!overflow);
+            
+            for (u32 seq_idx=0; i<num_seqs; seq_idx++) {
+                Sequence const seq = sequences_out.read_unsafe(seq_idx);
+                for (u32 tgt_idx=seq_idx; tgt_idx > 0; tgt_idx--) {
+                    
+                }
+            }
+        }
+
+        // Assert that there are no overlaps.
+        if (sequences_out.len() > 0) {
+            u64 const loop_end = sub_unsafe_u64(sequences_out.len(), 1);
+            for (u64 i = 0; i < loop_end; i++) {
+                Sequence const current = sequences_out.read_unsafe(sequence_index.read_unsafe(i));
+                Sequence const next =
+                    sequences_out.read_unsafe(sequence_index.read_unsafe(add_unsafe_u64(i, 1)));
+                assert(current.pc_end <= next.pc_begin);
+            }
+        }
 
         return DebugLine{
             .sequences = sequences_out.as_const(),
