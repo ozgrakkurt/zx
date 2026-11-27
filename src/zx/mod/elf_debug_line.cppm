@@ -74,6 +74,9 @@ struct DebugLine {
     Slice<Sequence> sequences;
     // array[sequence_idx] = (index of the last row in sequence) + 1
     Slice<u32> sequence_ends;
+    // Sorted index into the sequences slice. We will use this for implementing
+    // a binary search in query.
+    Slice<u32> sequence_index;
 
     // Parses the directory_path and file_path section of the compute unit
     // header.
@@ -778,6 +781,7 @@ struct DebugLine {
                 .rows = Slice<Row>::init_dangling(),
                 .sequences = Slice<Sequence>::init_dangling(),
                 .sequence_ends = Slice<u32>::init_dangling(),
+                .sequence_index = Slice<u32>::init_dangling(),
             };
         }
 
@@ -832,36 +836,47 @@ struct DebugLine {
         assert(AllocResizeStatus::Ok ==
                tmp_alloc->resize(nullptr, tmp_alloc_initial_offset));
 
+        // We will create a sorted index into sequences for binary search in pc
+        // queries later.
         SliceMut<u32> sequence_index;
-        assert(AllocStatuas::Ok == alloc->alloc<u32>(sequences_out.len(), &sequence_index));
+        assert(AllocStatus::Ok == alloc->alloc<u32>(nullptr,
+                                                    sequences_out.len(),
+                                                    &sequence_index));
 
         {
             bool overflow = false;
             u32 const num_seqs = u64_to_u32(sequences_out.len(), &overflow);
             assert(!overflow);
-            
-            for (u32 seq_idx=0; i<num_seqs; seq_idx++) {
-                Sequence const seq = sequences_out.read_unsafe(seq_idx);
-                for (u32 tgt_idx=seq_idx; tgt_idx > 0; tgt_idx--) {
-                    
-                }
-            }
-        }
 
-        // Assert that there are no overlaps.
-        if (sequences_out.len() > 0) {
-            u64 const loop_end = sub_unsafe_u64(sequences_out.len(), 1);
-            for (u64 i = 0; i < loop_end; i++) {
-                Sequence const current = sequences_out.read_unsafe(sequence_index.read_unsafe(i));
-                Sequence const next =
-                    sequences_out.read_unsafe(sequence_index.read_unsafe(add_unsafe_u64(i, 1)));
-                assert(current.pc_end <= next.pc_begin);
+            // Just do simple insertion sort for constructing the index.
+            // We sort only by pc_begin.
+            // We expect the sequences to overlap because that is how it is in
+            // practice. We will tolare the overlapping by doing a special kind
+            // of binary search later in query time.
+            for (u32 seq_idx = 0; seq_idx < num_seqs; seq_idx++) {
+                Sequence const seq = sequences_out.read_unsafe(seq_idx);
+                sequence_index.write_unsafe(seq_idx, seq_idx);
+
+                for (u32 tgt_idx = seq_idx; tgt_idx > 0; tgt_idx--) {
+                    u32 const prev_idx =
+                        sequence_index.read_unsafe(sub_unsafe_u32(tgt_idx, 1));
+                    Sequence const prev = sequences_out.read_unsafe(prev_idx);
+
+                    if (prev.pc_begin <= seq.pc_begin) {
+                        break;
+                    }
+
+                    sequence_index.write_unsafe(tgt_idx, prev_idx);
+                    sequence_index.write_unsafe(sub_unsafe_u32(tgt_idx, 1),
+                                                seq_idx);
+                }
             }
         }
 
         return DebugLine{
             .sequences = sequences_out.as_const(),
             .sequence_ends = sequence_ends_out.as_const(),
+            .sequence_index = sequence_index.as_const(),
             .rows = rows_out.as_const(),
             .file_paths = file_paths_out.as_const(),
         };
@@ -896,13 +911,13 @@ struct DebugLine {
 
         assert_dev(this->sequences.len() == this->sequence_ends.len());
 
-        u64 sequence_index = 0;
+        u64 seq_index = 0;
         Sequence sq;
         bool found = false;
         for (u64 i = 0; i < this->sequences.len(); i++) {
             sq = this->sequences.read_unsafe(i);
             if (sq.pc_begin <= pc && sq.pc_end > pc) {
-                sequence_index = i;
+                seq_index = i;
                 found = true;
                 break;
             }
@@ -913,10 +928,10 @@ struct DebugLine {
         }
 
         u64 rows_begin = 0;
-        if (sequence_index != 0) {
-            rows_begin = this->sequence_ends.read_unsafe(sequence_index - 1);
+        if (seq_index != 0) {
+            rows_begin = this->sequence_ends.read_unsafe(seq_index - 1);
         }
-        u64 const rows_end = this->sequence_ends.read_unsafe(sequence_index);
+        u64 const rows_end = this->sequence_ends.read_unsafe(seq_index);
 
         assert_dev(rows_end > rows_begin);
 
