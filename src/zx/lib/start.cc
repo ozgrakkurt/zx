@@ -110,23 +110,27 @@ static void print_lossy_(char const *message) {
 // zero value means that no thread is handling a signal yet.
 static i32_c signal_handler_owner_tid_ = 0;
 
-static i32 signum_to_exit_code(i32 signum) {
-    return (i32)add_unsafe_u64(128, (u64)signum);
-}
-
 static void signal_handler(i32_c signum, signal::SigInfo *info,
                            void *ucontext) {
     (void)info;
+
+    i32 const exit_code = (i32)wrapping_add_u64(128, (u64)signum);
 
     // Only one thread should print a stack trace. The other threads that panic
     // at the same time have to wait for this thread to finish and terminate the
     // process, otherwise they could interrupt the stack trace by exiting early.
     i32_c const tid = sys::gettid();
+
+    if (tid == 0) {
+        print_lossy_("gettid returned 0, this should never happen. Exiting "
+                     "program.\b\n");
+        sys::exit_group(exit_code);
+    }
+
     i32_c owner_tid = 0;
     if (!__atomic_compare_exchange_n(&signal_handler_owner_tid_, &owner_tid,
                                      tid, false, __ATOMIC_ACQ_REL,
                                      __ATOMIC_ACQUIRE)) {
-        i32 const exit_code = signum_to_exit_code(signum);
         if (owner_tid == tid) {
             // We panicked inside the signal handler, most likely in the ELF
             // code. Don't try to print another stack trace or unwind again,
@@ -195,7 +199,7 @@ static void signal_handler(i32_c signum, signal::SigInfo *info,
 
     elf::print_stack_trace_panic(&bt);
 
-    sys::exit_group(signum_to_exit_code(signum));
+    sys::exit_group(exit_code);
 }
 
 extern "C" void zx_setup_() {
